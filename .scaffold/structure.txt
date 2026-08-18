@@ -1,0 +1,16 @@
+# .scaffold/structure.txt
+# Example structure definition.
+# - Indent with 2 spaces per level (or your configured indentStep)
+# - Directories must end with "/"
+# - Files do not
+# - Lines starting with "#" are comments and ignored by parser
+# - Inline comments are allowed after "#" or "//" separated by whitespace
+#
+# The formatter (when enabled via config.format or --format) will:
+# - Normalize indentation based on indentStep
+# - Preserve blank lines and comments
+# - Keep inline comments attached to their entries
+#
+# Example:
+# src/
+#   index.ts

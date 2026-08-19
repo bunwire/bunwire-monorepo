@@ -7,7 +7,8 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "tsc -b && tsc -p tsconfig.tests.json --noEmit",
     "test": "vitest run",
-    "test:architecture": "vitest run tests/architecture.test.ts",
+    "test:clean-install": "node tests/clean-install.mjs",
+    "test:architecture": "vitest run tests/milestone-00/architecture.test.ts",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "quality": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm build"
   },

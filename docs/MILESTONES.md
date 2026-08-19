@@ -90,13 +90,21 @@ These rules apply to every milestone.
 
 ## Required test layers
 
-Every relevant milestone should use the appropriate layers:
+Every test checklist item is explicitly classified. All milestone tests are automated unless a future item is explicitly marked `Manual`.
 
-- **Unit tests** — metadata, container, bindings, scopes, Provider lifecycle, invocation, middleware, adapter contracts.
-- **Compiler fixture tests** — real TypeScript fixture projects analyzed by Vite/compiler code.
-- **Integration tests** — generated registries + Core runtime + fake adapter/extension.
-- **End-to-end tests** — Electrobun application behavior and frontend type contracts.
-- **Type-level tests** — compile-success/compile-failure fixtures for generated RPC typing.
+Use these classifications consistently:
+
+- **Automated / Unit** — isolated descriptors, metadata, tokens, configuration objects, or small APIs.
+- **Automated / Behavioral** — observable public/runtime behavior exercised through the relevant API without requiring the full system.
+- **Automated / Compiler Fixture** — real TypeScript fixture projects analyzed or compiled through Bunwire's compiler/Vite tooling.
+- **Automated / Integration** — multiple Bunwire subsystems or packages working together, such as generated metadata + Core runtime + fake adapters.
+- **Automated / E2E** — full application/host behavior through the real adapter-facing application flow.
+- **Automated / Type-level** — compile-success/compile-failure assertions for TypeScript-facing contracts.
+- **Automated / Architecture** — package dependency, source-boundary, platform-leakage, or forbidden-import invariants.
+- **Automated / Build** — clean install, workspace/package build, typecheck, and root command verification.
+- **Automated / Generated Output** — deterministic/stable generated artifacts or metadata output.
+
+`Behavioral` does not mean manual: it is still an automated test, but it asserts externally observable behavior rather than internal structure.
 
 ---
 
@@ -143,13 +151,13 @@ Add:
 
 ## Tests
 
-- [ ] `core` builds without Vite installed as a runtime dependency.
-- [ ] `core` builds without Electrobun installed as a runtime dependency.
-- [ ] A deliberate `core -> vite` import fails the architecture test.
-- [ ] A deliberate `core -> electrobun` import fails the architecture test.
-- [ ] Workspace typecheck succeeds from a clean install.
-- [ ] Workspace tests run from the root.
-- [ ] Packages build independently.
+- [ ] **[Automated / Architecture]** `core` builds without Vite installed as a runtime dependency.
+- [ ] **[Automated / Architecture]** `core` builds without Electrobun installed as a runtime dependency.
+- [ ] **[Automated / Architecture]** A deliberate `core -> vite` import fails the architecture test.
+- [ ] **[Automated / Architecture]** A deliberate `core -> electrobun` import fails the architecture test.
+- [ ] **[Automated / Build]** Workspace typecheck succeeds from a clean install.
+- [ ] **[Automated / Build]** Workspace tests run from the root.
+- [ ] **[Automated / Build]** Packages build independently.
 
 ## Exit criteria
 
@@ -201,12 +209,12 @@ defineClassKind({
 
 ## Tests
 
-- [ ] Two class kinds can coexist without hard-coded enum changes.
-- [ ] Class-kind IDs are stable and namespaced.
-- [ ] `injectable` is independently configurable from `managedMethods`.
-- [ ] A class kind can be registry-managed but not method-managed.
-- [ ] Adapter-created class descriptors compile using only Core APIs.
-- [ ] Core contains no adapter-specific class-kind IDs.
+- [ ] **[Automated / Unit]** Two class kinds can coexist without hard-coded enum changes.
+- [ ] **[Automated / Unit]** Class-kind IDs are stable and namespaced.
+- [ ] **[Automated / Unit]** `injectable` is independently configurable from `managedMethods`.
+- [ ] **[Automated / Unit]** A class kind can be registry-managed but not method-managed.
+- [ ] **[Automated / Compiler Fixture]** Adapter-created class descriptors compile using only Core APIs.
+- [ ] **[Automated / Architecture]** Core contains no adapter-specific class-kind IDs.
 
 ## Exit criteria
 
@@ -266,31 +274,31 @@ Do not call these binding definitions “Providers.”
 
 ### Tokens
 
-- [ ] Custom tokens are unique even with equal descriptions.
-- [ ] Class constructors can act as runtime tokens.
-- [ ] Interface-only TypeScript types cannot accidentally become runtime tokens.
+- [ ] **[Automated / Unit]** Custom tokens are unique even with equal descriptions.
+- [ ] **[Automated / Unit]** Class constructors can act as runtime tokens.
+- [ ] **[Automated / Type-level]** Interface-only TypeScript types cannot accidentally become runtime tokens.
 
 ### Class resolution
 
-- [ ] Zero-argument class resolves.
-- [ ] Constructor dependency index `0` resolves correctly.
-- [ ] Multiple constructor dependencies preserve positions.
-- [ ] Dependency metadata supplied out of order still creates correctly ordered constructor arguments.
+- [ ] **[Automated / Behavioral]** Zero-argument class resolves.
+- [ ] **[Automated / Behavioral]** Constructor dependency index `0` resolves correctly.
+- [ ] **[Automated / Behavioral]** Multiple constructor dependencies preserve positions.
+- [ ] **[Automated / Behavioral]** Dependency metadata supplied out of order still creates correctly ordered constructor arguments.
 
 ### Scopes
 
-- [ ] Singleton resolves to the same instance in one application container.
-- [ ] Separate root containers do not share singleton instances.
-- [ ] Transient produces a new instance per resolution.
+- [ ] **[Automated / Behavioral]** Singleton resolves to the same instance in one application container.
+- [ ] **[Automated / Behavioral]** Separate root containers do not share singleton instances.
+- [ ] **[Automated / Behavioral]** Transient produces a new instance per resolution.
 
 ### Explicit bindings
 
-- [ ] Token → value works.
-- [ ] Token → factory works.
-- [ ] Token → class works.
-- [ ] Alias preserves singleton identity.
-- [ ] Missing token produces an actionable error.
-- [ ] Runtime circular dependency produces a useful chain.
+- [ ] **[Automated / Behavioral]** Token → value works.
+- [ ] **[Automated / Behavioral]** Token → factory works.
+- [ ] **[Automated / Behavioral]** Token → class works.
+- [ ] **[Automated / Behavioral]** Alias preserves singleton identity.
+- [ ] **[Automated / Behavioral]** Missing token produces an actionable error.
+- [ ] **[Automated / Behavioral]** Runtime circular dependency produces a useful chain.
 
 ## Exit criteria
 
@@ -358,13 +366,13 @@ Provider lifecycle behavior is implemented in Milestone 4.
 
 ## Tests
 
-- [ ] `@Service()` creates `core.service` metadata.
-- [ ] `@Controller()` creates `core.controller` metadata.
-- [ ] `@Provider()` creates `core.provider` metadata.
-- [ ] Service says `managedMethods=false`.
-- [ ] Controller says `managedMethods=true`.
-- [ ] Provider lifecycle metadata identifies `register`/`boot` without pretending they are ordinary routes.
-- [ ] A plain undecorated class receives none of these managed capabilities.
+- [ ] **[Automated / Unit]** `@Service()` creates `core.service` metadata.
+- [ ] **[Automated / Unit]** `@Controller()` creates `core.controller` metadata.
+- [ ] **[Automated / Unit]** `@Provider()` creates `core.provider` metadata.
+- [ ] **[Automated / Unit]** Service says `managedMethods=false`.
+- [ ] **[Automated / Unit]** Controller says `managedMethods=true`.
+- [ ] **[Automated / Unit]** Provider lifecycle metadata identifies `register`/`boot` without pretending they are ordinary routes.
+- [ ] **[Automated / Unit]** A plain undecorated class receives none of these managed capabilities.
 
 ## Exit criteria
 
@@ -458,20 +466,20 @@ managed invocation pipeline
 
 ## Tests
 
-- [ ] `defineApp()` returns a stable Application object before startup.
-- [ ] Configuration can be chained without starting the application.
-- [ ] `withContext()` stores context for startup without itself starting the app.
-- [ ] `start()` creates the root container once.
-- [ ] Context is container-accessible before Provider `register()` executes.
-- [ ] `register()` runs once across many invocations.
-- [ ] `boot()` runs once for each managed invocation.
-- [ ] All Provider registrations complete before the runtime accepts managed invocations.
-- [ ] Explicit Provider binding overrides a convention binding.
-- [ ] Invocation-scoped values do not leak between concurrent invocations.
-- [ ] `register()` receives the root container.
-- [ ] `boot()` receives invocation context rather than a fake application-startup context.
-- [ ] Service classes do not receive Provider lifecycle calls.
-- [ ] Starting the same Application twice follows the documented failure/idempotency rule.
+- [ ] **[Automated / Behavioral]** `defineApp()` returns a stable Application object before startup.
+- [ ] **[Automated / Behavioral]** Configuration can be chained without starting the application.
+- [ ] **[Automated / Behavioral]** `withContext()` stores context for startup without itself starting the app.
+- [ ] **[Automated / Behavioral]** `start()` creates the root container once.
+- [ ] **[Automated / Behavioral]** Context is container-accessible before Provider `register()` executes.
+- [ ] **[Automated / Behavioral]** `register()` runs once across many invocations.
+- [ ] **[Automated / Behavioral]** `boot()` runs once for each managed invocation.
+- [ ] **[Automated / Integration]** All Provider registrations complete before the runtime accepts managed invocations.
+- [ ] **[Automated / Behavioral]** Explicit Provider binding overrides a convention binding.
+- [ ] **[Automated / Integration]** Invocation-scoped values do not leak between concurrent invocations.
+- [ ] **[Automated / Behavioral]** `register()` receives the root container.
+- [ ] **[Automated / Behavioral]** `boot()` receives invocation context rather than a fake application-startup context.
+- [ ] **[Automated / Behavioral]** Service classes do not receive Provider lifecycle calls.
+- [ ] **[Automated / Behavioral]** Starting the same Application twice follows the documented failure/idempotency rule.
 
 ## Exit criteria
 
@@ -522,13 +530,13 @@ framework context
 
 ## Tests
 
-- [ ] Method parameters can be reconstructed from an arbitrary prebuilt plan.
-- [ ] Method index and caller argument index are independent.
-- [ ] Container parameters may be interleaved with caller arguments.
-- [ ] Parameter-injected values may be interleaved with both.
-- [ ] Caller argument validation supports required/optional parameters.
-- [ ] Unknown injector/resolver IDs fail clearly.
-- [ ] A fake method kind can invoke a class without platform dependencies.
+- [ ] **[Automated / Behavioral]** Method parameters can be reconstructed from an arbitrary prebuilt plan.
+- [ ] **[Automated / Behavioral]** Method index and caller argument index are independent.
+- [ ] **[Automated / Behavioral]** Container parameters may be interleaved with caller arguments.
+- [ ] **[Automated / Behavioral]** Parameter-injected values may be interleaved with both.
+- [ ] **[Automated / Behavioral]** Caller argument validation supports required/optional parameters.
+- [ ] **[Automated / Behavioral]** Unknown injector/resolver IDs fail clearly.
+- [ ] **[Automated / Integration]** A fake method kind can invoke a class without platform dependencies.
 
 ## Exit criteria
 
@@ -629,19 +637,19 @@ without modifying Core or Vite.
 
 ## Tests
 
-- [ ] Adapter must be a class instance matching the adapter contract.
-- [ ] `withAdapter()` receives/attaches the same Application instance returned by `defineApp()`.
-- [ ] Adapter can contribute a Provider before startup.
-- [ ] Adapter-prepared context is container-accessible during Provider `register()`.
-- [ ] Fake adapter adds a new managed class kind without Core changes.
-- [ ] Fake adapter adds a managed method kind without Vite changes.
-- [ ] Fake adapter receives generated metadata for its classes/methods.
-- [ ] Fake parameter injector participates in invocation and is caller-invisible.
-- [ ] Invalid method decorator placement on the wrong class kind is rejected.
-- [ ] Injector/class/method IDs are namespaced.
-- [ ] Fake host does not accept invocations until Providers and registries are ready.
-- [ ] Native callback receives the real fake-host object, not a Bunwire replacement wrapper.
-- [ ] Manual adapter path can use `withContext(existingContext).start()`.
+- [ ] **[Automated / Behavioral]** Adapter must be a class instance matching the adapter contract.
+- [ ] **[Automated / Behavioral]** `withAdapter()` receives/attaches the same Application instance returned by `defineApp()`.
+- [ ] **[Automated / Integration]** Adapter can contribute a Provider before startup.
+- [ ] **[Automated / Integration]** Adapter-prepared context is container-accessible during Provider `register()`.
+- [ ] **[Automated / Architecture]** Fake adapter adds a new managed class kind without Core changes.
+- [ ] **[Automated / Architecture]** Fake adapter adds a managed method kind without Vite changes.
+- [ ] **[Automated / Integration]** Fake adapter receives generated metadata for its classes/methods.
+- [ ] **[Automated / Integration]** Fake parameter injector participates in invocation and is caller-invisible.
+- [ ] **[Automated / Behavioral]** Invalid method decorator placement on the wrong class kind is rejected.
+- [ ] **[Automated / Unit]** Injector/class/method IDs are namespaced.
+- [ ] **[Automated / Integration]** Fake host does not accept invocations until Providers and registries are ready.
+- [ ] **[Automated / Behavioral]** Native callback receives the real fake-host object, not a Bunwire replacement wrapper.
+- [ ] **[Automated / Integration]** Manual adapter path can use `withContext(existingContext).start()`.
 
 ## Exit criteria
 
@@ -701,16 +709,16 @@ Vite discovery should:
 
 ## Tests
 
-- [ ] Relative source root resolves correctly.
-- [ ] Relative bootstrap path resolves correctly.
-- [ ] Multiple source files are discovered deterministically.
-- [ ] Files outside configured source graph are ignored unless explicitly imported/allowed by compiler rules.
-- [ ] Adapter compiler extensions are resolved from the adapter class used in bootstrap.
-- [ ] Adapter runtime configuration does not need to be duplicated in `bunwire.config.*`.
-- [ ] Compiler discovery does not execute native-object callbacks or arbitrary adapter runtime config.
-- [ ] Invalid source root produces an actionable error.
-- [ ] Unresolvable adapter compiler integration produces an actionable error.
-- [ ] Runtime code has no source-tree scanning dependency.
+- [ ] **[Automated / Compiler Fixture]** Relative source root resolves correctly.
+- [ ] **[Automated / Compiler Fixture]** Relative bootstrap path resolves correctly.
+- [ ] **[Automated / Compiler Fixture]** Multiple source files are discovered deterministically.
+- [ ] **[Automated / Compiler Fixture]** Files outside configured source graph are ignored unless explicitly imported/allowed by compiler rules.
+- [ ] **[Automated / Compiler Fixture]** Adapter compiler extensions are resolved from the adapter class used in bootstrap.
+- [ ] **[Automated / Compiler Fixture]** Adapter runtime configuration does not need to be duplicated in `bunwire.config.*`.
+- [ ] **[Automated / Compiler Fixture]** Compiler discovery does not execute native-object callbacks or arbitrary adapter runtime config.
+- [ ] **[Automated / Compiler Fixture]** Invalid source root produces an actionable error.
+- [ ] **[Automated / Compiler Fixture]** Unresolvable adapter compiler integration produces an actionable error.
+- [ ] **[Automated / Architecture]** Runtime code has no source-tree scanning dependency.
 
 ## Exit criteria
 
@@ -764,14 +772,14 @@ otherwise
 
 ## Tests
 
-- [ ] Aliased import of `@Service()` is still recognized by symbol.
-- [ ] Imported managed class constructor dependency is auto-injected.
-- [ ] Plain undecorated class constructor dependency is not silently auto-injected.
-- [ ] `@Inject(RandomUtility)` compiles as an explicit container source.
-- [ ] `@Inject(CACHE)` works with an interface-typed parameter.
-- [ ] Interface parameter without `@Inject()` fails with a useful diagnostic.
-- [ ] Constructor parameter positions are preserved.
-- [ ] Cross-file and aliased class symbols resolve correctly.
+- [ ] **[Automated / Compiler Fixture]** Aliased import of `@Service()` is still recognized by symbol.
+- [ ] **[Automated / Compiler Fixture]** Imported managed class constructor dependency is auto-injected.
+- [ ] **[Automated / Compiler Fixture]** Plain undecorated class constructor dependency is not silently auto-injected.
+- [ ] **[Automated / Compiler Fixture]** `@Inject(RandomUtility)` compiles as an explicit container source.
+- [ ] **[Automated / Compiler Fixture]** `@Inject(CACHE)` works with an interface-typed parameter.
+- [ ] **[Automated / Compiler Fixture]** Interface parameter without `@Inject()` fails with a useful diagnostic.
+- [ ] **[Automated / Compiler Fixture]** Constructor parameter positions are preserved.
+- [ ] **[Automated / Compiler Fixture]** Cross-file and aliased class symbols resolve correctly.
 
 ## Exit criteria
 
@@ -851,26 +859,26 @@ method 5 ← caller arg 2 optional
 
 ### Indexing
 
-- [ ] No-injection method maps method indexes 0..N directly to caller args 0..N.
-- [ ] One injected parameter in the middle compacts caller indexes correctly.
-- [ ] Multiple interleaved injections compact correctly.
-- [ ] Explicit token injection is excluded from caller args.
-- [ ] Adapter/framework injector parameters are excluded from caller args.
-- [ ] Optional caller parameters preserve optionality.
+- [ ] **[Automated / Compiler Fixture]** No-injection method maps method indexes 0..N directly to caller args 0..N.
+- [ ] **[Automated / Compiler Fixture]** One injected parameter in the middle compacts caller indexes correctly.
+- [ ] **[Automated / Compiler Fixture]** Multiple interleaved injections compact correctly.
+- [ ] **[Automated / Compiler Fixture]** Explicit token injection is excluded from caller args.
+- [ ] **[Automated / Compiler Fixture]** Adapter/framework injector parameters are excluded from caller args.
+- [ ] **[Automated / Compiler Fixture]** Optional caller parameters preserve optionality.
 
 ### Classification
 
-- [ ] Managed injectable class type auto-injects.
-- [ ] Plain DTO/class type remains caller-visible unless explicitly injected.
-- [ ] Interface with `@Inject(TOKEN)` becomes container-resolved.
-- [ ] Parameter injector decorator wins over type-based classification.
+- [ ] **[Automated / Compiler Fixture]** Managed injectable class type auto-injects.
+- [ ] **[Automated / Compiler Fixture]** Plain DTO/class type remains caller-visible unless explicitly injected.
+- [ ] **[Automated / Compiler Fixture]** Interface with `@Inject(TOKEN)` becomes container-resolved.
+- [ ] **[Automated / Compiler Fixture]** Parameter injector decorator wins over type-based classification.
 
 ### Validation
 
-- [ ] Too few caller args fails at runtime using generated bounds.
-- [ ] Too many caller args fails at runtime unless rest args are supported.
-- [ ] Invalid method decorator placement fails at compile time.
-- [ ] Duplicate incompatible parameter-injector/source decorators fail clearly.
+- [ ] **[Automated / Behavioral]** Too few caller args fails at runtime using generated bounds.
+- [ ] **[Automated / Behavioral]** Too many caller args fails at runtime unless rest args are supported.
+- [ ] **[Automated / Compiler Fixture]** Invalid method decorator placement fails at compile time.
+- [ ] **[Automated / Compiler Fixture]** Duplicate incompatible parameter-injector/source decorators fail clearly.
 
 ## Exit criteria
 
@@ -917,14 +925,14 @@ Runtime should load generated modules and execute them directly.
 
 ## Tests
 
-- [ ] Generated TypeScript typechecks.
-- [ ] Same source produces byte-stable/deterministic registry output where practical.
-- [ ] Runtime performs no source-tree scanning.
-- [ ] Generated constructor plan constructs a Controller correctly.
-- [ ] Generated managed-method plan handles interleaved caller/container/resolver parameters.
-- [ ] Provider registry causes `register()` once and `boot()` per invocation.
-- [ ] Fake adapter class/method registry executes end to end.
-- [ ] Missing runtime token binding fails through normal container resolution.
+- [ ] **[Automated / Compiler Fixture]** Generated TypeScript typechecks.
+- [ ] **[Automated / Generated Output]** Same source produces byte-stable/deterministic registry output where practical.
+- [ ] **[Automated / Architecture]** Runtime performs no source-tree scanning.
+- [ ] **[Automated / Integration]** Generated constructor plan constructs a Controller correctly.
+- [ ] **[Automated / Integration]** Generated managed-method plan handles interleaved caller/container/resolver parameters.
+- [ ] **[Automated / Integration]** Provider registry causes `register()` once and `boot()` per invocation.
+- [ ] **[Automated / Integration]** Fake adapter class/method registry executes end to end.
+- [ ] **[Automated / Integration]** Missing runtime token binding fails through normal container resolution.
 
 ## Exit criteria
 
@@ -1021,31 +1029,31 @@ Runtime support:
 
 ### Compiler
 
-- [ ] `ElectrobunAdapter` used in bootstrap exposes its compiler integration without duplicate build-config adapter declaration.
-- [ ] `@Route("get")` creates an Electrobun request method entry.
-- [ ] `@Message("selected")` creates a message entry.
-- [ ] Controller prefix + method name normalizes correctly.
-- [ ] Plain `id: string` becomes caller argument automatically.
-- [ ] Interleaved `UserService` becomes container-injected automatically.
-- [ ] `@Inject(CACHE)` disappears from caller-visible arguments.
-- [ ] `@Window()` injector disappears from caller-visible arguments.
-- [ ] No `@Arg(0)` is required in fixtures.
+- [ ] **[Automated / Compiler Fixture]** `ElectrobunAdapter` used in bootstrap exposes its compiler integration without duplicate build-config adapter declaration.
+- [ ] **[Automated / Compiler Fixture]** `@Route("get")` creates an Electrobun request method entry.
+- [ ] **[Automated / Compiler Fixture]** `@Message("selected")` creates a message entry.
+- [ ] **[Automated / Compiler Fixture]** Controller prefix + method name normalizes correctly.
+- [ ] **[Automated / Compiler Fixture]** Plain `id: string` becomes caller argument automatically.
+- [ ] **[Automated / Compiler Fixture]** Interleaved `UserService` becomes container-injected automatically.
+- [ ] **[Automated / Compiler Fixture]** `@Inject(CACHE)` disappears from caller-visible arguments.
+- [ ] **[Automated / Compiler Fixture]** `@Window()` injector disappears from caller-visible arguments.
+- [ ] **[Automated / Compiler Fixture]** No `@Arg(0)` is required in fixtures.
 
 ### Runtime
 
-- [ ] `app.start()` creates/configures the normal Electrobun host through the adapter.
-- [ ] Adapter context is available in the root container before adapter/application Provider registration that depends on it.
-- [ ] Main-window configuration reaches the real BrowserWindow creation path.
-- [ ] Native window callback receives the actual BrowserWindow object.
-- [ ] Native RPC callback receives the actual Electrobun RPC object.
-- [ ] Request reaches the intended Controller method.
-- [ ] Request return value reaches caller.
-- [ ] Message reaches intended Controller method without response contract.
-- [ ] `@Window()` receives the correct native object through the injector system.
-- [ ] Undecorated public Controller method is not exposed.
-- [ ] Managed traffic is not accepted before Providers/registries are ready.
-- [ ] Manual Electrobun path works with `withContext(existingContext).start()`.
-- [ ] Native outgoing communication remains usable without Bunwire replacing it.
+- [ ] **[Automated / E2E]** `app.start()` creates/configures the normal Electrobun host through the adapter.
+- [ ] **[Automated / E2E]** Adapter context is available in the root container before adapter/application Provider registration that depends on it.
+- [ ] **[Automated / E2E]** Main-window configuration reaches the real BrowserWindow creation path.
+- [ ] **[Automated / E2E]** Native window callback receives the actual BrowserWindow object.
+- [ ] **[Automated / E2E]** Native RPC callback receives the actual Electrobun RPC object.
+- [ ] **[Automated / E2E]** Request reaches the intended Controller method.
+- [ ] **[Automated / E2E]** Request return value reaches caller.
+- [ ] **[Automated / E2E]** Message reaches intended Controller method without response contract.
+- [ ] **[Automated / E2E]** `@Window()` receives the correct native object through the injector system.
+- [ ] **[Automated / E2E]** Undecorated public Controller method is not exposed.
+- [ ] **[Automated / E2E]** Managed traffic is not accepted before Providers/registries are ready.
+- [ ] **[Automated / E2E]** Manual Electrobun path works with `withContext(existingContext).start()`.
+- [ ] **[Automated / E2E]** Native outgoing communication remains usable without Bunwire replacing it.
 
 ## Exit criteria
 
@@ -1149,32 +1157,32 @@ Generated caller contract:
 
 ### Type level
 
-- [ ] Correct caller arguments compile.
-- [ ] Supplying `UserService` from frontend fails typecheck.
-- [ ] Supplying `CACHE` value from frontend fails typecheck.
-- [ ] Supplying `BrowserWindow` from frontend fails typecheck.
-- [ ] Missing required caller argument fails typecheck.
-- [ ] Optional caller argument can be omitted.
-- [ ] Too many caller arguments fail typecheck where the API permits strict checking.
-- [ ] Request return type is inferred correctly.
-- [ ] Message does not expose a meaningful response type.
+- [ ] **[Automated / Type-level]** Correct caller arguments compile.
+- [ ] **[Automated / Type-level]** Supplying `UserService` from frontend fails typecheck.
+- [ ] **[Automated / Type-level]** Supplying `CACHE` value from frontend fails typecheck.
+- [ ] **[Automated / Type-level]** Supplying `BrowserWindow` from frontend fails typecheck.
+- [ ] **[Automated / Type-level]** Missing required caller argument fails typecheck.
+- [ ] **[Automated / Type-level]** Optional caller argument can be omitted.
+- [ ] **[Automated / Type-level]** Too many caller arguments fail typecheck where the API permits strict checking.
+- [ ] **[Automated / Type-level]** Request return type is inferred correctly.
+- [ ] **[Automated / Type-level]** Message does not expose a meaningful response type.
 
 ### Runtime/E2E
 
-- [ ] Importing `bootstrap.ts` creates/configures but does not start the Application.
-- [ ] `app.start()` performs startup exactly once.
-- [ ] Full Electrobun adapter creates the normal native context from declarative config.
-- [ ] Native callbacks receive actual Electrobun objects.
-- [ ] Adapter-created context is available to Providers during registration.
-- [ ] Request with correct caller args reconstructs complete server method args.
-- [ ] Request with too few runtime args fails clearly.
-- [ ] Request with too many runtime args fails clearly.
-- [ ] Provider `register()` runs once for the process/application lifetime.
-- [ ] Provider `boot()` runs for each request/message invocation.
-- [ ] Adapter-owned Providers participate in the same lifecycle as application Providers.
-- [ ] No service/controller is manually instantiated by application code.
-- [ ] No manual RPC handler table is required.
-- [ ] Manual-host fixture starts successfully with `withContext(existingContext)`.
+- [ ] **[Automated / E2E]** Importing `bootstrap.ts` creates/configures but does not start the Application.
+- [ ] **[Automated / E2E]** `app.start()` performs startup exactly once.
+- [ ] **[Automated / E2E]** Full Electrobun adapter creates the normal native context from declarative config.
+- [ ] **[Automated / E2E]** Native callbacks receive actual Electrobun objects.
+- [ ] **[Automated / E2E]** Adapter-created context is available to Providers during registration.
+- [ ] **[Automated / E2E]** Request with correct caller args reconstructs complete server method args.
+- [ ] **[Automated / E2E]** Request with too few runtime args fails clearly.
+- [ ] **[Automated / E2E]** Request with too many runtime args fails clearly.
+- [ ] **[Automated / E2E]** Provider `register()` runs once for the process/application lifetime.
+- [ ] **[Automated / E2E]** Provider `boot()` runs for each request/message invocation.
+- [ ] **[Automated / E2E]** Adapter-owned Providers participate in the same lifecycle as application Providers.
+- [ ] **[Automated / Architecture]** No service/controller is manually instantiated by application code.
+- [ ] **[Automated / Architecture]** No manual RPC handler table is required.
+- [ ] **[Automated / E2E]** Manual-host fixture starts successfully with `withContext(existingContext)`.
 
 ## Exit criteria
 
@@ -1219,39 +1227,39 @@ Turn the architecture into a dependable initial release without expanding scope 
 
 ### Architecture
 
-- [ ] `core` contains no Vite import.
-- [ ] `core` contains no Electrobun import.
-- [ ] Vite contains no hard-coded Electrobun decorator switch.
-- [ ] Fake second adapter adds its own outer/method decorators without Core modifications.
-- [ ] Runtime contains no filesystem source discovery.
+- [ ] **[Automated / Architecture]** `core` contains no Vite import.
+- [ ] **[Automated / Architecture]** `core` contains no Electrobun import.
+- [ ] **[Automated / Architecture]** Vite contains no hard-coded Electrobun decorator switch.
+- [ ] **[Automated / Architecture]** Fake second adapter adds its own outer/method decorators without Core modifications.
+- [ ] **[Automated / Architecture]** Runtime contains no filesystem source discovery.
 
 ### DI policy
 
-- [ ] Managed class auto-injects by type.
-- [ ] Plain class does not accidentally auto-inject.
-- [ ] Plain class with explicit `@Inject(Class)` + binding resolves.
-- [ ] Interface requires explicit token.
-- [ ] Missing runtime token binding errors clearly.
+- [ ] **[Automated / Compiler Fixture]** Managed class auto-injects by type.
+- [ ] **[Automated / Compiler Fixture]** Plain class does not accidentally auto-inject.
+- [ ] **[Automated / Integration]** Plain class with explicit `@Inject(Class)` + binding resolves.
+- [ ] **[Automated / Compiler Fixture]** Interface requires explicit token.
+- [ ] **[Automated / Behavioral]** Missing runtime token binding errors clearly.
 
 ### Invocation
 
-- [ ] Interleaved injected/caller parameters remain correct.
-- [ ] Generated caller indexes remain stable.
-- [ ] Parameter injector indexes remain correct.
-- [ ] No ordinary `@Arg(index)` API is required.
+- [ ] **[Automated / Integration]** Interleaved injected/caller parameters remain correct.
+- [ ] **[Automated / Generated Output]** Generated caller indexes remain stable.
+- [ ] **[Automated / Compiler Fixture]** Parameter injector indexes remain correct.
+- [ ] **[Automated / Compiler Fixture]** No ordinary `@Arg(index)` API is required.
 
 ### Provider lifecycle
 
-- [ ] `register()` exactly once.
-- [ ] `boot()` per invocation.
-- [ ] concurrent invocation state isolation.
+- [ ] **[Automated / Integration]** `register()` exactly once.
+- [ ] **[Automated / Integration]** `boot()` per invocation.
+- [ ] **[Automated / Integration]** concurrent invocation state isolation.
 
 ### Release
 
-- [ ] Clean checkout installs, typechecks, tests, and builds.
-- [ ] Example Electrobun application builds.
-- [ ] Generated contracts compile in frontend example.
-- [ ] Public package exports contain only intended APIs.
+- [ ] **[Automated / Build]** Clean checkout installs, typechecks, tests, and builds.
+- [ ] **[Automated / Build]** Example Electrobun application builds.
+- [ ] **[Automated / Type-level]** Generated contracts compile in frontend example.
+- [ ] **[Automated / Architecture]** Public package exports contain only intended APIs.
 
 ## Exit criteria
 

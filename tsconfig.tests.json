@@ -2,16 +2,19 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "allowJs": true,
+    "baseUrl": ".",
     "checkJs": false,
     "composite": false,
     "declaration": false,
     "declarationMap": false,
+    "esModuleInterop": true,
     "noEmit": true,
+    "paths": {
+      "@bunwire/core": ["packages/core/src/index.ts"]
+    },
     "types": ["node", "vitest/globals"]
   },
   "include": [
-    "packages/**/*.test.ts",
-    "tests/**/*.test.ts",
-    "scripts/**/*.mjs"
+    "tests/**/*.test.ts"
   ]
 }

@@ -4,7 +4,7 @@ import {
   defineManagedClassDecorator,
   getManagedClassMetadata,
   type ManagedClassKind,
-} from "../index.js";
+} from "@bunwire/core";
 
 describe("managed class kinds", () => {
   it("allows unrelated class kinds to coexist without a central enum", () => {
@@ -38,6 +38,17 @@ describe("managed class kinds", () => {
       analyzeConstructor: false,
       managedMethods: false,
     })).toThrow(/namespaced identifier/);
+
+    if (false) {
+      defineClassKind({
+        // @ts-expect-error A class-kind ID must be namespaced at compile time.
+        id: "invalid",
+        injectable: false,
+        autoDiscover: false,
+        analyzeConstructor: false,
+        managedMethods: false,
+      });
+    }
   });
 
   it("configures injectability independently from managed methods", () => {

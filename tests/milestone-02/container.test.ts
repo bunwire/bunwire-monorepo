@@ -3,7 +3,7 @@ import {
   Container,
   ContainerResolutionError,
   createToken,
-} from "../index.js";
+} from "@bunwire/core";
 
 describe("runtime tokens", () => {
   it("creates unique custom tokens even when descriptions match", () => {
@@ -57,7 +57,29 @@ describe("class resolution from constructor metadata", () => {
     expect(container.get(Service).logger).toBe(container.get(Logger));
   });
 
-  it("preserves multiple constructor positions when metadata is out of order", () => {
+  it("preserves multiple constructor dependency positions", () => {
+    const HOST = createToken<string>("position-host");
+    const PORT = createToken<number>("position-port");
+    class Server {
+      constructor(readonly host: string, readonly port: number) {}
+    }
+    const container = new Container()
+      .value(HOST, "127.0.0.1")
+      .value(PORT, 3000)
+      .transient(Server)
+      .registerConstructorMetadata({
+        target: Server,
+        dependencies: [
+          { index: 0, token: HOST },
+          { index: 1, token: PORT },
+        ],
+      });
+
+    const server = container.get(Server);
+    expect([server.host, server.port]).toEqual(["127.0.0.1", 3000]);
+  });
+
+  it("orders constructor arguments when dependency metadata is supplied out of order", () => {
     const PORT = createToken<number>("port");
     const HOST = createToken<string>("host");
     class Server {

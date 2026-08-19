@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkCoreBoundaries, findForbiddenCoreImports } from "../scripts/check-boundaries.mjs";
+import { checkCoreBoundaries, findForbiddenCoreImports } from "../../scripts/check-boundaries.mjs";
 
 describe("package boundaries", () => {
   it("rejects a deliberate Core to Vite import", () => {

@@ -1,3 +1,5 @@
+# AGENTS.md
+
 ## Project Instructions
 
 This monorepo implements Bunwire and its Core, compiler/build tooling, adapters, examples, and supporting packages.
@@ -11,7 +13,7 @@ Do not implement the project from assumptions or from generic framework conventi
 
 If implementation details are unclear, prefer the architecture described in `docs/README.md` and the concrete acceptance requirements in `docs/MILESTONES.md`.
 
-Do not silently redesign documented architecture while implementing it. If implementation reveals a genuine architectural conflict, record the conflict clearly in `progress.md` before making the smallest reasonable implementation decision.
+Do not silently redesign documented architecture while implementing it. If implementation reveals a genuine architectural conflict, record the conflict clearly in the current milestone's dedicated progress file before making the smallest reasonable implementation decision.
 
 ---
 
@@ -587,34 +589,41 @@ When a change affects shared Core or compiler behavior, verify relevant dependen
 
 ## Progress Tracking
 
-Maintain a repository-root file named:
+Maintain two levels of implementation progress tracking:
 
-`progress.md`
+1. a repository-root `progress.md` file containing the concise overall project status; and
+2. a dedicated progress file for every milestone that has been started or completed.
 
-Create it if it does not exist.
+Create a repository-root directory named:
 
-Update `progress.md` throughout implementation.
+`progress/`
 
-It must serve as the implementation record for the project and make it easy for the repository owner or another agent to understand:
+Each milestone must have its own file using the milestone number, for example:
 
-- what has been implemented
-- which milestone is currently in progress
+- `progress/milestone-00.md`
+- `progress/milestone-01.md`
+- `progress/milestone-02.md`
+
+Use the milestone numbering from `docs/MILESTONES.md`.
+
+Do not combine detailed implementation histories for multiple milestones into one milestone progress file.
+
+### Main `progress.md`
+
+The repository-root `progress.md` is the project-level index.
+
+Keep it concise.
+
+It should tell the repository owner or another agent:
+
+- what has been implemented overall
 - which milestones are complete
-- which milestone requirements remain
-- which monorepo packages were changed
-- what tests were added
-- what tests were run
-- whether those tests passed
-- important implementation decisions
-- deviations or unresolved questions
-- known limitations
-- what should work at the current stage
-- what is intentionally not expected to work yet
-- what should be implemented next
+- which milestone is currently in progress
+- what milestone comes next
+- whether there are known blockers
+- where to find the detailed progress record for each started or completed milestone
 
-Do not update `progress.md` only at the end.
-
-Keep it current as meaningful work is completed.
+For every milestone that is in progress or complete, link to its dedicated progress file.
 
 Use a structure similar to:
 
@@ -623,84 +632,147 @@ Use a structure similar to:
 
 ## Current Status
 
-Current milestone: Milestone X — <name>
+Current milestone: Milestone 2 — <name>
 
 Overall status:
 
-- Milestone 0: Complete
-- Milestone 1: Complete
-- Milestone 2: In progress
+- Milestone 0: Complete — [details](progress/milestone-00.md)
+- Milestone 1: Complete — [details](progress/milestone-01.md)
+- Milestone 2: In progress — [details](progress/milestone-02.md)
 - Milestone 3+: Not started
 
-## Completed Milestones
+## Implemented
 
-### Milestone 0 — <name>
+- ...
+- ...
+- ...
 
-Packages changed:
+## Current Work
+
+- Milestone 2 — <name>
+- ...
+- ...
+
+## Next
+
+- Milestone 3 — <name>
+- ...
+
+## Blockers
+
+- None
+
+## Milestone Progress Files
+
+- [Milestone 0](progress/milestone-00.md)
+- [Milestone 1](progress/milestone-01.md)
+- [Milestone 2](progress/milestone-02.md)
+```
+
+`progress.md` should not duplicate the full implementation history, complete test logs, or detailed acceptance-criteria notes contained in the milestone files.
+
+Its purpose is to answer quickly:
+
+- Where is the project now?
+- What has already been implemented?
+- What is being implemented now?
+- What comes next?
+- Where are the details?
+
+Update `progress.md` whenever a milestone starts, changes status, completes, or when the next planned work changes.
+
+### Milestone Progress Files
+
+Create the dedicated progress file as soon as work on a milestone begins.
+
+The milestone file is the detailed implementation record for that milestone.
+
+For example, while implementing Milestone 2, maintain:
+
+`progress/milestone-02.md`
+
+The file must make it possible for the repository owner or another agent to understand the complete state of that milestone without reconstructing previous work.
+
+Each milestone progress file should record:
+
+- milestone name and number
+- current milestone status
+- packages changed
+- requirements implemented
+- requirements remaining
+- acceptance criteria
+- tests added
+- tests run
+- exact test results
+- important implementation decisions
+- architectural issues encountered
+- deviations or unresolved questions
+- known limitations
+- expected working behavior after the milestone
+- functionality intentionally not expected yet
+- regressions checked
+- any blockers
+- what remains before the milestone can be declared complete
+
+Use a structure similar to:
+
+```md
+# Milestone 2 — <name>
+
+Status: In progress
+
+## Packages Changed
 
 - `packages/...`
 - `packages/...`
 
-Implemented:
+## Implemented
 
 - ...
 - ...
 
-Tests added:
+## Remaining
 
 - ...
 - ...
 
-Tests run:
+## Acceptance Criteria
+
+- [x] ...
+- [ ] ...
+- [ ] ...
+
+## Tests Added
+
+- ...
+- ...
+
+## Tests Run
 
 - `...`
 - `...`
 
-Result:
+## Test Results
 
-- Passed
+- Passed: ...
+- Failed: ...
+- Skipped: ...
 
-Acceptance criteria:
-
-- [x] ...
-- [x] ...
-
-Expected behavior:
+## Regression Checks
 
 - ...
 - ...
 
-Not expected yet:
+## Expected Behavior
+
+After this milestone:
 
 - ...
 - ...
 
-## Current Milestone
-
-### Milestone 2 — <name>
-
-Packages being changed:
+## Not Expected Yet
 
 - ...
-
-Completed:
-
-- ...
-
-Remaining:
-
-- ...
-
-Tests currently passing:
-
-- ...
-
-Tests still required:
-
-- ...
-
-Open issues:
-
 - ...
 
 ## Important Decisions
@@ -713,15 +785,34 @@ Open issues:
 - ...
 - ...
 
-## Next Work
+## Blockers
+
+- None
+
+## Next Work Within This Milestone
 
 - ...
 - ...
 ```
 
-Keep this file concise enough to remain useful, but detailed enough that another agent or the repository owner can continue the implementation without reconstructing previous work.
+Do not update milestone progress only at the end.
 
-When a milestone becomes complete, explicitly mark it complete and record the acceptance criteria and tests that establish completion.
+Keep the current milestone's progress file updated as meaningful work is completed, tests are added or run, acceptance criteria change status, or implementation decisions are made.
+
+When a milestone becomes complete:
+
+1. mark its dedicated progress file as `Status: Complete`;
+2. ensure all acceptance criteria are recorded and checked;
+3. record the final tests and regression checks that establish completion;
+4. record what the repository owner should now expect to work;
+5. record what is intentionally left for later milestones; and
+6. update `progress.md` to mark the milestone complete and point to the completed milestone file.
+
+Never delete a completed milestone progress file merely because work has moved to a later milestone.
+
+Completed milestone files are part of the project's implementation history.
+
+When beginning the next milestone, create its dedicated progress file and update `progress.md` so it becomes the current milestone.
 
 ---
 
@@ -737,7 +828,8 @@ A milestone is complete only when:
 4. those tests pass;
 5. relevant regressions have been checked;
 6. affected workspace packages still build/test where applicable;
-7. `progress.md` records the completed work and expected behavior.
+7. the milestone's dedicated progress file records the completed work, acceptance criteria, tests, and expected behavior; and
+8. `progress.md` marks the milestone complete and links to that milestone progress file.
 
 If a milestone cannot be completed, leave it marked as incomplete and document exactly what remains.
 
@@ -764,7 +856,7 @@ Do not rewrite architectural decisions simply to fit an easier implementation.
 
 Prefer changing the implementation to match the architecture unless there is a concrete technical reason the documented design cannot work.
 
-Record significant architectural changes in `progress.md`.
+Record significant architectural changes in the relevant milestone progress file, and summarize project-level consequences in `progress.md` when appropriate.
 
 When changing public APIs, lifecycle behavior, adapter contracts, compiler behavior, package ownership, or generated output, verify whether `docs/README.md` or `docs/MILESTONES.md` must also be updated.
 
@@ -804,13 +896,8 @@ Prefer useful error messages and diagnostics, especially around:
 
 Continue implementation until the current milestone's acceptance criteria are satisfied or a concrete blocker is reached.
 
-When stopping work, ensure `progress.md` accurately describes:
+When stopping work:
 
-- the current milestone
-- repository state
-- packages changed
-- tests run
-- tests passing or failing
-- expected working functionality
-- expected missing functionality
-- the exact next implementation work
+- ensure the current milestone's dedicated `progress/milestone-XX.md` file accurately describes the detailed repository state for that milestone;
+- record packages changed, tests run, test results, acceptance-criteria status, expected working behavior, expected missing behavior, blockers, and exact remaining milestone work there; and
+- ensure the repository-root `progress.md` accurately summarizes what has been implemented, which milestone is current, what is next, and links to every started or completed milestone progress file.

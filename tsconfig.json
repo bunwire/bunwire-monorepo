@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/vite" },
+    { "path": "./packages/electrobun" },
+    { "path": "./examples/electrobun-app" }
+  ]
+}

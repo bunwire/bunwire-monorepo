@@ -1,0 +1,19 @@
+{
+  "name": "bunwire-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "typecheck": "tsc -b && tsc -p tsconfig.tests.json --noEmit",
+    "test": "vitest run",
+    "test:architecture": "vitest run tests/architecture.test.ts",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "quality": "pnpm check:boundaries && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

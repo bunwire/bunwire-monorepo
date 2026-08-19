@@ -1,0 +1,11 @@
+{
+  "name": "@bunwire/example-electrobun-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "tsc -b", "typecheck": "tsc -b --pretty false" },
+  "dependencies": {
+    "@bunwire/core": "workspace:*",
+    "@bunwire/electrobun": "workspace:*"
+  }
+}

@@ -1,0 +1,75 @@
+import type { ManagedClassKind } from "./class-kind.js";
+import {
+  createClassDecoratorId,
+  type ClassDecoratorId,
+  type NamespacedIdentifier,
+} from "./identifiers.js";
+import {
+  attachManagedClassMetadata,
+  type ManagedClassMetadata,
+  type ManagedClassTarget,
+} from "./metadata.js";
+
+export interface ManagedClassDecoratorDefinition<
+  Options,
+  Data,
+  Id extends string = string,
+> {
+  readonly id: ClassDecoratorId<Id>;
+  readonly kind: ManagedClassKind;
+  readonly createMetadata: (options: Options) => Data;
+}
+
+type DecoratorFactory<Options> = [Options] extends [void]
+  ? (options?: Options) => ClassDecorator
+  : (options: Options) => ClassDecorator;
+
+export type ManagedClassDecorator<Options, Data, Id extends string = string> =
+  DecoratorFactory<Options> & {
+    readonly definition: ManagedClassDecoratorDefinition<Options, Data, Id>;
+  };
+
+export interface DefineManagedClassDecoratorOptions<
+  Options,
+  Data,
+  Id extends NamespacedIdentifier,
+> {
+  readonly id: Id;
+  readonly kind: ManagedClassKind;
+  readonly createMetadata: (options: Options) => Data;
+}
+
+export function defineManagedClassDecorator<
+  Options = void,
+  Data = undefined,
+  const Id extends NamespacedIdentifier = NamespacedIdentifier,
+>(
+  options: DefineManagedClassDecoratorOptions<Options, Data, Id>,
+): ManagedClassDecorator<Options, Data, Id> {
+  const definition = Object.freeze({
+    id: createClassDecoratorId(options.id),
+    kind: options.kind,
+    createMetadata: options.createMetadata,
+  });
+
+  const factory = ((decoratorOptions: Options) => {
+    return ((target: Function) => {
+      const managedTarget = target as ManagedClassTarget;
+      const metadata: ManagedClassMetadata<Data> = {
+        decoratorId: definition.id,
+        kindId: definition.kind.id,
+        target: managedTarget,
+        data: definition.createMetadata(decoratorOptions),
+      };
+      attachManagedClassMetadata(managedTarget, metadata);
+    }) as ClassDecorator;
+  }) as ManagedClassDecorator<Options, Data, Id>;
+
+  Object.defineProperty(factory, "definition", {
+    enumerable: true,
+    value: definition,
+    writable: false,
+  });
+
+  return factory;
+}

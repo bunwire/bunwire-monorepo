@@ -1,55 +1,66 @@
-# TypeScript Application Framework — Architecture Specification v0.2
+# TypeScript Application Framework — Architecture Specification v0.4
+
+> Working architecture for Bunwire. This revision incorporates the clarified managed-class model, Provider lifecycle, compiled invocation plans, explicit token injection, adapter-extensible class/method decorators, and `bunwire.config.*` build configuration.
 
 ## 1. Overview
 
-We are designing a lightweight, opinionated **TypeScript application framework and application kernel**, with Electrobun as its first platform adapter.
+Bunwire is a lightweight, opinionated **TypeScript application framework and application kernel**, with Electrobun as its first platform adapter.
 
 The framework is intentionally broader than Electrobun.
 
 The architecture separates:
 
-- **Framework Core** — controllers, services, dependency injection, containers, providers, scopes, lifecycle, middleware, metadata, application composition, and extension APIs.
-- **Build tooling** — primarily a Vite integration responsible for source discovery, source analysis, validation, dependency-graph generation, and generated registries.
-- **Platform adapters** — integrations such as Electrobun that contribute platform-specific decorators, providers, parameter resolvers, transports, lifecycle behavior, compiler extensions, and metadata handlers.
+- **Framework Core** — managed class semantics, controllers, services, Providers, dependency injection, the container, bindings, scopes, tokens, invocation, lifecycle, middleware, metadata, application composition, and extension APIs.
+- **Build tooling** — primarily a Vite integration responsible for reading `bunwire.config.*`, source discovery, TypeScript symbol analysis, decorator analysis, generated registries, compiled invocation plans, validation, and generated RPC contracts.
+- **Platform adapters** — integrations such as Electrobun that contribute platform-specific managed class kinds, managed method kinds, parameter decorators/resolvers, transports, runtime registry consumers, lifecycle behavior, and compiler extensions.
 
-Electrobun should therefore not be embedded into Core.
+Electrobun must not be embedded into Core.
 
-The initial target is Electrobun, but Core should be designed so that another adapter can integrate naturally without requiring Core changes for every platform-specific feature.
+The initial target is Electrobun, but Core must expose enough generic machinery that another adapter can add new controller-like class kinds and route-like method kinds without requiring Core or Vite to hard-code them.
 
 The framework should provide:
 
-- Class-based controllers
-- Decorator-based application metadata
-- Request/response RPC endpoints through adapters
-- Fire-and-forget message endpoints through adapters
-- Parameter decorators
-- Constructor dependency injection
-- Method parameter injection
-- Services
-- Singleton and transient services
-- Explicit dependency/container registration
-- Automatic controller/service/provider discovery
-- A `bootstrap.ts` composition root
-- Application lifecycle management
-- Middleware
-- Build-time registration through Vite
-- Strong TypeScript typing
-- Generated application metadata
-- Generated RPC metadata/contracts
-- A generic adapter/extension system
-- Electrobun-specific infrastructure providers through the Electrobun adapter
+- managed class decorators;
+- class-based controllers;
+- services;
+- Providers with `register()` and `boot()` phases;
+- constructor dependency injection;
+- managed-method parameter injection;
+- explicit token injection;
+- singleton and transient bindings;
+- values, factories, aliases, and existing-instance bindings;
+- automatic discovery of managed classes;
+- adapter-defined managed class and managed method kinds;
+- build-time TypeScript analysis through Vite;
+- generated application registries;
+- generated invocation plans;
+- application lifecycle management;
+- middleware;
+- strong TypeScript typing;
+- generated RPC metadata/contracts;
+- Electrobun-specific infrastructure resolution through the Electrobun adapter.
 
 The framework should **not replace Electrobun**.
 
-It should turn Electrobun's low-level primitives into a higher-level application architecture while keeping Electrobun responsible for the underlying desktop runtime and communication mechanisms.
+It should turn Electrobun's low-level primitives into a higher-level application architecture while Electrobun remains responsible for the desktop runtime, windows, webviews, and underlying RPC mechanisms.
 
 ---
 
 # 2. Core Philosophy
 
-## 2.1 Convention
+## 2.1 Convention with a bounded source root
 
-Developers should be able to follow a predictable project structure:
+Applications define the Bunwire source area through `bunwire.config.*`.
+
+Conceptually:
+
+```ts
+export default defineBunwireConfig({
+  source: "./src/bun",
+});
+```
+
+A conventional application may look like:
 
 ```text
 src/
@@ -62,80 +73,74 @@ src/
     └── main.ts
 ```
 
-The build tooling automatically discovers relevant classes.
-
-Convention should reduce boilerplate without preventing explicit configuration.
-
----
+The folder names are conventions, not Core semantics. The compiler discovers managed objects by their registered decorators and adapter extensions within the configured source graph.
 
 ## 2.2 Explicitness
 
 Automatic discovery should never remove developer control.
 
-Developers should be able to explicitly register:
+Developers should be able to explicitly configure the container through Providers and the container API:
 
-- classes
-- providers
-- values
-- factories
-- aliases
-- tokens
-- middleware
-- singleton instances
-- application hooks
-- adapters
-
-through `bootstrap.ts` and/or the container API.
-
-Explicit registrations should be capable of overriding or augmenting convention-based registrations according to a documented precedence model.
-
----
-
-## 2.3 Compile-Time Intelligence
-
-The framework should perform as much discovery and validation as practical during development/build rather than relying on runtime filesystem scanning or excessive reflection.
-
-The intended pipeline is:
-
-```text
-Source
-  ↓
-Vite
-  ↓
-Scanner / Analyzer
-  ↓
-Framework + Adapter metadata
-  ↓
-Dependency and endpoint validation
-  ↓
-Generated Registry
-  ↓
-Application Runtime
+```ts
+container.bind(...)
+container.singleton(...)
+container.transient(...)
+container.value(...)
+container.factory(...)
+container.alias(...)
 ```
 
-Runtime should consume generated metadata rather than rediscovering the application structure.
+Explicit tokens are used where a TypeScript type does not provide a concrete runtime identity.
 
----
+## 2.3 Compile-time intelligence
 
-## 2.4 Platform Independence
-
-Core must not import or depend on Electrobun.
-
-Core understands concepts such as:
+Bunwire should perform expensive source interpretation once during development/build.
 
 ```text
+TypeScript Source
+      ↓
+bunwire.config.*
+      ↓
+Vite Plugin
+      ↓
+TypeScript Program / Symbols
+      ↓
+Managed Class Analysis
+      ↓
+Managed Method Analysis
+      ↓
+Parameter Classification
+      ↓
+Generated Registries + Invocation Plans
+      ↓
+Bundle
+      ↓
+Runtime executes generated plans
+```
+
+Runtime should not repeatedly inspect source files, rediscover methods, or determine which method parameters are caller arguments versus container injections.
+
+## 2.4 Platform independence
+
+Core understands generic concepts such as:
+
+```text
+Managed Class
+Managed Method
 Controller
 Service
 Provider
 Container
+Binding
 Dependency
+Token
 Scope
-Lifecycle
+Invocation
 Middleware
 Metadata
 Adapter
 Resolver
-Transport
+Registry
 ```
 
 Core must not directly understand:
@@ -145,119 +150,1549 @@ BrowserWindow
 Webview
 Electrobun RPC
 Electrobun messages
-Bun
+HTTP GET
+HTTP POST
+Bun-specific transport objects
 ```
 
-Those belong to the Electrobun adapter.
+Those meanings belong to adapters.
 
----
+## 2.5 Adapter extensibility
 
-## 2.5 Adapter Extensibility
-
-Adapters are first-class framework extensions.
+Adapters are first-class compiler and runtime extensions, represented at runtime by **class instances**.
 
 An adapter may contribute:
 
-- decorators
-- parameter decorators
-- providers
-- parameter resolvers
-- transports
-- lifecycle hooks
-- compiler/build-time extensions
-- metadata handlers
-- application configuration
-- platform services
+- outer/class decorators;
+- method decorators;
+- parameter injectors;
+- managed class-kind definitions;
+- managed method-kind definitions;
+- adapter-owned Providers;
+- runtime registry consumers;
+- transports;
+- host lifecycle integration;
+- compiler metadata handlers;
+- validation rules;
+- generated contract extensions.
 
-This allows a platform to integrate without modifying Core.
+The adapter instance is attached to the already-created Bunwire `Application` during application definition. This gives the adapter access to the same registration mechanisms used by Core while the application is still unstarted.
+
+The adapter may also own the normal host bootstrap for its platform. For example, an Electrobun adapter may create/configure the native RPC model and main window; an Express adapter may create/configure the Express application and HTTP server.
+
+Core provides the mechanism; the adapter gives the mechanism platform meaning and may expose native host objects back to the developer through typed configuration callbacks.
 
 ---
 
-# 3. High-Level Architecture
+# 3. The Managed Class Model
+
+An **outer/class decorator** opts a class into Bunwire's managed application graph and describes how the compiler/runtime should treat that class.
+
+The built-in managed classes are initially:
 
 ```text
-                         Application Source
-                                │
-             ┌──────────────────┼──────────────────┐
-             │                  │                  │
-        Controllers          Services          Providers
-             │                  │                  │
-             └──────────────────┼──────────────────┘
-                                │
-                           Vite Plugin
-                                │
-                    Build-Time Discovery
-                                │
-                    Framework Compiler
-                                │
-                    Loaded Adapter Extensions
-                                │
-                    Generated Application
-                           Registry
-                                │
-                         Application
-                          Bootstrap
-                                │
-                         Dependency
-                           Container
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-               Core Runtime          Platform Adapter
-                                            │
-                                      Electrobun
-                                            │
-                              ┌─────────────┼─────────────┐
-                              │             │             │
-                             RPC         Window        Webview
-                              │
-                     ┌────────┴────────┐
-                     │                 │
-                  Requests          Messages
-                     │                 │
-                 @Route()          @Message()
+Service
+Controller
+Provider
 ```
+
+Adapters may add more.
+
+A managed class kind can conceptually declare capabilities such as:
+
+```ts
+defineClassKind({
+  id: "core.service",
+  injectable: true,
+  autoDiscover: true,
+  analyzeConstructor: true,
+  managedMethods: false,
+});
+```
+
+Controller-like:
+
+```ts
+defineClassKind({
+  id: "core.controller",
+  injectable: true,
+  autoDiscover: true,
+  analyzeConstructor: true,
+  managedMethods: true,
+  registry: true,
+});
+```
+
+Adapter-defined:
+
+```ts
+defineClassKind({
+  id: "queue.consumer",
+  injectable: true,
+  autoDiscover: true,
+  analyzeConstructor: true,
+  managedMethods: true,
+  registry: true,
+});
+```
+
+The exact API is subject to implementation. The important architectural point is that Vite must not contain a hard-coded list of every possible class decorator.
 
 ---
 
-# 4. Monorepo Architecture
+# 4. Automatic Injection Boundary
 
-The project should be organized as a monorepo from the beginning.
+Automatic type-based DI is allowed only where Bunwire has an explicit managed-class contract.
+
+For example:
+
+```ts
+@Service()
+export class UserService {}
+
+@Controller("users")
+export class UserController {
+  constructor(
+    private readonly users: UserService,
+  ) {}
+}
+```
+
+Because `UserService` is a managed, injectable class kind, the compiler may infer that constructor parameter automatically.
+
+A random undecorated class is **not** automatically treated as a server-side dependency merely because TypeScript can locate its declaration:
+
+```ts
+export class RandomUtility {}
+```
+
+If a developer wants it from the container, they make that explicit:
+
+```ts
+@Controller("users")
+export class UserController {
+  constructor(
+    @Inject(RandomUtility)
+    private readonly utility: RandomUtility,
+  ) {}
+}
+```
+
+and bind it:
+
+```ts
+container.singleton(RandomUtility);
+```
+
+This prevents DTOs, transport objects, and ordinary application classes from accidentally becoming DI dependencies.
+
+---
+
+# 5. Services
+
+A Service is a managed application class containing reusable application/business logic.
+
+```ts
+@Service()
+export class UserService {
+  constructor(
+    private readonly database: DatabaseService,
+  ) {}
+
+  async find(id: string) {
+    return this.database.users.find(id);
+  }
+}
+```
+
+A Service:
+
+- is automatically discoverable;
+- can be automatically injected by concrete class type;
+- can have constructor dependencies;
+- can have singleton or transient scope;
+- does **not** have Provider lifecycle semantics;
+- does **not** require its ordinary methods to be compiled into an invocation registry.
+
+Service methods are ordinary TypeScript methods called by application code.
+
+---
+
+# 6. Controllers
+
+A Controller is Core's built-in controller-style managed class kind.
+
+```ts
+@Controller("users")
+export class UserController {
+  constructor(
+    private readonly users: UserService,
+  ) {}
+}
+```
+
+A Controller:
+
+- is automatically discovered;
+- can have constructor DI;
+- can itself be injectable where useful;
+- has a generated class registry entry;
+- may contain managed/invocable methods contributed by adapters or Core extensions.
+
+Core defines what a Controller **is structurally**. It does not have to define what an Electrobun request or HTTP route means.
+
+---
+
+# 7. Providers
+
+A Provider is **not a Service** and is not a synonym for a container binding.
+
+A Provider is a managed lifecycle/bootstrap class.
+
+```ts
+@Provider()
+export class AppProvider {
+  register(container: Container) {
+    container.singleton(EventBus);
+    container.bind(Logger, ProductionLogger);
+  }
+
+  async boot(context: InvocationContext) {
+    // Runs for each managed invocation.
+  }
+}
+```
+
+Provider lifecycle:
+
+```text
+register(container)
+    ↓
+called once during app.start(), after host context is available
+    ↓
+configures root/runtime container bindings
+
+boot(context)
+    ↓
+called for each managed invocation
+    ↓
+prepares invocation-level state before the target method executes
+```
+
+`register()` receives the container as its framework-owned parameter. It is not a normal managed method whose parameter list is inferred from application DI.
+
+`boot()` is invocation-level, not application-startup bootstrapping.
+
+Providers are automatically discovered and receive generated Provider registry entries so the application kernel can load and call their known lifecycle hooks.
+
+Container entries should be called **bindings**, not Providers.
+
+---
+
+# 8. Bindings, Tokens, and Explicit Injection
+
+A binding is something the container knows how to resolve.
+
+Bindings include:
+
+- class bindings;
+- singleton class bindings;
+- transient class bindings;
+- value bindings;
+- factory bindings;
+- aliases;
+- existing instances.
+
+Not every injectable thing is a concrete class.
+
+For interfaces, objects, factories, runtime handles, and other erased TypeScript types, use a runtime token:
+
+```ts
+export interface Cache {
+  get(key: string): Promise<unknown>;
+}
+
+export const CACHE = createToken<Cache>("cache");
+```
+
+Bind it:
+
+```ts
+@Provider()
+export class CacheProvider {
+  register(container: Container) {
+    container.singleton(CACHE, () => createCache());
+  }
+}
+```
+
+Inject it explicitly:
+
+```ts
+@Service()
+export class UserService {
+  constructor(
+    @Inject(CACHE)
+    private readonly cache: Cache,
+  ) {}
+}
+```
+
+An interface by itself is not a runtime token and must not be treated as one.
+
+---
+
+# 9. Container
+
+Core owns the dependency container.
+
+Conceptually:
+
+```ts
+container.bind(Logger, ProductionLogger);
+container.singleton(DatabaseService);
+container.transient(FormatterService);
+container.value(APP_CONFIG, config);
+container.factory(Database, createDatabase);
+container.alias(Cache, REDIS_CACHE);
+container.get(UserService);
+```
+
+The exact overloads are subject to implementation.
+
+The container owns runtime resolution and lifetimes. Vite owns compile-time knowledge of **how an injection position should be resolved**, not the runtime value itself.
+
+---
+
+# 10. Constructor Dependency Metadata
+
+Managed class constructors are analyzed by Vite.
+
+```ts
+@Service()
+export class UserService {
+  constructor(
+    private readonly logger: LoggerService,
+    @Inject(CACHE)
+    private readonly cache: Cache,
+  ) {}
+}
+```
+
+Generated metadata preserves real constructor positions:
+
+```ts
+{
+  target: UserService,
+  dependencies: [
+    {
+      index: 0,
+      source: "container",
+      token: LoggerService,
+    },
+    {
+      index: 1,
+      source: "container",
+      token: CACHE,
+    },
+  ],
+}
+```
+
+Indexes are semantically important even if the generated code later optimizes the representation.
+
+---
+
+# 11. Managed Method Kinds
+
+An outer managed class may permit **managed method decorators**.
+
+For Electrobun, a Controller can contain:
+
+```ts
+@Route("get")
+getUser(...) {}
+
+@Message("selected")
+selected(...) {}
+```
+
+An adapter may introduce a completely different class/method pair:
+
+```ts
+@Consumer()
+export class OrderConsumer {
+  @Subscribe("orders.created")
+  handle(...) {}
+}
+```
+
+The adapter can conceptually declare:
+
+```ts
+defineMethodKind({
+  id: "queue.subscribe",
+  allowedOn: ["queue.consumer"],
+  invocable: true,
+});
+```
+
+The compiler then generates the owning class, method, extension metadata, and complete parameter plan without Vite understanding queue semantics.
+
+---
+
+# 12. Method Parameters: Two Coordinate Systems
+
+Every managed/invocable method has two distinct parameter coordinate systems:
+
+1. **method indexes** — the real positions in the server-side method;
+2. **caller argument indexes** — the positions visible to the transport/frontend caller.
+
+Example:
+
+```ts
+@Route("get")
+get(
+  id: string,                  // method index 0 / caller arg 0
+  users: UserService,          // method index 1 / container
+  name: string,                // method index 2 / caller arg 1
+  @Inject(CACHE) cache: Cache, // method index 3 / container
+  active?: boolean,            // method index 4 / caller arg 2
+) {}
+```
+
+Generated plan:
+
+```ts
+{
+  method: "get",
+  parameters: [
+    {
+      index: 0,
+      source: "transport",
+      argumentIndex: 0,
+      optional: false,
+    },
+    {
+      index: 1,
+      source: "container",
+      token: UserService,
+    },
+    {
+      index: 2,
+      source: "transport",
+      argumentIndex: 1,
+      optional: false,
+    },
+    {
+      index: 3,
+      source: "container",
+      token: CACHE,
+    },
+    {
+      index: 4,
+      source: "transport",
+      argumentIndex: 2,
+      optional: true,
+    },
+  ],
+}
+```
+
+The frontend sends only:
+
+```ts
+rpc.request("users/get", id, name, active);
+```
+
+It never supplies `UserService` or `CACHE`.
+
+---
+
+# 13. Default Method Parameter Classification
+
+For a managed method, the compiler enumerates **every parameter automatically**.
+
+The default classification order should be:
+
+```text
+registered parameter injector decorator?
+    → injector(resolverId)
+
+explicit @Inject(TOKEN)?
+    → container(TOKEN)
+
+concrete type belongs to a managed class kind with injectable=true?
+    → container(Class)
+
+otherwise
+    → caller/transport argument
+```
+
+This means an Electrobun controller can be written naturally:
+
+```ts
+@Route("get")
+get(
+  id: string,
+  users: UserService,
+  includePosts?: boolean,
+) {}
+```
+
+and compile to:
+
+```text
+method 0 ← caller arg 0
+method 1 ← container(UserService)
+method 2 ← caller arg 1
+```
+
+No `@Arg(0)` decorator is required.
+
+Parameter injectors are framework-supplied parameters. They are never caller-visible, regardless of whether their value comes from the container, the invocation context, or an adapter-specific runtime resolver.
+
+---
+
+# 14. `@Inject()`
+
+`@Inject()` is explicit runtime token selection.
+
+Constructor example:
+
+```ts
+constructor(
+  @Inject(CACHE)
+  cache: Cache,
+) {}
+```
+
+Managed method example:
+
+```ts
+@Route("save")
+save(
+  payload: SaveDto,
+  @Inject(CACHE) cache: Cache,
+) {}
+```
+
+In a managed method, `@Inject()` also tells the compiler that the parameter is **not caller-visible**.
+
+`@Inject()` is necessary when:
+
+- the TypeScript type is an interface;
+- the runtime identity is a token/alias rather than a concrete managed class;
+- the developer wants to override type inference;
+- the parameter is an explicitly bound plain class.
+
+---
+
+# 15. Parameter Injectors
+
+Injected managed-method parameters are a first-class extension category.
+
+Core provides container injection through `@Inject()` and managed-class type inference. Adapters may define additional parameter-injection decorators whose values come from adapter/runtime context.
+
+Electrobun examples:
+
+```ts
+@Window()
+window: BrowserWindow
+```
+
+```ts
+@Webview()
+webview: Webview
+```
+
+```ts
+@Context()
+context: RpcContext
+```
+
+Conceptually:
+
+```text
+@Inject(CACHE)  → Core/container injector
+@Window()       → Electrobun injector
+@Webview()      → Electrobun injector
+@Context()      → Electrobun injector
+```
+
+Each adapter parameter injector has a registered runtime resolver ID. The decorator selects the injection source; it does not manually specify the method parameter index because TypeScript analysis already provides that index.
+
+A transport-specific `@Body()` may exist only if the adapter has a meaningful payload/body abstraction. It is not required for ordinary positional Electrobun arguments.
+
+All injected parameters are excluded automatically from generated caller-facing contracts.
+
+---
+
+# 16. No `@Arg(index)` Requirement
+
+Bunwire should not require developers to repeat parameter positions manually.
+
+This:
+
+```ts
+@Route("get")
+get(id: string, page: number) {}
+```
+
+already gives the compiler enough information to generate:
+
+```text
+method index 0 ← caller argument 0
+method index 1 ← caller argument 1
+```
+
+When injected parameters are interleaved:
+
+```ts
+get(
+  id: string,
+  users: UserService,
+  page: number,
+  logger: LoggerService,
+) {}
+```
+
+Bunwire generates:
+
+```text
+method 0 ← caller arg 0
+method 1 ← container(UserService)
+method 2 ← caller arg 1
+method 3 ← container(LoggerService)
+```
+
+The compiler owns this mapping.
+
+---
+
+# 17. Caller Argument Validation
+
+The generated invocation plan knows which parameters are caller-visible and which are optional.
+
+For:
+
+```ts
+get(
+  id: string,
+  users: UserService,
+  name: string,
+  active?: boolean,
+) {}
+```
+
+the caller-visible signature is:
+
+```ts
+(id: string, name: string, active?: boolean)
+```
+
+At runtime, Bunwire should reject too few or too many transport arguments according to the generated plan.
+
+Generated TypeScript contracts should catch most mistakes at development time; runtime validation protects the RPC boundary.
+
+---
+
+# 18. Compiled Invocation Plans
+
+The Vite compiler performs method classification once and emits an execution plan.
+
+Runtime should not ask:
+
+```text
+Which parameters are injected?
+Which parameters came from the frontend?
+What is their position?
+Which token should be resolved?
+```
+
+Those questions were already answered by generated metadata/code.
+
+A first implementation may interpret metadata:
+
+```ts
+args[0] = incoming[0];
+args[1] = container.get(UserService);
+args[2] = incoming[1];
+```
+
+A later optimizer may generate direct invoker functions:
+
+```ts
+function invokeUsersGet(controller, container, incoming) {
+  return controller.get(
+    incoming[0],
+    container.get(UserService),
+    incoming[1],
+  );
+}
+```
+
+Both honor the same semantic model.
+
+---
+
+# 19. Provider Registration vs Build-Time Compilation
+
+Provider bindings are runtime configuration.
+
+Vite does **not** need to execute Provider `register()` or prove that every explicit token is bound in order to generate injection plans.
+
+For:
+
+```ts
+@Route("save")
+save(
+  @Inject(CACHE) cache: Cache,
+) {}
+```
+
+Vite only needs to compile:
+
+```text
+method parameter → container(CACHE)
+```
+
+At runtime a Provider may establish the binding:
+
+```ts
+register(container: Container) {
+  container.singleton(CACHE, () => createCache());
+}
+```
+
+If `CACHE` is not actually available at runtime, the container reports a resolution error.
+
+Future static analysis may inspect declarative bindings for better diagnostics, but Provider AST interpretation is not required for the first architecture.
+
+---
+
+# 20. Application Runtime Lifecycle
+
+`defineApp()` creates an **Application instance immediately**. The object can be configured and exported before anything is started.
+
+The normal runtime lifecycle is conceptually:
+
+```text
+bootstrap.ts executes
+        ↓
+defineApp() creates Application
+        ↓
+withAdapter(adapterInstance)
+        ↓
+adapter attaches to Application and contributes
+Providers / injectors / runtime integration
+        ↓
+Application is exported but NOT started
+        ↓
+host entrypoint imports Application
+        ↓
+app.start()
+        ↓
+create root container
+        ↓
+load generated registry
+        ↓
+primary adapter prepares native host context
+without accepting managed traffic yet
+        ↓
+store application/adapter context in container
+        ↓
+discover/create Provider instances
+        ↓
+Provider.register(rootContainer) — once
+        ↓
+apply auto-generated managed-class bindings
+        ↓
+connect generated managed methods to adapter runtime
+        ↓
+primary adapter completes host start
+        ↓
+Application running
+        ↓
+Incoming invocation
+        ↓
+Create invocation context/scope where required
+        ↓
+Provider.boot(context) — per invocation
+        ↓
+Resolve target managed class
+        ↓
+Execute compiled parameter/injector plan
+        ↓
+Middleware
+        ↓
+Managed method
+        ↓
+Transport result / completion
+```
+
+The exact internal adapter lifecycle method names are implementation details. The public lifecycle boundary is `app.start()`.
+
+For the manual-host escape hatch, `app.withContext(context)` supplies an already-created host context before `start()`. This path is useful for existing applications, unusual host ownership, and tests; it is not the recommended default when a full adapter can own the platform bootstrap.
+
+Exact ordering between explicit Provider bindings and convention-generated bindings must preserve deterministic developer override behavior.
+
+---
+
+# 21. Registration Precedence
+
+A useful intended precedence is:
+
+```text
+Framework defaults
+      ↓
+Convention/generated managed-class defaults
+      ↓
+Adapter defaults
+      ↓
+Provider.register() explicit bindings
+      ↓
+Explicit application/runtime overrides, where supported
+```
+
+Implementation may stage these differently as long as explicit developer bindings deterministically win over convention defaults.
+
+---
+
+# 22. `bootstrap.ts`
+
+`bootstrap.ts` is the application composition root. It **defines and exports** an instantiated Bunwire Application but does not start it.
+
+The recommended form is a chainable API:
+
+```ts
+import { defineApp } from "@bunwire/core";
+import { ElectrobunAdapter } from "@bunwire/electrobun";
+
+export default defineApp()
+  .withAdapter(
+    new ElectrobunAdapter({
+      mainWindow: {
+        title: "My App",
+        width: 1200,
+        height: 800,
+
+        configure(window) {
+          // Real Electrobun BrowserWindow escape hatch.
+        },
+      },
+      rpc: {
+        configure(rpc) {
+          // Real Electrobun RPC escape hatch.
+        },
+      },
+    }),
+  );
+```
+
+The application is already instantiated here; it is simply not running yet.
+
+The host entrypoint imports that same object and starts it:
+
+```ts
+import app from "./bootstrap";
+
+await app.start();
+```
+
+For a manual integration, the developer may provide context explicitly:
+
+```ts
+await app
+  .withContext(existingElectrobunContext)
+  .start();
+```
+
+Providers are preferably auto-discovered from the configured Bunwire source tree. Explicit Provider inclusion may still be supported for classes outside ordinary discovery. Adapter instances may also contribute their own Providers.
+
+Container bindings belong primarily in Provider `register()` and/or explicit container configuration APIs rather than being mislabeled as “providers.”
+
+---
+
+# 23. `bunwire.config.*`
+
+Build configuration defines the bounded source graph and build-time behavior. Runtime adapter configuration belongs in `bootstrap.ts`, not duplicated in the build config.
+
+Conceptually:
+
+```ts
+export default defineBunwireConfig({
+  source: "./src/bun",
+  bootstrap: "./src/bun/bootstrap.ts",
+});
+```
+
+Possible responsibilities include:
+
+- source root(s);
+- bootstrap/composition-root location;
+- generated output options;
+- diagnostics configuration;
+- optional discovery conventions.
+
+The compiler analyzes the configured bootstrap source and resolves adapter classes used by `withAdapter(...)`. Adapter packages expose the compiler descriptors associated with those adapter classes, so the runtime adapter does not need to be declared a second time in `bunwire.config.*`.
+
+The compiler must not execute arbitrary adapter instance configuration merely to discover extensions. It resolves the adapter class/symbol and loads the adapter's declared compiler integration deterministically.
+
+`bunwire.config.*` is build configuration. `bootstrap.ts` is runtime/application composition.
+
+---
+
+# 24. Vite Scanner and TypeScript Analysis
+
+The Vite package should create/use a TypeScript Program so it can resolve real symbols rather than relying only on decorator text.
+
+It needs to understand:
+
+- source files in the configured graph;
+- imports and aliases;
+- class declarations;
+- registered outer/class decorators;
+- registered managed method decorators;
+- constructor parameter types;
+- explicit `@Inject()` tokens;
+- managed method parameter types;
+- registered parameter injector decorators;
+- optional/rest parameter information;
+- return types for generated contracts;
+- source locations for diagnostics.
+
+The analyzer should resolve symbols to their actual declarations where necessary.
+
+---
+
+# 25. Generated Registries
+
+The build should generate registry modules rather than requiring manual registration tables.
+
+Conceptually:
+
+```ts
+export const applicationRegistry = {
+  classes: [
+    {
+      kind: "core.service",
+      target: UserService,
+      scope: "singleton",
+      dependencies: [
+        { index: 0, token: DatabaseService },
+      ],
+    },
+    {
+      kind: "core.controller",
+      target: UserController,
+      dependencies: [
+        { index: 0, token: UserService },
+      ],
+      methods: [/* generated managed method metadata */],
+    },
+  ],
+  providers: [AppProvider],
+};
+```
+
+The exact shape may be split into Core and adapter registries for tree-shaking and ownership clarity.
+
+---
+
+# 26. Generic Adapter Class/Method Registries
+
+Core must allow an adapter to receive a generated registry for its own managed class/method kinds.
+
+Example source:
+
+```ts
+@Consumer("orders")
+export class OrderConsumer {
+  @Subscribe("created")
+  async created(
+    event: OrderCreated,
+    audit: AuditService,
+  ) {}
+}
+```
+
+Possible generated representation:
+
+```ts
+{
+  kind: "queue.consumer",
+  target: OrderConsumer,
+  metadata: { name: "orders" },
+  methods: [
+    {
+      kind: "queue.subscribe",
+      method: "created",
+      metadata: { event: "created" },
+      parameters: [
+        {
+          index: 0,
+          source: "transport",
+          argumentIndex: 0,
+        },
+        {
+          index: 1,
+          source: "container",
+          token: AuditService,
+        },
+      ],
+    },
+  ],
+}
+```
+
+The queue adapter decides how to register and invoke this at runtime.
+
+---
+
+# 27. Adapter Definition
+
+A runtime adapter is a **class instance** attached to an Application.
+
+Conceptually:
+
+```ts
+abstract class Adapter<TContext = unknown> {
+  protected app!: Application;
+
+  attach(app: Application): void {
+    this.app = app;
+  }
+
+  // Internal lifecycle shape is illustrative only.
+  abstract prepare(): Promise<TContext> | TContext;
+  abstract start(context: TContext): Promise<void> | void;
+}
+```
+
+`Application.withAdapter()` attaches the instance before the application starts:
+
+```ts
+class Application {
+  withAdapter<TAdapter extends Adapter>(adapter: TAdapter): this {
+    adapter.attach(this);
+    this.adapter = adapter;
+    return this;
+  }
+}
+```
+
+The adapter class may contribute:
+
+```text
+managed class kinds
+managed method kinds
+parameter injectors and their runtime resolvers
+adapter-owned Providers
+compiler descriptors
+runtime registry consumers
+host preparation/start behavior
+native configuration callbacks
+validation hooks
+```
+
+Adapter classes should expose their compiler-facing definitions in a way Vite can resolve from the class symbol without executing arbitrary runtime configuration.
+
+For v1, Bunwire assumes one primary host adapter controls application startup. Supporting multiple unrelated host adapters simultaneously is not required for the first release.
+
+A full adapter owns the normal host bootstrap. A manual adapter variant may instead consume context supplied through `app.withContext(...)`.
+
+---
+
+# 28. Electrobun Adapter
+
+Electrobun is the first adapter and should be shipped as a class-based host integration.
+
+The recommended/full export owns the normal Electrobun scaffold:
+
+```ts
+new ElectrobunAdapter({
+  mainWindow: {
+    title: "My App",
+    width: 1200,
+    height: 800,
+    configure(window) {
+      // Actual Electrobun BrowserWindow.
+    },
+  },
+  rpc: {
+    configure(rpc) {
+      // Actual Electrobun RPC object.
+    },
+  },
+});
+```
+
+The adapter owns Electrobun-specific concepts such as:
+
+```text
+@Route()
+@Message()
+@Window()
+@Webview()
+@Context()
+RPC request registration
+RPC message registration
+BrowserWindow/Webview parameter injection
+adapter-owned Providers
+Electrobun host/context creation
+Bun → Webview outgoing communication through Electrobun's native APIs
+```
+
+The adapter may reproduce the useful defaults of an ordinary Electrobun scaffold as declarative configuration while preserving access to real native objects through typed callbacks.
+
+A manual Electrobun adapter/integration path should also be available for existing or unusually structured Electrobun applications. In that mode the developer creates the native runtime/context and supplies it through `app.withContext(...)` before `app.start()`.
+
+Core should not import Electrobun concepts.
+
+---
+
+# 29. Electrobun Requests
+
+Example:
+
+```ts
+@Controller("users")
+export class UserController {
+  @Route("get")
+  async getUser(
+    id: string,
+    users: UserService,
+  ) {
+    return users.find(id);
+  }
+}
+```
+
+Caller:
+
+```ts
+rpc.request("users/get", id);
+```
+
+The generated invocation plan injects `UserService`; the frontend never supplies it.
+
+---
+
+# 30. Electrobun Messages
+
+Example:
+
+```ts
+@Controller("analytics")
+export class AnalyticsController {
+  @Message("click")
+  trackClick(
+    buttonId: string,
+    logger: LoggerService,
+  ) {
+    logger.info(buttonId);
+  }
+}
+```
+
+Caller:
+
+```ts
+rpc.message("analytics/click", buttonId);
+```
+
+Messages have no response contract.
+
+---
+
+# 31. Requests vs Messages
+
+| Feature | Request | Message |
+|---|---|---|
+| Electrobun decorator | `@Route()` | `@Message()` |
+| Response contract | Yes | No |
+| Return value | Meaningful | Not caller-visible |
+| Caller awaits result | Yes | No |
+| Typical use | queries/commands with result | telemetry/events/notifications |
+
+The distinction is transport semantics, not browser-thread blocking.
+
+---
+
+# 32. Controller Prefixes
+
+For:
+
+```ts
+@Controller("users")
+export class UserController {
+  @Route("get")
+  getUser() {}
+
+  @Message("deleted")
+  deleted() {}
+}
+```
+
+Electrobun receives logical paths:
+
+```text
+Request: users/get
+Message: users/deleted
+```
+
+Trailing slashes and path segments should be normalized deterministically.
+
+---
+
+# 33. Platform-Owned Objects
+
+Platform objects remain **native platform objects** even when a full Bunwire adapter creates/configures them on the developer's behalf.
+
+For example, the Electrobun adapter may create the main `BrowserWindow` as part of its normal host bootstrap, but Core must never construct or emulate a `BrowserWindow`. Ownership semantics and native behavior remain Electrobun's.
+
+The adapter can expose those objects through parameter injectors:
+
+```ts
+@Route("title")
+getTitle(
+  @Window() window: BrowserWindow,
+) {
+  return window.title;
+}
+```
+
+and through typed configuration callbacks:
+
+```ts
+new ElectrobunAdapter({
+  mainWindow: {
+    configure(window) {
+      // Real BrowserWindow instance.
+    },
+  },
+});
+```
+
+Bunwire should not replace Electrobun's outgoing communication APIs. The adapter may expose or lightly integrate them, but developers retain access to the actual platform runtime.
+
+---
+
+# 34. Middleware
+
+Middleware remains a Core capability around managed invocation.
+
+Potential levels include:
+
+```text
+Application middleware
+Managed-class middleware
+Managed-method middleware
+Adapter-specific middleware layers
+```
+
+Example:
+
+```ts
+@Use(loggingMiddleware)
+@Route("get")
+getUser(id: string) {}
+```
+
+Middleware may handle logging, validation, authorization, telemetry, timing, auditing, and errors.
+
+Adapters decide how their runtime events enter the generic invocation/middleware pipeline.
+
+---
+
+# 35. Invocation Runtime
+
+Conceptually:
+
+```text
+Adapter/runtime event
+      ↓
+Generated managed-method metadata
+      ↓
+Resolve target class
+      ↓
+Provider.boot(context)
+      ↓
+Validate caller argument count
+      ↓
+Execute generated parameter plan
+      ↓
+args[] in true method-index order
+      ↓
+Middleware
+      ↓
+method(...args)
+      ↓
+Adapter result/completion
+```
+
+The runtime does not infer parameter sources on each invocation.
+
+---
+
+# 36. Generated RPC Contracts
+
+Injected/server-side parameters must be excluded from caller-facing contracts.
+
+Server:
+
+```ts
+@Route("get")
+async getUser(
+  id: string,
+  users: UserService,
+  @Inject(CACHE) cache: Cache,
+  includePosts?: boolean,
+): Promise<User> {}
+```
+
+Generated caller contract:
+
+```ts
+"users/get": (
+  id: string,
+  includePosts?: boolean,
+) => Promise<User>
+```
+
+The compiler derives the caller-visible argument list from the same parameter plan used by runtime invocation.
+
+---
+
+# 37. Frontend API
+
+The initial API may remain close to Electrobun:
+
+```ts
+rpc.request("users/get", id);
+rpc.message("users/deleted", id);
+```
+
+A future generated API may provide:
+
+```ts
+rpc.users.get(id);
+rpc.users.deleted(id);
+```
+
+This is optional and should not distort the underlying transport semantics.
+
+---
+
+# 38. Build-Time Validation
+
+The compiler should validate facts it can prove from source metadata, including:
+
+- invalid managed-class decorator usage;
+- invalid managed-method decorator placement;
+- duplicate logical endpoint identifiers where the owning adapter requires uniqueness;
+- invalid parameter metadata;
+- impossible automatic injection targets;
+- explicit `@Inject()` syntax/token extraction failures;
+- circular constructor dependencies among statically known managed classes where detectable;
+- adapter/compiler metadata errors.
+
+The compiler does **not** need to prove that every runtime token registered by Provider code will exist. Runtime container resolution remains authoritative for dynamic bindings.
+
+---
+
+# 39. Security Boundary
+
+A public method is not automatically externally invocable merely because it is public.
+
+```ts
+@Controller("users")
+class UserController {
+  @Route("get")
+  getUser() {}
+
+  formatUser() {}
+}
+```
+
+Only the method carrying a recognized managed-method decorator is exposed through the corresponding adapter registry.
+
+---
+
+# 40. Recommended Application Structure
+
+```text
+src/
+│
+├── bun/
+│   ├── controllers/
+│   ├── services/
+│   ├── providers/
+│   ├── middleware/
+│   ├── bootstrap.ts
+│   └── main.ts
+│
+├── web/
+│   └── ...
+│
+└── shared/
+    ├── types.ts
+    └── rpc.ts
+
+bunwire.config.ts
+```
+
+`bootstrap.ts` defines/exports the Application. `main.ts` imports it and calls `app.start()` at the host entrypoint. A full adapter normally creates its own platform context; a manual integration may call `withContext()` before `start()`.
+
+The source structure is conventional. The configured source root and registered decorators are authoritative.
+
+---
+
+# 41. Complete Electrobun Example
+
+Application code:
+
+```ts
+export interface Cache {
+  get(key: string): Promise<unknown>;
+}
+
+export const CACHE = createToken<Cache>("cache");
+
+@Provider()
+export class AppProvider {
+  register(container: Container) {
+    container.singleton(DatabaseService);
+    container.singleton(CACHE, () => createCache());
+  }
+
+  async boot(context: InvocationContext) {
+    // Per invocation setup when needed.
+  }
+}
+
+@Service({ scope: "singleton" })
+export class UserService {
+  constructor(
+    private readonly database: DatabaseService,
+  ) {}
+
+  async find(id: string) {
+    return this.database.users.find(id);
+  }
+}
+
+@Controller("users")
+export class UserController {
+  constructor(
+    private readonly users: UserService,
+  ) {}
+
+  @Route("get")
+  async get(
+    id: string,
+    @Inject(CACHE) cache: Cache,
+    @Window() window: BrowserWindow,
+    includePosts?: boolean,
+  ) {
+    return this.users.find(id);
+  }
+
+  @Message("selected")
+  selected(
+    id: string,
+    logger: LoggerService,
+  ) {
+    logger.info(`Selected: ${id}`);
+  }
+}
+```
+
+Bootstrap:
+
+```ts
+// src/bun/bootstrap.ts
+import { defineApp } from "@bunwire/core";
+import { ElectrobunAdapter } from "@bunwire/electrobun";
+
+export default defineApp()
+  .withAdapter(
+    new ElectrobunAdapter({
+      mainWindow: {
+        title: "Users",
+        width: 1200,
+        height: 800,
+        configure(window) {
+          // Optional native customization.
+        },
+      },
+    }),
+  );
+```
+
+Host entrypoint:
+
+```ts
+// src/bun/main.ts
+import app from "./bootstrap";
+
+await app.start();
+```
+
+Generated request-facing signature:
+
+```ts
+"users/get": (
+  id: string,
+  includePosts?: boolean,
+) => Promise<User>
+```
+
+`CACHE` and `BrowserWindow` are injected parameters and are not caller arguments.
+
+A manual-host application may instead attach the manual Electrobun integration and provide an existing context with `app.withContext(context).start()`.
+
+---
+
+# 42. Monorepo Architecture
 
 ```text
 framework/
 │
 ├── packages/
-│   │
 │   ├── core/
-│   │   ├── src/
-│   │   │   ├── decorators/
-│   │   │   ├── container/
-│   │   │   ├── providers/
-│   │   │   ├── metadata/
-│   │   │   ├── lifecycle/
-│   │   │   ├── middleware/
-│   │   │   ├── invocation/
-│   │   │   └── adapters/
-│   │   └── package.json
+│   │   └── src/
+│   │       ├── decorators/
+│   │       ├── managed-classes/
+│   │       ├── managed-methods/
+│   │       ├── container/
+│   │       ├── bindings/
+│   │       ├── providers/
+│   │       ├── metadata/
+│   │       ├── lifecycle/
+│   │       ├── middleware/
+│   │       ├── invocation/
+│   │       └── adapters/
 │   │
 │   ├── vite/
-│   │   ├── src/
-│   │   │   ├── scanner/
-│   │   │   ├── analyzer/
-│   │   │   ├── dependency-graph/
-│   │   │   ├── generator/
-│   │   │   └── plugin.ts
-│   │   └── package.json
+│   │   └── src/
+│   │       ├── config/
+│   │       ├── scanner/
+│   │       ├── analyzer/
+│   │       ├── symbols/
+│   │       ├── parameter-plans/
+│   │       ├── validation/
+│   │       ├── generator/
+│   │       └── plugin.ts
 │   │
 │   └── electrobun/
-│       ├── src/
-│       │   ├── decorators/
-│       │   ├── providers/
-│       │   ├── resolvers/
-│       │   ├── rpc/
-│       │   └── compiler/
-│       └── package.json
+│       └── src/
+│           ├── decorators/
+│           ├── resolvers/
+│           ├── rpc/
+│           ├── runtime/
+│           └── compiler/
 │
 ├── examples/
 │   └── electrobun-app/
@@ -282,2438 +1717,121 @@ Dependency direction:
                  application
 ```
 
-- `core` knows nothing about Vite or Electrobun.
-- `vite` consumes Core compiler concepts.
-- `electrobun` consumes Core concepts and implements the Electrobun adapter.
-- An application consumes Core plus its selected adapter and build integration.
+`core` knows nothing about Vite or Electrobun.
 
 ---
 
-# 5. Framework Core
+# 43. Architectural Invariants
 
-Core contains the generic application kernel.
-
-Core responsibilities include:
-
-```text
-Decorators
-Container
-Dependency resolution
-Providers
-Scopes
-Tokens
-Lifecycle
-Middleware
-Invocation
-Metadata model
-Application composition
-Adapter registration
-Extension APIs
-```
-
-Core remains intentionally small.
-
-It should not contain platform-specific routing, RPC, browser-window, or desktop APIs.
-
----
-
-# 6. Controllers
-
-Controllers are application classes that can expose operations through an adapter.
-
-```ts
-@Controller("users")
-export class UserController {
-  constructor(
-    private readonly users: UserService
-  ) {}
-}
-```
-
-The generic controller concept belongs to Core.
-
-The meaning of endpoint decorators is determined by the active adapter.
-
-For Electrobun, `@Route()` can represent an RPC request endpoint.
-
----
-
-# 7. Controller Prefixes
-
-`@Controller()` defines a logical base path/namespace.
-
-```ts
-@Controller("users")
-export class UserController {}
-```
-
-For Electrobun:
-
-```ts
-@Route("get")
-getUser() {}
-
-@Route("create")
-createUser() {}
-```
-
-produces:
-
-```text
-users/get
-users/create
-```
-
-Trailing slashes should be normalized.
-
----
-
-# 8. Services
-
-Services are Core application classes containing reusable business logic.
-
-```ts
-@Service()
-export class UserService {
-
-  async get(id: string) {
-    // business logic
-  }
-}
-```
-
-Controllers consume services:
-
-```ts
-@Controller("users")
-export class UserController {
-
-  constructor(
-    private readonly users: UserService
-  ) {}
-
-  @Route("get")
-  getUser(id: string) {
-    return this.users.get(id);
-  }
-}
-```
-
-Controllers should generally remain thin while services own reusable application logic.
-
----
-
-# 9. Dependency Injection
-
-Core provides the dependency injection container.
-
-```ts
-@Service()
-export class DatabaseService {}
-
-@Service()
-export class UserService {
-
-  constructor(
-    private readonly database: DatabaseService
-  ) {}
-}
-
-@Controller("users")
-export class UserController {
-
-  constructor(
-    private readonly users: UserService
-  ) {}
-}
-```
-
-The dependency graph is:
-
-```text
-UserController
-      │
-      ▼
- UserService
-      │
-      ▼
-DatabaseService
-```
-
-The container recursively resolves dependencies.
-
-## Important runtime/build-time distinction
-
-TypeScript/Bun does **not** automatically turn:
-
-```ts
-constructor(database: DatabaseService)
-```
-
-into a runtime request for a `DatabaseService` instance.
-
-The framework must establish this relationship.
-
-The Vite analyzer therefore discovers the dependency and generates metadata that the runtime container consumes.
-
----
-
-# 10. Constructor Dependency Metadata
-
-Every injectable constructor parameter must have a corresponding dependency definition.
-
-Example:
-
-```ts
-class UserService {
-  constructor(
-    logger: LoggerService,
-    database: DatabaseService
-  ) {}
-}
-```
-
-Conceptually generated metadata:
-
-```ts
-{
-  token: UserService,
-  dependencies: [
-    {
-      index: 0,
-      token: LoggerService
-    },
-    {
-      index: 1,
-      token: DatabaseService
-    }
-  ]
-}
-```
-
-The index is essential.
-
-A graph containing only:
-
-```text
-UserService → LoggerService
-UserService → DatabaseService
-```
-
-does not tell the runtime which constructor position receives which dependency.
-
-The runtime effectively performs:
-
-```ts
-const args = [];
-
-for (const dependency of metadata.dependencies) {
-  args[dependency.index] =
-    container.resolve(dependency.token);
-}
-
-return new UserService(...args);
-```
-
-Where all constructor parameters are ordinary DI parameters, the generated representation may be optimized to:
-
-```ts
-dependencies: [
-  LoggerService,
-  DatabaseService
-]
-```
-
-because array position itself represents the index.
-
-The semantic model nevertheless remains indexed.
-
----
-
-# 11. Constructor Injection
-
-Constructor injection is the primary mechanism for application-level dependencies.
-
-```ts
-class UserController {
-  constructor(
-    private users: UserService,
-    private logger: LoggerService
-  ) {}
-}
-```
-
-The framework creates the controller rather than requiring developers to manually instantiate it.
-
----
-
-# 12. Constructor Injection with `@Inject()`
-
-Type-based automatic DI should be the default where the analyzer can resolve the referenced class.
-
-Explicit tokens should be available when a dependency is not represented by a directly injectable class.
-
-```ts
-export const APP_CONFIG =
-  createToken<AppConfig>("APP_CONFIG");
-
-@Service()
-export class UserService {
-
-  constructor(
-    @Inject(APP_CONFIG)
-    private config: AppConfig
-  ) {}
-}
-```
-
-The analyzer records the token relationship.
-
-Conceptually:
-
-```ts
-{
-  index: 0,
-  token: APP_CONFIG
-}
-```
-
-`@Inject()` therefore does not mean "DI only happens when `@Inject()` is present."
-
-Rather:
-
-- class-type dependencies can be inferred automatically;
-- `@Inject()` provides explicit token selection when inference is insufficient or the developer wants to override it.
-
----
-
-# 13. Singleton Services
-
-Core supports singleton lifetimes.
-
-```ts
-@Service({
-  scope: "singleton"
-})
-export class DatabaseService {}
-```
-
-A singleton means:
-
-> One instance per application/container scope.
-
-```text
-resolve(DatabaseService)
-        │
-        ▼
-   instance #1
-
-resolve(DatabaseService)
-        │
-        ▼
-   instance #1
-```
-
-It does not imply a global static instance across unrelated containers.
-
----
-
-# 14. Transient Services
-
-Core supports transient lifetimes.
-
-```ts
-@Service({
-  scope: "transient"
-})
-export class SomeService {}
-```
-
-Each resolution creates a new instance.
-
-```text
-resolve()
-  ↓
-instance #1
-
-resolve()
-  ↓
-instance #2
-```
-
-Initial scopes:
-
-- `singleton`
-- `transient`
-
-Additional scopes can be added later.
-
----
-
-# 15. Providers
-
-Providers are a first-class Core concept.
-
-A provider can represent:
-
-- a class
-- a value
-- a factory
-- an alias
-- an existing instance
-
-Conceptually:
-
-```ts
-container.provide({
-  token: Database,
-  useFactory: () => createDatabase(config)
-});
-```
-
-Providers are especially important for adapters because an adapter can contribute platform-specific dependencies without placing them in Core.
-
----
-
-# 16. Values and Tokens
-
-Not every dependency is a class.
-
-The container supports values and tokens:
-
-```ts
-export const APP_CONFIG =
-  createToken<AppConfig>("APP_CONFIG");
-
-container.value(APP_CONFIG, config);
-```
-
-A class can consume it:
-
-```ts
-constructor(
-  @Inject(APP_CONFIG)
-  private config: AppConfig
-) {}
-```
-
-This supports:
-
-- configuration
-- constants
-- runtime state
-- infrastructure handles
-- external objects
-- aliases
-
----
-
-# 17. Explicit Container Registration
-
-Automatic discovery is not the only registration mechanism.
-
-Examples:
-
-```ts
-container.singleton(DatabaseService);
-```
-
-```ts
-container.bind(LoggerService, FileLoggerService);
-```
-
-```ts
-container.bind(DatabaseService, () => {
-  return new DatabaseService(config.database);
-});
-```
-
-Explicit registrations can override convention-based registrations when the application composition rules permit it.
-
----
-
-# 18. Registration Precedence
-
-The framework should define deterministic precedence.
-
-The intended model is:
-
-```text
-Framework defaults
-      ↓
-Auto-discovered metadata
-      ↓
-Adapter-provided registrations
-      ↓
-bootstrap.ts explicit registrations
-      ↓
-Runtime overrides, where explicitly supported
-```
-
-The exact conflict rules should be documented and enforced.
-
-An explicit application registration should normally be able to replace an automatically discovered implementation.
-
----
-
-# 19. `bootstrap.ts`
-
-`bootstrap.ts` is the **composition root** of an application.
-
-It gives developers explicit control over application configuration.
-
-Conceptually:
-
-```ts
-export default defineApp({
-  providers: [
-    DatabaseService,
-    ConfigService,
-  ],
-
-  singletons: [
-    EventBus,
-    AppState,
-  ],
-});
-```
-
-It can also select and configure the adapter:
-
-```ts
-export default defineApp({
-  adapter: electrobun(),
-
-  providers: [
-    DatabaseService,
-  ],
-});
-```
-
-Automatic discovery handles conventions.
-
-`bootstrap.ts` handles explicit configuration and application composition.
-
----
-
-# 20. Automatic Discovery + Bootstrap
-
-These mechanisms work together:
-
-```text
-Automatic discovery
-        +
-bootstrap.ts
-        +
-adapter configuration
-        ↓
-Application Registry
-        ↓
-Dependency Container
-```
-
-Developers should not have to choose between convention and configuration.
-
----
-
-# 21. Dependency Graph Generation
-
-The Vite plugin analyzes constructors and explicit injection metadata.
-
-Example:
-
-```ts
-@Service()
-export class DatabaseService {}
-
-@Service()
-export class UserService {
-
-  constructor(
-    database: DatabaseService
-  ) {}
-}
-
-@Controller("users")
-export class UserController {
-
-  constructor(
-    users: UserService
-  ) {}
-}
-```
-
-The generated graph is conceptually:
-
-```text
-UserController
-  parameter 0 → UserService
-                   │
-                   └── parameter 0 → DatabaseService
-```
-
-The graph must preserve parameter positions.
-
----
-
-# 22. Method Parameter Injection
-
-Constructor injection and method parameter injection are distinct mechanisms.
-
-Example:
-
-```ts
-@Route("save")
-save(
-  @Body() data: SaveData,
-  @Window() window: BrowserWindow,
-  @Inject(AuditService) audit: AuditService
-) {}
-```
-
-Conceptually generated metadata:
-
-```ts
-{
-  method: "save",
-
-  parameters: [
-    {
-      index: 0,
-      resolver: "body"
-    },
-    {
-      index: 1,
-      resolver: "electrobun.window"
-    },
-    {
-      index: 2,
-      resolver: "container",
-      token: AuditService
-    }
-  ]
-}
-```
-
-The runtime must preserve the index.
-
----
-
-# 23. Parameter Resolution Model
-
-Parameter decorators are metadata declarations.
-
-They should not directly resolve their values.
-
-The flow is:
-
-```text
-Parameter decorator
-        ↓
-Parameter metadata
-        ↓
-Invocation engine
-        ↓
-Registered resolver
-        ↓
-Resolved argument
-```
-
-For example:
-
-```text
-@Window()
-    ↓
-"electrobun.window"
-    ↓
-Electrobun adapter resolver
-    ↓
-BrowserWindow
-```
-
-This keeps decorators independent of runtime resolution.
-
----
-
-# 24. Resolver Tokens
-
-Generated metadata should preferably reference stable resolver identifiers rather than embedding runtime resolver functions.
-
-Example:
-
-```ts
-{
-  index: 1,
-  source: "adapter",
-  resolver: "electrobun.window"
-}
-```
-
-The Electrobun adapter registers:
-
-```text
-"electrobun.window"
-        ↓
-WindowResolver
-```
-
-This gives a clean build-time/runtime boundary.
-
-Resolver identifiers should be namespaced to avoid collisions.
-
----
-
-# 25. Method Invocation Pipeline
-
-For an endpoint method:
-
-```text
-Incoming invocation
-        ↓
-Endpoint metadata
-        ↓
-Controller resolution
-        ↓
-Parameter metadata
-        ↓
-Parameter resolvers
-        ↓
-args[]
-        ↓
-Middleware
-        ↓
-method(...args)
-        ↓
-Transport result
-```
-
-Parameter resolution must occur in the correct parameter indexes.
-
----
-
-# 26. Parameter Sources
-
-A method parameter can originate from different sources.
-
-Examples:
-
-```text
-Container
-Transport payload
-Transport argument
-Platform object
-Application context
-Custom resolver
-```
-
-Example:
-
-```ts
-@Route("save")
-save(
-  @Body() data: SaveDto,
-  @Window() window: BrowserWindow,
-  @Inject(APP_CONFIG) config: AppConfig
-) {}
-```
-
-Conceptually:
-
-```text
-index 0 → transport/body
-index 1 → adapter/electrobun.window
-index 2 → container/APP_CONFIG
-```
-
----
-
-# 27. Core Parameter Decorators
-
-Core should only define parameter decorators with genuinely generic semantics.
-
-Examples:
-
-```ts
-@Inject()
-```
-
-Potential generic transport abstractions may be provided by Core where appropriate, but transport-specific concepts should remain adapter-owned.
-
----
-
-# 28. Adapter Parameter Decorators
-
-Electrobun can contribute:
-
-```ts
-@Window()
-@Webview()
-@Context()
-```
-
-These map to Electrobun-specific resolvers.
-
-Core does not need to know what `BrowserWindow` or `Webview` means.
-
----
-
-# 29. Adapter System
-
-Adapters are first-class Core extensions.
-
-An adapter represents an integration between the framework and an external runtime/platform.
-
-Examples could eventually include:
-
-```text
-Electrobun
-Electron
-Tauri
-Node
-HTTP
-CLI
-```
-
-An application normally selects the adapter appropriate for its runtime.
-
-The point is extensibility, not requiring unrelated adapters to operate simultaneously.
-
----
-
-# 30. Adapter Responsibilities
-
-An adapter can contribute:
-
-```text
-Decorators
-Parameter decorators
-Providers
-Parameter resolvers
-Transports
-Lifecycle hooks
-Compiler extensions
-Metadata handlers
-Runtime services
-```
-
-Conceptually:
-
-```ts
-defineAdapter({
-  name: "electrobun",
-
-  decorators: [
-    RouteDecorator,
-    MessageDecorator,
-    WindowDecorator,
-    WebviewDecorator,
-  ],
-
-  providers: [
-    BrowserWindowProvider,
-    WebviewProvider,
-  ],
-
-  resolvers: [
-    WindowResolver,
-    WebviewResolver,
-    ContextResolver,
-  ],
-
-  compiler: [
-    ElectrobunRpcCompiler,
-  ],
-
-  transports: {
-    rpc: electrobunRpcTransport,
-  },
-});
-```
-
-The exact API is subject to implementation.
-
----
-
-# 31. Adapter Build-Time and Runtime Model
-
-An adapter participates in two major parts of the system:
-
-```text
-                     Adapter
-                        │
-             ┌──────────┴──────────┐
-             │                     │
-        Build-time               Runtime
-             │                     │
-             ▼                     ▼
-       Source analysis         Container
-       Metadata generation     Providers
-       Validation              Resolvers
-       Registry generation     Transport
-```
-
-This prevents Vite and Core from becoming hard-coded around Electrobun.
-
----
-
-# 32. Vite Plugin
-
-The Vite integration is a separate package.
-
-Its responsibilities include:
-
-- source discovery
-- class/decorator analysis
-- dependency graph construction
-- parameter metadata extraction
-- adapter compiler integration
-- validation
-- registry generation
-- development-time diagnostics
-- generated TypeScript integration
-
-It should not own the runtime dependency container.
-
-It prepares information the runtime consumes.
-
----
-
-# 33. Vite Discovery
-
-The Vite plugin can scan conventional locations:
-
-```text
-controllers/**/*.ts
-services/**/*.ts
-providers/**/*.ts
-middleware/**/*.ts
-```
-
-It identifies classes and metadata using TypeScript source analysis.
-
-Example:
-
-```ts
-@Service()
-export class UserService {
-
-  constructor(
-    private database: DatabaseService
-  ) {}
-}
-```
-
-The analyzer records:
-
-```text
-UserService
-  constructor parameter 0
-      ↓
-DatabaseService
-```
-
----
-
-# 34. Generated Registry
-
-The Vite plugin generates an internal module containing application metadata.
-
-Conceptually:
-
-```ts
-export const applicationRegistry = {
-  controllers: [
-    {
-      token: UserController,
-      scope: "singleton",
-      routes: {
-        get: "getUser",
-      },
-    },
-  ],
-
-  services: [
-    {
-      token: UserService,
-      scope: "singleton",
-      dependencies: [
-        {
-          index: 0,
-          token: DatabaseService,
-        },
-      ],
-    },
-  ],
-};
-```
-
-The generated module is an implementation detail and should not need manual editing.
-
----
-
-# 35. Generated Endpoint Metadata
-
-Endpoint metadata should preserve:
-
-- controller token
-- method name
-- endpoint path
-- endpoint kind
-- parameter metadata
-- middleware metadata
-- adapter/transport metadata
-
-Conceptually:
-
-```ts
-{
-  controller: UserController,
-  method: "getUser",
-  path: "users/get",
-  kind: "request",
-
-  parameters: [
-    {
-      index: 0,
-      resolver: "electrobun.arg",
-      argumentIndex: 0
-    }
-  ]
-}
-```
-
----
-
-# 36. Why Build-Time Discovery?
-
-Avoid runtime filesystem discovery:
-
-```text
-Scan filesystem
-     ↓
-Find files
-     ↓
-Import files
-     ↓
-Inspect classes
-     ↓
-Discover metadata
-     ↓
-Construct registry
-```
-
-Prefer:
-
-```text
-Vite
-  ↓
-Scan source
-  ↓
-Analyze
-  ↓
-Validate
-  ↓
-Generate registry
-  ↓
-Bundle
-```
-
-At runtime:
-
-```text
-Load generated registry
-        ↓
-Create container
-        ↓
-Register dependencies
-        ↓
-Initialize adapter
-        ↓
-Register endpoints
-```
-
----
-
-# 37. AST / Source Analysis
-
-The Vite plugin can analyze TypeScript source directly.
-
-For:
-
-```ts
-@Service()
-export class UserService {
-
-  constructor(
-    private database: DatabaseService
-  ) {}
-}
-```
-
-the analyzer can identify:
-
-```text
-UserService
-    ↓
-parameter 0
-    ↓
-DatabaseService
-```
-
-For:
-
-```ts
-constructor(
-  @Inject(APP_CONFIG)
-  config: AppConfig
-) {}
-```
-
-the explicit token takes precedence over inferred class metadata.
-
----
-
-# 38. Dependency Graph Validation
-
-The generated graph can look like:
-
-```text
-UserController
-      │
-      └── UserService
-              │
-              ├── DatabaseService
-              │
-              └── EventBus
-```
-
-The build process should detect where possible:
-
-- missing dependencies
-- circular dependencies
-- duplicate registrations
-- invalid providers
-- invalid controller definitions
-- invalid routes
-- unsupported decorator combinations
-- invalid parameter metadata
-- invalid adapter metadata
-- unresolved injection tokens
-
-Diagnostics should identify the source file and parameter index where possible.
-
----
-
-# 39. Circular Dependencies
-
-The dependency graph should explicitly detect cycles.
-
-Example:
-
-```text
-A → B
-B → C
-C → A
-```
-
-The framework should report the dependency chain instead of failing with an opaque runtime error.
-
-Whether some cycles are later supported through lazy providers is a future consideration.
-
----
-
-# 40. Electrobun Adapter
-
-The Electrobun package is a platform adapter, not part of Core.
-
-It contributes Electrobun-specific functionality such as:
-
-```text
-BrowserWindow provider
-Webview provider
-RPC transport
-Message transport
-RPC context
-Window resolver
-Webview resolver
-Route decorator
-Message decorator
-Electrobun compiler extension
-```
-
----
-
-# 41. Requests
-
-In the Electrobun adapter, requests represent call-and-response RPC operations.
-
-```ts
-@Controller("users")
-export class UserController {
-
-  @Route("get")
-  async getUser(id: string) {
-    return {
-      id,
-      name: "Davy",
-    };
-  }
-}
-```
-
-The Electrobun adapter maps:
-
-```text
-users/get
-```
-
-to the appropriate Electrobun request endpoint.
-
----
-
-# 42. Messages
-
-The Electrobun adapter exposes a distinct fire-and-forget message primitive.
-
-```ts
-@Controller("analytics")
-export class AnalyticsController {
-
-  @Message("click")
-  trackClick(buttonId: string) {
-    console.log(buttonId);
-  }
-}
-```
-
-The adapter maps:
-
-```text
-analytics/click
-```
-
-to the appropriate Electrobun message mechanism.
-
-No response contract is expected.
-
----
-
-# 43. Requests vs Messages
-
-| Feature | Request | Message |
-|---|---|---|
-| Electrobun decorator | `@Route()` | `@Message()` |
-| Response | Yes | No |
-| Return value | Meaningful | Not part of contract |
-| Caller awaits result | Yes | No |
-| Suitable for queries | Yes | No |
-| Suitable for commands requiring a result | Yes | Usually no |
-| Suitable for telemetry/events | Usually no | Yes |
-| Suitable for notifications | Usually no | Yes |
-
-The distinction represents communication semantics.
-
-It should not be described as "blocking the browser thread." Awaiting a request is asynchronous; the distinction is whether the caller has a response contract.
-
----
-
-# 44. Controller Prefix + Endpoint Registration
-
-For:
-
-```ts
-@Controller("users")
-export class UserController {
-
-  @Route("get")
-  getUser() {}
-
-  @Message("deleted")
-  deleted() {}
-}
-```
-
-the adapter receives:
-
-```text
-Request:
-users/get
-
-Message:
-users/deleted
-```
-
-The adapter then transforms these into the native Electrobun registration structures.
-
----
-
-# 45. Parameter Decorators
-
-The framework supports parameter injection.
-
-Example:
-
-```ts
-@Route("title")
-getTitle(
-  @Window() window: BrowserWindow
-) {
-  return window.title;
-}
-```
-
-The caller does not supply the `BrowserWindow`.
-
-The Electrobun adapter resolves it.
-
----
-
-# 46. `@Body()`
-
-Where the selected transport exposes a body/payload concept, `@Body()` represents that payload.
-
-```ts
-@Message("save")
-save(
-  @Body() data: SaveFileDto
-) {}
-```
-
-The adapter determines how the incoming transport payload is mapped to the parameter.
-
-If Electrobun's native RPC API uses positional arguments rather than an HTTP-like body, the Electrobun implementation may map `@Body()` to the appropriate payload abstraction.
-
-The framework should not assume HTTP semantics merely because the decorator is called `@Body()`.
-
----
-
-# 47. `@Arg()`
-
-Individual transport arguments can be accessed through a parameter decorator.
-
-```ts
-@Route("get")
-getUser(
-  @Arg(0) id: string
-) {}
-```
-
-Conceptual metadata:
-
-```ts
-{
-  index: 0,
-  resolver: "electrobun.arg",
-  argumentIndex: 0
-}
-```
-
-The adapter maps the incoming argument index to the method parameter.
-
----
-
-# 48. Electrobun Infrastructure Injection
-
-The Electrobun adapter can provide resolvers for infrastructure objects:
-
-```ts
-@Window()
-window: BrowserWindow
-```
-
-```ts
-@Webview()
-webview: Webview
-```
-
-```ts
-@Context()
-context: RpcContext
-```
-
-These are resolved by the adapter and are not ordinary application services.
-
----
-
-# 49. Core DI vs Platform Parameter Resolution
-
-The framework distinguishes:
-
-```text
-Application dependencies
-```
-
-from:
-
-```text
-Platform-provided parameters
-```
-
-For:
-
-```ts
-constructor(
-  private users: UserService
-) {}
-```
-
-the container performs ordinary Core DI.
-
-For:
-
-```ts
-getTitle(
-  @Window() window: BrowserWindow
-) {}
-```
-
-the adapter supplies a parameter resolver.
-
-Both eventually feed arguments into the same invocation engine.
-
----
-
-# 50. Runtime Invocation
-
-The generic invocation engine should conceptually perform:
-
-```ts
-const args: unknown[] = [];
-
-for (const parameter of endpoint.parameters) {
-  args[parameter.index] =
-    resolveParameter(parameter, invocationContext);
-}
-
-await invoke(
-  controllerInstance,
-  endpoint.method,
-  args
-);
-```
-
-`resolveParameter()` can delegate to:
-
-```text
-container
-adapter resolver
-transport resolver
-custom resolver
-```
-
-The engine must never assume that every parameter comes from DI.
-
----
-
-# 51. Middleware
-
-Middleware is a Core capability.
-
-Adapters determine how their transports enter the middleware pipeline.
-
-Potential levels:
-
-```text
-Application middleware
-Controller middleware
-Endpoint middleware
-Message middleware
-```
-
-Example:
-
-```ts
-@Use(loggingMiddleware)
-@Route("get")
-getUser() {}
-```
-
-Middleware can handle:
-
-- logging
-- validation
-- authorization
-- telemetry
-- timing
-- auditing
-- error handling
-
----
-
-# 52. Request and Message Middleware
-
-Request middleware may have a response-aware lifecycle:
-
-```text
-Request
-  ↓
-middleware
-  ↓
-handler
-  ↓
-response
-  ↓
-middleware
-```
-
-Messages have no response phase:
-
-```text
-Message
-  ↓
-middleware
-  ↓
-handler
-```
-
-The framework preserves this semantic difference.
-
----
-
-# 53. Application Lifecycle
-
-Core provides application lifecycle management.
-
-```text
-Create application
-      ↓
-Load generated registry
-      ↓
-Create container
-      ↓
-Register providers
-      ↓
-Initialize adapter
-      ↓
-Initialize application services
-      ↓
-Register endpoints
-      ↓
-Application running
-      ↓
-Shutdown
-      ↓
-Dispose resources
-```
-
-Adapters may contribute lifecycle hooks.
-
----
-
-# 54. Bootstrap Hooks
-
-`bootstrap.ts` can expose lifecycle hooks:
-
-```ts
-export default defineApp({
-
-  async onBootstrap(container) {
-    const database = container.get(DatabaseService);
-
-    await database.connect();
-  },
-
-  async onShutdown(container) {
-    const database = container.get(DatabaseService);
-
-    await database.close();
-  }
-});
-```
-
----
-
-# 55. Service Lifecycle
-
-Services may eventually support lifecycle interfaces:
-
-```ts
-interface OnBootstrap {
-  onBootstrap(): Promise<void> | void;
-}
-
-interface OnShutdown {
-  onShutdown(): Promise<void> | void;
-}
-```
-
-Example:
-
-```ts
-@Service()
-export class DatabaseService implements OnBootstrap, OnShutdown {
-
-  async onBootstrap() {
-    // connect
-  }
-
-  async onShutdown() {
-    // disconnect
-  }
-}
-```
-
-Lifecycle invocation must respect dependency initialization order where applicable.
-
----
-
-# 56. Outgoing Communication
-
-Electrobun also supports Bun → Webview communication.
-
-The framework should distinguish incoming endpoints from outgoing communication.
-
-Conceptually:
-
-```text
-                    Communication
-                         │
-           ┌─────────────┼─────────────┐
-           │             │             │
-       Request        Message       Outgoing
-           │             │           Event
-           │             │             │
-     Webview → Bun  Webview → Bun  Bun → Webview
-```
-
-Requests and incoming messages map naturally to controller endpoint decorators.
-
-Outgoing events should be represented as an adapter/runtime capability.
-
-The exact API should follow the actual Electrobun API rather than inventing a competing transport.
-
----
-
-# 57. Shared Type Safety
-
-Controller definitions should contribute to generated RPC contracts.
-
-For:
-
-```ts
-@Route("get")
-async getUser(id: string): Promise<User> {}
-```
-
-the generated contract should be equivalent to:
-
-```ts
-"users/get": (
-  id: string
-) => Promise<User>
-```
-
-For:
-
-```ts
-@Message("deleted")
-deleted(id: string): void {}
-```
-
-the generated contract should be equivalent to:
-
-```ts
-"users/deleted": (
-  id: string
-) => void
-```
-
-The framework should eliminate duplicated manual RPC definitions wherever the compiler can safely generate them.
-
----
-
-# 58. Frontend API
-
-The initial API can remain close to Electrobun:
-
-```ts
-rpc.request("users/get", id);
-```
-
-```ts
-rpc.message("users/deleted", id);
-```
-
-A later stage may generate higher-level APIs:
-
-```ts
-rpc.users.get(id);
-```
-
-```ts
-rpc.users.deleted(id);
-```
-
-The generated API must preserve the underlying transport semantics.
-
----
-
-# 59. Decorator Categories
-
-## Core class decorators
-
-```ts
-@Controller()
-@Service()
-@Provider()
-```
-
-## Core injection
-
-```ts
-@Inject()
-```
-
-## Core method/application decorators
-
-Only decorators with genuinely framework-wide semantics should live in Core.
-
-Example:
-
-```ts
-@Use()
-```
-
-## Adapter method decorators
-
-Electrobun:
-
-```ts
-@Route()
-@Message()
-```
-
-## Adapter parameter decorators
-
-Electrobun:
-
-```ts
-@Window()
-@Webview()
-@Context()
-@Arg()
-```
-
-Transport-generic decorators may eventually be moved into a shared transport abstraction if their semantics prove sufficiently universal.
-
----
-
-# 60. Recommended Application Structure
-
-```text
-src/
-│
-├── bun/
-│   │
-│   ├── controllers/
-│   │   ├── user.controller.ts
-│   │   ├── file.controller.ts
-│   │   └── window.controller.ts
-│   │
-│   ├── services/
-│   │   ├── user.service.ts
-│   │   ├── file.service.ts
-│   │   └── database.service.ts
-│   │
-│   ├── providers/
-│   │   └── config.provider.ts
-│   │
-│   ├── middleware/
-│   │   ├── logging.ts
-│   │   └── validation.ts
-│   │
-│   ├── bootstrap.ts
-│   └── main.ts
-│
-├── web/
-│   └── ...
-│
-└── shared/
-    ├── types.ts
-    └── rpc.ts
-```
-
-`bun/` is an application convention for the Electrobun adapter, not a Core requirement.
-
----
-
-# 61. Complete Electrobun Controller Example
-
-```ts
-@Controller("files")
-export class FileController {
-
-  constructor(
-    private readonly files: FileService,
-    private readonly logger: LoggerService
-  ) {}
-
-  @Route("read")
-  async read(
-    @Arg(0) path: string
-  ) {
-    return this.files.read(path);
-  }
-
-  @Route("save")
-  async save(
-    @Body() data: SaveFileDto,
-    @Window() window: BrowserWindow
-  ) {
-    const result = await this.files.save(data);
-
-    // Outgoing communication should use the actual
-    // Electrobun adapter/runtime API.
-
-    return result;
-  }
-
-  @Message("opened")
-  opened(
-    @Body() path: string
-  ) {
-    this.logger.info(`Opened: ${path}`);
-  }
-}
-```
-
----
-
-# 62. Example Service Graph
-
-```ts
-@Service({
-  scope: "singleton"
-})
-export class DatabaseService {}
-
-@Service({
-  scope: "singleton"
-})
-export class FileService {
-
-  constructor(
-    private database: DatabaseService
-  ) {}
-}
-
-@Controller("files")
-export class FileController {
-
-  constructor(
-    private files: FileService
-  ) {}
-}
-```
-
-The container resolves:
-
-```text
-FileController
-      │
-      ▼
- FileService
-      │
-      ▼
-DatabaseService
-```
-
----
-
-# 63. Example Bootstrap
-
-```ts
-export default defineApp({
-  adapter: electrobun(),
-
-  providers: [
-    DatabaseService,
-    FileService,
-  ],
-
-  singletons: [
-    EventBus,
-    ApplicationState,
-  ],
-
-  values: {
-    APP_NAME: "My Electrobun App"
-  },
-
-  async onBootstrap(container) {
-    const database = container.get(DatabaseService);
-
-    await database.connect();
-  },
-
-  async onShutdown(container) {
-    const database = container.get(DatabaseService);
-
-    await database.close();
-  }
-});
-```
-
----
-
-# 64. Bootstrap as Composition Root
-
-`bootstrap.ts` is not merely a list of classes.
-
-It is the place where automatic application discovery and explicit developer configuration are composed.
-
-Conceptually:
-
-```text
-                 Generated Metadata
-                        │
-                        ▼
-                Auto registrations
-                        │
-                        ▼
-                 bootstrap.ts
-                        │
-             ┌──────────┴──────────┐
-             │                     │
-          overrides             additions
-             │                     │
-             └──────────┬──────────┘
-                        ▼
-                 Final container
-```
-
-This allows patterns such as:
-
-```ts
-export default defineApp({
-  providers: [
-    {
-      token: LoggerService,
-      useClass: ProductionLogger,
-    }
-  ]
-});
-```
-
-while still allowing the build system to discover the rest of the application automatically.
-
----
-
-# 65. Provider Factories
-
-Factories can receive container dependencies.
-
-Conceptually:
-
-```ts
-{
-  token: Database,
-  useFactory: (config: AppConfig) => {
-    return createDatabase(config);
-  },
-  inject: [APP_CONFIG]
-}
-```
-
-The factory's injection metadata must also preserve dependency positions.
-
-The same principle applies:
-
-```text
-factory parameter 0 → APP_CONFIG
-factory parameter 1 → LoggerService
-```
-
----
-
-# 66. Provider Aliases
-
-The container should support aliases.
-
-Example:
-
-```ts
-container.alias(
-  "Database",
-  DatabaseService
-);
-```
-
-or:
-
-```ts
-{
-  token: Database,
-  useExisting: DatabaseService
-}
-```
-
-An alias must resolve to the same underlying instance when the target provider is singleton-scoped.
-
----
-
-# 67. Existing Instances
-
-The application can provide an already-created object:
-
-```ts
-const database = createDatabase();
-
-export default defineApp({
-  providers: [
-    {
-      token: DatabaseService,
-      useValue: database
-    }
-  ]
-});
-```
-
-This is particularly useful for objects owned by a platform runtime.
-
----
-
-# 68. Platform-Owned Objects
-
-Platform objects such as `BrowserWindow` may be created outside the Core container.
-
-The adapter can expose them through:
-
-- providers
-- scoped context
-- parameter resolvers
-- runtime handles
-
-The important distinction is ownership.
-
-For example:
-
-```text
-Electrobun creates BrowserWindow
-             ↓
-Electrobun adapter owns lifecycle
-             ↓
-Framework exposes access
-             ↓
-@Window() resolves it
-```
-
-Core must not attempt to construct a `BrowserWindow`.
-
----
-
-# 69. Security Boundary
-
-Controllers execute in the privileged Bun side of an Electrobun application.
-
-The framework should therefore favor explicit endpoint exposure.
-
-A method should **not automatically become an RPC endpoint merely because it is public**.
-
-```ts
-@Controller("users")
-class UserController {
-
-  @Route("get")
-  getUser() {}
-
-  internalCalculation() {}
-
-  privateInternalMethod() {}
-}
-```
-
-Only:
-
-```text
-users/get
-```
-
-is exposed through the Electrobun adapter.
-
----
-
-# 70. Endpoint Metadata Model
-
-The generic endpoint model should be capable of representing:
-
-```ts
-{
-  controller: ControllerToken,
-
-  method: "getUser",
-
-  path: "users/get",
-
-  kind: "request",
-
-  parameters: [
-    {
-      index: 0,
-      source: "transport",
-      resolver: "electrobun.arg",
-      argumentIndex: 0
-    }
-  ],
-
-  middleware: []
-}
-```
-
-The adapter converts this generic metadata into its native registration representation.
-
----
-
-# 71. Message Endpoint Metadata
-
-A message endpoint differs primarily in transport semantics:
-
-```ts
-{
-  controller: AnalyticsController,
-
-  method: "trackClick",
-
-  path: "analytics/click",
-
-  kind: "message",
-
-  parameters: [
-    {
-      index: 0,
-      source: "transport",
-      resolver: "electrobun.arg",
-      argumentIndex: 0
-    }
-  ]
-}
-```
-
-The runtime should know that no response contract is expected.
-
----
-
-# 72. Runtime Architecture
-
-```text
-                           Application
-                                │
-                         bootstrap.ts
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-              Auto Discovery          Explicit Config
-                    │                       │
-                    └───────────┬───────────┘
-                                │
-                           Vite Plugin
-                                │
-                     Generated App Graph
-                                │
-                         Selected Adapter
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-              Core Registry          Adapter Registry
-                    │                       │
-                    └───────────┬───────────┘
-                                │
-                         DI Container
-                                │
-                ┌───────────────┼────────────────┐
-                │               │                │
-           Singleton        Transient       Factories
-                │               │                │
-                └───────────────┼────────────────┘
-                                │
-                         Invocation Engine
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-              Constructor             Endpoint Method
-              Resolution                 Resolution
-                    │                       │
-                    │              ┌────────┼─────────┐
-                    │              │        │         │
-                    │           Container Adapter  Transport
-                    │           resolver  resolver  resolver
-                    │              │        │         │
-                    └──────────────┴────────┴─────────┘
-                                │
-                             args[]
-                                │
-                           Middleware
-                                │
-                         Controller Method
-                                │
-                         Adapter Transport
-                                │
-                           Electrobun
-```
-
----
-
-# 73. Full Build-Time Architecture
-
-```text
-                         TypeScript Source
-                                │
-                                ▼
-                         Vite Framework
-                            Plugin
-                                │
-              ┌─────────────────┼─────────────────┐
-              │                 │                 │
-              ▼                 ▼                 ▼
-          File Scan         Core Analyzer     Adapter Analyzer
-              │                 │                 │
-              │            @Service()          @Route()
-              │            @Controller()        @Message()
-              │            @Inject()            @Window()
-              │                                 @Webview()
-              │
-              └─────────────────┬─────────────────┘
-                                │
-                                ▼
-                       Application Metadata
-                                │
-               ┌────────────────┼────────────────┐
-               │                │                │
-               ▼                ▼                ▼
-        Dependency Graph   Endpoint Graph   Parameter Graph
-               │                │                │
-               └────────────────┼────────────────┘
-                                ▼
-                           Validation
-                                │
-                                ▼
-                        Generated Registry
-                                │
-                                ▼
-                              Bundle
-```
-
----
-
-# 74. Final Layered Architecture
-
-```text
-┌────────────────────────────────────────────┐
-│                Application                 │
-│                                            │
-│ Controllers / Services / Providers         │
-└───────────────────────┬────────────────────┘
-                        │
-┌───────────────────────▼────────────────────┐
-│                 Framework Core              │
-│                                            │
-│ Container / DI / Lifecycle / Middleware    │
-│ Metadata / Decorators / Providers          │
-│ Invocation Engine / Adapter API            │
-└───────────────────────┬────────────────────┘
-                        │
-┌───────────────────────▼────────────────────┐
-│              Build Integration              │
-│                                            │
-│ Vite / Scanner / Analyzer / Generator      │
-│ Dependency Graph / Validation               │
-│ Adapter Compiler Extensions                │
-└───────────────────────┬────────────────────┘
-                        │
-┌───────────────────────▼────────────────────┐
-│             Platform Adapter                │
-│                                            │
-│ Electrobun Decorators / Resolvers          │
-│ Providers / RPC / Lifecycle / Compiler     │
-└───────────────────────┬────────────────────┘
-                        │
-┌───────────────────────▼────────────────────┐
-│                 Electrobun                 │
-│                                            │
-│ Bun ↔ Webview runtime and native RPC       │
-└────────────────────────────────────────────┘
-```
-
----
-
-# 75. Intended Developer Experience
-
-An Electrobun developer should be able to write:
-
-```ts
-@Service()
-export class UserService {
-
-  constructor(
-    private database: DatabaseService
-  ) {}
-
-  async find(id: string) {
-    return this.database.users.find(id);
-  }
-}
-```
-
-and:
-
-```ts
-@Controller("users")
-export class UserController {
-
-  constructor(
-    private users: UserService
-  ) {}
-
-  @Route("get")
-  get(
-    @Arg(0) id: string
-  ) {
-    return this.users.find(id);
-  }
-
-  @Message("selected")
-  selected(
-    @Arg(0) id: string
-  ) {
-    console.log("Selected:", id);
-  }
-}
-```
-
-without manually constructing:
-
-```ts
-new DatabaseService()
-new UserService(...)
-new UserController(...)
-```
-
-or manually maintaining:
-
-```ts
-defineRpc({
-  handlers: {
-    "users/get": ...,
-    "users/selected": ...
-  }
-})
-```
-
-The framework discovers, analyzes, wires, validates, and registers the application.
-
----
-
-# 76. Architectural Invariants
-
-The following should be treated as core architectural rules.
+The following are release-defining rules.
 
 1. **Core never imports a platform adapter.**
-2. **Platform-specific decorators belong to adapters unless their semantics are genuinely generic.**
-3. **Build-time analysis may generate runtime metadata, but runtime should not need to rediscover the source tree.**
-4. **Every injectable constructor parameter has a positional meaning.**
-5. **Every injectable method parameter has an explicit parameter index in metadata.**
-6. **Parameter decorators declare resolution strategy; resolvers perform resolution.**
-7. **TypeScript type annotations alone are not assumed to provide runtime DI.**
-8. **`@Inject()` is explicit token selection, not the requirement for all DI.**
-9. **Automatic discovery and explicit bootstrap registration coexist.**
-10. **Explicit application configuration must have deterministic precedence over discovered defaults.**
-11. **Platform-owned objects must remain owned by their platform adapter/runtime.**
-12. **Controllers only expose explicitly decorated endpoints.**
-13. **Requests and messages are distinct transport semantics.**
-14. **Generated metadata should use stable identifiers for adapter-specific resolvers where practical.**
-15. **The container owns application dependency lifetimes; adapters own platform lifetimes where appropriate.**
-16. **The adapter participates in both build-time compilation and runtime integration.**
-17. **Generated RPC contracts should be derived from controller metadata whenever safely possible.**
-18. **The framework must not pretend to replace the underlying platform runtime.**
+2. **Core never imports Vite.**
+3. **Outer/class decorators opt classes into Bunwire's managed graph.**
+4. **Automatic type-based DI only targets class kinds explicitly marked injectable.**
+5. **Plain classes require explicit container intent, such as `@Inject(Class)` plus a binding, unless a future class kind opts them in.**
+6. **Interfaces and arbitrary objects use explicit runtime tokens.**
+7. **Services are not Providers.**
+8. **Container entries are bindings, not Providers.**
+9. **`defineApp()` creates the Application; `app.start()` is the normal public startup boundary.**
+10. **A full adapter is a class instance attached before startup and may own normal host bootstrap.**
+11. **Host/adapter context is stored in the root container before Provider registration that depends on it.**
+12. **Provider `register()` runs once during application startup.**
+13. **Provider `boot()` is invocation-level.**
+14. **Provider lifecycle parameters are framework-defined rather than ordinary caller arguments.**
+15. **Every managed constructor dependency has a real parameter index.**
+16. **Every managed method parameter has a real method index.**
+17. **Caller argument indexes are generated independently from method indexes.**
+18. **Injected parameters never appear in generated caller-facing RPC signatures.**
+19. **Developers do not manually repeat ordinary caller argument indexes with `@Arg(index)`.**
+20. **Parameter injector decorators select resolution sources; the compiler already knows their indexes.**
+21. **Vite compiles parameter classification once; runtime executes the generated plan.**
+22. **Provider binding code does not need to be executed by Vite for the core architecture to work.**
+23. **Controllers expose only recognized managed methods.**
+24. **Adapters may introduce new controller-like class kinds, route-like method kinds, parameter injectors, and adapter-owned Providers.**
+25. **Vite must consume generic class/method/injector definitions instead of hard-coding adapter decorators.**
+26. **Platform-native objects remain platform-native even when a full adapter creates/configures them.**
+27. **Requests and messages remain distinct transport semantics.**
+28. **Generated registries and contracts are implementation outputs, not manually maintained structures.**
+29. **Runtime does not rediscover the application source tree.**
+30. **`bunwire.config.*` defines the bounded build-time source graph and locates the composition root.**
+31. **Runtime adapter configuration belongs in `bootstrap.ts`, not duplicated in build configuration.**
+32. **The framework does not replace the underlying platform runtime.**
+33. **`withContext()` is an explicit/manual host integration path; full adapters should normally create and register their own context.**
 
 ---
 
-# 77. Long-Term Direction
+# 44. Long-Term Direction
 
-The immediate target is Electrobun, but the framework should remain platform-extensible.
+The same Core machinery should support integrations such as:
 
 ```text
                     Framework Core
                           │
-                    Adapter API
+               Managed Class/Method API
                           │
           ┌───────────────┼───────────────┐
           │               │               │
-     Electrobun        Electron        Tauri
-      Adapter          Adapter         Adapter
-          │
-          ├── Decorators
-          ├── Providers
-          ├── Resolvers
-          ├── Compiler extensions
-          ├── Transport
-          └── Lifecycle
+     Electrobun        HTTP/Node        Queue/Jobs
+      Adapter           Adapter           Adapter
+          │               │               │
+      @Route           @Get/@Post      @Consumer/@Job
+      @Message                         @Subscribe/@Run
 ```
 
-An application normally selects the adapter appropriate for its environment.
-
-The point is not to make unrelated platform adapters operate simultaneously.
-
-The point is to make Core extensible enough that a platform can integrate cleanly without becoming part of Core itself.
+The point is not to run unrelated adapters simultaneously by default. The point is that adding one should not require redesigning Core's compiler/runtime model.
 
 ---
 
-# 78. Final Summary
+# 45. Final Summary
 
-The project is a **TypeScript application framework and application kernel**, initially optimized for Electrobun.
+Bunwire is a TypeScript application kernel whose compiler understands **managed classes**, **managed methods**, and **parameter plans**.
 
-Its central architecture is:
-
-1. **Core** provides controllers, services, dependency injection, providers, scopes, tokens, lifecycle, middleware, invocation, metadata, and the adapter extension API.
-2. **Adapters** extend Core with platform-specific decorators, providers, parameter resolvers, transports, lifecycle behavior, and compiler integrations.
-3. **Electrobun is the first adapter**, providing RPC requests, messages, BrowserWindow/Webview injection, Electrobun-specific decorators, and native RPC integration.
-4. **Vite is the build integration**, responsible for scanning source files, analyzing metadata, building dependency and endpoint graphs, validating the application, invoking adapter compiler extensions, and generating the application registry.
-5. **`bootstrap.ts` is the composition root**, allowing developers to explicitly configure providers, scopes, values, factories, middleware, lifecycle hooks, and the selected adapter.
-6. **The DI container is runtime infrastructure**, while generated registry metadata supplies the information needed to construct the application efficiently.
-7. **Constructor dependency metadata preserves parameter positions**, ensuring the container knows exactly which dependency belongs to which constructor argument.
-8. **Method parameter metadata independently preserves parameter indexes**, because method parameters can be supplied by multiple sources.
-9. **`@Inject()` is explicit token selection**, while ordinary class dependencies can be inferred during build-time analysis.
-10. **Parameter decorators are metadata declarations**, while registered resolvers perform actual runtime resolution.
-11. **Adapter resolver identifiers create a clean build-time/runtime boundary**, allowing generated metadata to refer to platform capabilities without embedding runtime implementation objects.
-12. **RPC routes and messages are adapter concepts**, because their meaning depends on the underlying transport.
-13. **Build-time analysis replaces runtime filesystem discovery**, minimizing runtime overhead and enabling validation before execution.
-14. **Generated TypeScript metadata and RPC contracts provide strong type safety** without requiring developers to maintain duplicate registration structures.
-15. **Electrobun remains the underlying runtime and transport**, rather than being replaced by the framework.
-
-The intended developer mental model is:
+Core provides:
 
 ```text
-Controllers
-Services
-Dependencies
-Providers
-Lifecycle
+Managed class semantics
+Service / Controller / Provider kinds
+Container and bindings
+Tokens and @Inject
+Scopes
+Provider lifecycle
+Invocation
 Middleware
-Application composition
-```
-
-while the framework handles:
-
-```text
-Discovery
-Dependency wiring
-Dependency graph generation
 Metadata
-Validation
-RPC registration
-Parameter resolution
-Middleware execution
-Platform integration
+Adapter extension APIs
 ```
 
-and Electrobun continues to handle:
+Vite/build tooling provides:
 
 ```text
-Windows
-Webviews
-Native desktop functionality
-Bun runtime
-Underlying RPC transport
+bunwire.config loading
+Source discovery
+TypeScript symbol analysis
+Managed class discovery
+Managed method discovery
+Constructor dependency analysis
+Method parameter classification
+Caller-argument mapping
+Validation
+Generated registries
+Generated invocation plans
+Generated contracts
 ```
 
-That separation is the foundation of the project.
+Adapters provide:
+
+```text
+Platform-specific managed class kinds when needed
+Platform-specific managed method kinds
+Parameter injectors and runtime resolvers
+Adapter-owned Providers
+Runtime registry consumers
+Host bootstrap and transports
+Platform lifecycle integration
+Compiler metadata extensions
+```
+
+For Electrobun, a developer should be able to write controllers, services, Providers, and typed methods while Bunwire compiles the object graph and invocation plans once. At runtime the exported Application is started once. Its adapter prepares the native host context, Bunwire stores that context in the root container, runs Provider registration once, connects generated registries to the adapter, and completes host startup. Each invocation then runs Provider boot, resolves injected parameters from the container or adapter injectors, places caller arguments into their correct method positions, and hands the result back to the platform.
+
+That separation is the foundation of Bunwire.

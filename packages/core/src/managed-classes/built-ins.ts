@@ -78,11 +78,4 @@ export const Provider = defineManagedClassDecorator<void, ProviderClassMetadata>
     lifecycleHooks: PROVIDER_LIFECYCLE_HOOKS,
     constructorPolicy: "zero-arguments" as const,
   }),
-  validateTarget: (target) => {
-    if (target.length !== 0) {
-      throw new TypeError(
-        `Provider "${target.name}" must be constructible with zero arguments; Bunwire does not perform Provider constructor injection in v1.`,
-      );
-    }
-  },
 });

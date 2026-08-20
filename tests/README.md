@@ -1,4 +1,4 @@
-# Milestones 0–2 automated acceptance matrix
+# Bunwire automated acceptance matrix
 
 This file maps every literal test checkbox in `docs/MILESTONES.md` to executable automation. No checkbox relies only on a statement in `progress.md`.
 
@@ -65,6 +65,35 @@ All tests below are in `tests/milestone-03/built-in-kinds.test.ts`.
 | Service scope metadata supports transient | Service scope test |
 | Controller prefix is retained generically for adapters | Controller prefix metadata test |
 | Provider follows the v1 zero-argument construction rule | Provider construction-policy test |
+| Undecorated subclasses do not inherit managed identity | Built-in inheritance regression test |
+| Managed subclasses can opt into independent metadata | Managed-subclass regression test |
+
+## Milestone 4
+
+All tests below are in `tests/milestone-04/application-kernel.test.ts`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| `defineApp()` returns a stable Application before startup | Application definition test |
+| Configuration chains without startup | Configuration-state test |
+| `withContext()` stores context without startup | Manual-context test |
+| `start()` creates one root container | Repeated and concurrent startup tests |
+| Context is available before `register()` | Manual-context registration-order test |
+| `register()` runs once across invocations | Registry deduplication/lifecycle-count test |
+| `boot()` runs once per invocation | Lifecycle-count and invocation-context tests |
+| Registration completes before invocations | Asynchronous registration-gate integration test |
+| Explicit Provider binding overrides convention binding | Registration-precedence test |
+| Concurrent invocation values do not leak | Synchronized concurrent-invocation test |
+| `register()` receives the root container | Manual-context registration-order test |
+| `boot()` receives real invocation context | Invocation-context identity/token test |
+| Services receive no Provider lifecycle calls | Service lifecycle-separation test |
+| Starting twice follows the clear-failure rule | Repeated and concurrent startup tests |
+| Child containers inherit root bindings and isolate overrides | Child-container scope tests |
+| Provider registry rejects non-Provider entries | Registry validation test |
+| Provider constructors with optional/default/rest parameters receive zero arguments | Provider constructor-policy integration test |
+| Required Provider constructor parameters fail at the typed registry boundary | Provider constructor type-level test |
+| Undecorated Provider subclasses are rejected | Provider metadata-ownership registry test |
+| Runtime Provider entries require callable `register(container)` | Provider lifecycle-shape diagnostic test |
 
 ## Commands
 

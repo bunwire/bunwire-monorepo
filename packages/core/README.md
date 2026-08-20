@@ -12,7 +12,15 @@ Core's built-in specializations use that same API:
 - `@Controller(prefix?)` describes injectable, registry-managed classes that may own adapter-defined managed methods. The optional prefix is retained as generic metadata for adapters.
 - `@Provider()` describes registry-managed lifecycle classes with the known `register` and `boot` hooks. These hooks are lifecycle metadata, not ordinary managed methods or routes.
 
-In v1 Bunwire constructs Providers with zero supplied constructor arguments and performs no Provider constructor injection. A Provider constructor must therefore require zero arguments. Dependencies and bindings needed during startup are handled through the framework-owned `register(container)` hook. Provider lifecycle execution begins in Milestone 4.
+In v1 Bunwire constructs Providers with zero supplied constructor arguments and performs no Provider constructor injection. A Provider constructor must therefore be callable with zero arguments; optional, defaulted, and rest parameters are valid, while required parameters are rejected by the typed Provider registry. Dependencies and bindings needed during startup are handled through the framework-owned `register(container)` hook. Provider lifecycle execution begins in Milestone 4.
+
+## Application and lifecycle
+
+`defineApp()` returns an instantiated, unstarted `Application`. `withContext()`, `withProviderRegistry()`, `withProviders()`, and `withConventionBindings()` configure and return that same object without starting it. Configuration closes when `start()` begins.
+
+`start()` creates the root `Container`, applies convention defaults, stores any manual context under `APPLICATION_CONTEXT`, constructs each distinct `@Provider()` class with zero arguments, and awaits every `register(rootContainer)` call. Convention defaults are staged first so explicit Provider bindings win through the container's last-binding-wins semantics. A second or concurrent `start()` call throws `ApplicationStateError`; startup is never repeated silently.
+
+`runInvocation()` is the Core boundary used by later adapters and managed-method machinery. It is available only after startup completes. Each call creates a child container, stores its real `InvocationContext` under `INVOCATION_CONTEXT`, applies optional invocation-local configuration, runs each Provider `boot(context)`, and then calls the supplied handler. Child-local values are isolated, including across concurrent invocations, while inherited root singletons keep root identity.
 
 ## Container
 

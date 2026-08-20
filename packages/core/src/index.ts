@@ -64,3 +64,22 @@ export {
 } from "./container/bindings.js";
 export { ContainerResolutionError } from "./container/errors.js";
 export { Container } from "./container/container.js";
+export {
+  Application,
+  defineApp,
+  type ApplicationState,
+} from "./application/application.js";
+export { ApplicationStateError } from "./application/errors.js";
+export {
+  APPLICATION_CONTEXT,
+  INVOCATION_CONTEXT,
+  type InvocationContext,
+  type ManagedInvocationOptions,
+} from "./application/invocation-context.js";
+export {
+  defineProviderRegistry,
+  type ConventionRegistration,
+  type ProviderConstructor,
+  type ProviderLifecycle,
+  type ProviderRegistry,
+} from "./application/registry.js";

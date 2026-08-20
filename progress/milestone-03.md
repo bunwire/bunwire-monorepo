@@ -36,7 +36,7 @@ Status: Complete
 
 ## Tests Added
 
-- `tests/milestone-03/built-in-kinds.test.ts` — required built-in metadata/capability tests plus Service scope, Controller prefix, generic-specialization, and Provider constructor-policy coverage.
+- `tests/milestone-03/built-in-kinds.test.ts` — required built-in metadata/capability tests plus Service scope, Controller prefix, generic-specialization, constructor-local inheritance behavior, and Provider constructor-policy coverage.
 
 ## Tests Run
 
@@ -63,6 +63,16 @@ Status: Complete
 - Failed in final verification: none.
 - Skipped: none.
 
+## Corrective Verification — 2026-08-20
+
+- Provider construction now follows the documented callable-with-zero-arguments rule without relying on `Function.length`.
+- Optional, defaulted, and rest constructor parameters are accepted and receive zero supplied arguments.
+- Required constructor parameters are rejected at the typed Provider-registry boundary.
+- Passed: finalized Milestone 3 suite, 1 file and 13 tests.
+- Passed: full repository suite, 7 files and 70 tests.
+- Passed: full quality and clean-install gates.
+- Failed: none.
+
 ## Regression Checks
 
 - Milestones 0–2 tests pass alongside Milestone 3.
@@ -87,12 +97,13 @@ After this milestone:
 ## Important Decisions
 
 - Providers are constructed with zero supplied arguments in v1; no Provider constructor DI occurs.
+- Optional, defaulted, and rest constructor parameters are valid because construction still supplies zero arguments; required parameters are rejected by the typed registry.
 - `register(container)` is a framework-owned lifecycle hook, not an ordinary managed method.
 - Provider target validation uses the generic decorator-definition mechanism.
 
 ## Architectural Issues Encountered
 
-- None.
+- `Function.length` cannot distinguish required TypeScript constructor parameters from optional parameters without defaults, so the runtime arity check rejected valid zero-callable Providers. The arity check was removed in favor of the typed registry contract and runtime lifecycle-shape validation.
 
 ## Deviations or Unresolved Questions
 

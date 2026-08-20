@@ -19,6 +19,9 @@ type MetadataCarrier = ManagedClassTarget & {
 export function getManagedClassMetadata<Target extends ManagedClassTarget>(
   target: Target,
 ): ManagedClassMetadata<unknown, Target> | undefined {
+  if (!Object.prototype.hasOwnProperty.call(target, MANAGED_CLASS_METADATA)) {
+    return undefined;
+  }
   return (target as MetadataCarrier)[MANAGED_CLASS_METADATA] as
     | ManagedClassMetadata<unknown, Target>
     | undefined;

@@ -32,6 +32,7 @@ Status: Complete
 - `tests/milestone-01/managed-classes.test.ts` — generic class-kind/decorator tests and type-level invalid-ID assertion.
 - `tests/milestone-01/public-api.test.ts` — external public-API fixture compilation and production-ID scan.
 - `tests/fixtures/milestone-1-adapter` — external adapter compile fixture.
+- `tests/milestone-03/built-in-kinds.test.ts` — cross-milestone regression coverage proving managed metadata is constructor-local across inheritance and subclasses can opt in independently.
 
 ## Tests Run
 
@@ -49,6 +50,14 @@ Status: Complete
 - Passed: type-level assertions, Core build, dependent workspace builds, and package-boundary scan.
 - Failed: none in final verification.
 - Skipped: none.
+
+## Corrective Verification — 2026-08-20
+
+- Corrected metadata lookup to require an own metadata property on the requested constructor.
+- Passed: focused Milestones 1, 3, and 4 suite, 4 files and 40 tests.
+- Passed: full repository suite, 7 files and 70 tests.
+- Passed: package boundaries, production/test typechecking, all workspace builds, and clean frozen-lockfile installation/typechecking.
+- Failed: none.
 
 ## Regression Checks
 
@@ -70,7 +79,7 @@ Status: Complete
 
 ## Architectural Issues Encountered
 
-- None.
+- Runtime metadata lookup initially used ordinary static-property access, allowing undecorated subclasses to inherit a decorated base class's managed identity. Corrected by requiring constructor-owned metadata and covered by inheritance regressions.
 
 ## Deviations or Unresolved Questions
 

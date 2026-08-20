@@ -100,6 +100,41 @@ describe("Milestone 3 — built-in managed class kinds", () => {
     expect(PlainUtility).not.toHaveProperty("definition");
   });
 
+  it("does not inherit managed metadata through undecorated subclasses", () => {
+    @Service()
+    class BaseService {}
+
+    @Controller("base")
+    class BaseController {}
+
+    @Provider()
+    class BaseProvider {}
+
+    class UndecoratedService extends BaseService {}
+    class UndecoratedController extends BaseController {}
+    class UndecoratedProvider extends BaseProvider {}
+
+    expect(getManagedClassMetadata(UndecoratedService)).toBeUndefined();
+    expect(getManagedClassMetadata(UndecoratedController)).toBeUndefined();
+    expect(getManagedClassMetadata(UndecoratedProvider)).toBeUndefined();
+  });
+
+  it("allows a subclass to opt into its own managed metadata", () => {
+    @Service()
+    class BaseService {}
+
+    @Service({ scope: "transient" })
+    class ManagedSubclass extends BaseService {}
+
+    const baseMetadata = getManagedClassMetadata(BaseService);
+    const subclassMetadata = getManagedClassMetadata(ManagedSubclass);
+
+    expect(baseMetadata?.target).toBe(BaseService);
+    expect((baseMetadata?.data as ServiceClassMetadata).scope).toBe("singleton");
+    expect(subclassMetadata?.target).toBe(ManagedSubclass);
+    expect((subclassMetadata?.data as ServiceClassMetadata).scope).toBe("transient");
+  });
+
   it("all built-ins specialize the generic managed-class decorator system", () => {
     expect(Service.definition.kind).toBe(SERVICE_KIND);
     expect(Controller.definition.kind).toBe(CONTROLLER_KIND);
@@ -120,15 +155,7 @@ describe("Milestone 3 — built-in managed class kinds", () => {
     expect((metadata?.data as ServiceClassMetadata).scope).toBe("transient");
   });
 
-  it("Provider enforces the zero-required-argument v1 construction policy", () => {
-    class InvalidProvider {
-      constructor(_dependency: object) {}
-    }
-
-    expect(() => Provider()(InvalidProvider)).toThrow(
-      /must be constructible with zero arguments.*does not perform Provider constructor injection/i,
-    );
-
+  it("Provider records the zero-argument construction policy", () => {
     @Provider()
     class ValidProvider {}
 

@@ -20,6 +20,11 @@ import {
 type UnknownRuntimeToken = RuntimeToken<unknown>;
 type UnknownBinding = Binding<unknown>;
 
+interface LocatedBinding {
+  readonly binding: UnknownBinding;
+  readonly owner: Container;
+}
+
 function eraseToken<Value>(token: RuntimeToken<Value>): UnknownRuntimeToken {
   return token as UnknownRuntimeToken;
 }
@@ -33,6 +38,27 @@ export class Container {
   readonly #constructorMetadata = new Map<Constructable, ConstructorMetadata>();
   readonly #singletonInstances = new Map<UnknownRuntimeToken, unknown>();
   #activeResolutionChain: UnknownRuntimeToken[] | undefined;
+
+  readonly parent: Container | undefined;
+
+  constructor(parent?: Container) {
+    this.parent = parent;
+  }
+
+  get root(): Container {
+    return this.parent?.root ?? this;
+  }
+
+  createChild(): Container {
+    return new Container(this);
+  }
+
+  has<Value>(token: RuntimeToken<Value>, includeParents = true): boolean {
+    const erasedToken = eraseToken(token);
+    return this.#bindings.has(erasedToken) || (
+      includeParents && this.parent?.has(erasedToken) === true
+    );
+  }
 
   bind<Value>(implementation: Constructable<Value>): this;
   bind<Value>(token: RuntimeToken<Value>, implementation: Constructable<Value>): this;
@@ -147,13 +173,14 @@ export class Container {
       throw circularResolutionError([...chain.slice(cycleStart), token]);
     }
 
-    const binding = this.#bindings.get(token);
-    if (!binding) {
+    const located = this.findBinding(token);
+    if (!located) {
       throw missingBindingError(token, chain);
     }
 
     chain.push(token);
     try {
+      const { binding, owner } = located;
       switch (binding.type) {
         case "value":
         case "instance":
@@ -161,9 +188,9 @@ export class Container {
         case "alias":
           return this.resolve(eraseToken(binding.target), chain);
         case "class":
-          return this.resolveScoped(token, binding, () => this.construct(binding.implementation, chain));
+          return this.resolveScoped(token, binding, owner, chain);
         case "factory":
-          return this.resolveScoped(token, binding, () => binding.factory(this));
+          return this.resolveScoped(token, binding, owner, chain);
       }
     } finally {
       chain.pop();
@@ -173,21 +200,31 @@ export class Container {
   private resolveScoped(
     token: UnknownRuntimeToken,
     binding: ClassBinding | FactoryBinding,
-    create: () => unknown,
+    owner: Container,
+    chain: UnknownRuntimeToken[],
   ): unknown {
     if (binding.scope === "transient") {
-      return create();
+      return this.createFromBinding(binding, chain);
     }
-    if (this.#singletonInstances.has(token)) {
-      return this.#singletonInstances.get(token);
+    if (owner.#singletonInstances.has(token)) {
+      return owner.#singletonInstances.get(token);
     }
-    const instance = create();
-    this.#singletonInstances.set(token, instance);
+    const instance = owner.createFromBinding(binding, chain);
+    owner.#singletonInstances.set(token, instance);
     return instance;
   }
 
+  private createFromBinding(
+    binding: ClassBinding | FactoryBinding,
+    chain: UnknownRuntimeToken[],
+  ): unknown {
+    return binding.type === "class"
+      ? this.construct(binding.implementation, chain)
+      : binding.factory(this);
+  }
+
   private construct<Value>(implementation: Constructable<Value>, chain: UnknownRuntimeToken[]): Value {
-    const metadata = this.#constructorMetadata.get(implementation);
+    const metadata = this.findConstructorMetadata(implementation);
     if (!metadata || metadata.dependencies.length === 0) {
       return new implementation();
     }
@@ -206,5 +243,18 @@ export class Container {
         this.#singletonInstances.delete(token);
       }
     }
+  }
+
+  private findBinding(token: UnknownRuntimeToken): LocatedBinding | undefined {
+    const binding = this.#bindings.get(token);
+    if (binding) {
+      return { binding, owner: this };
+    }
+    return this.parent?.findBinding(token);
+  }
+
+  private findConstructorMetadata(implementation: Constructable): ConstructorMetadata | undefined {
+    return this.#constructorMetadata.get(implementation)
+      ?? this.parent?.findConstructorMetadata(implementation);
   }
 }

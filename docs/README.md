@@ -385,7 +385,7 @@ prepares invocation-level state before the target method executes
 
 Providers are automatically discovered and receive generated Provider registry entries so the application kernel can load and call their known lifecycle hooks.
 
-For v1, Bunwire constructs Provider classes with zero supplied constructor arguments and does not perform Provider constructor injection. Provider constructors must therefore be callable with no arguments. Startup dependencies and bindings are accessed through the framework-owned `register(container)` hook; `register()` parameters are not analyzed as ordinary method DI.
+For v1, Bunwire constructs Provider classes with zero supplied constructor arguments and does not perform Provider constructor injection. Provider constructors must therefore be callable with no arguments. Optional, defaulted, and rest parameters are permitted because they remain callable with zero supplied arguments; required constructor parameters are rejected at the typed Provider-registry boundary. Startup dependencies and bindings are accessed through the framework-owned `register(container)` hook; `register()` parameters are not analyzed as ordinary method DI.
 
 Container entries should be called **bindings**, not Providers.
 
@@ -935,6 +935,10 @@ Transport result / completion
 
 The exact internal adapter lifecycle method names are implementation details. The public lifecycle boundary is `app.start()`.
 
+Core's v1 startup contract fails clearly if `start()` is called a second time or while a first startup is still running. Configuration methods likewise reject changes after startup begins. Provider registries are deduplicated by class identity, and all asynchronous `register()` calls finish before the Application enters its running state or accepts managed invocations.
+
+Until adapter transports and compiled managed-method plans are connected, Core exposes `runInvocation()` as the generic managed-invocation boundary. It creates an isolated child container and real `InvocationContext`, applies invocation-local bindings, runs Provider `boot(context)`, and only then calls the invocation handler. This is lifecycle/scope orchestration rather than automatic exposure of Service or Controller methods.
+
 For the manual-host escape hatch, `app.withContext(context)` supplies an already-created host context before `start()`. This path is useful for existing applications, unusual host ownership, and tests; it is not the recommended default when a full adapter can own the platform bootstrap.
 
 Exact ordering between explicit Provider bindings and convention-generated bindings must preserve deterministic developer override behavior.
@@ -957,7 +961,7 @@ Provider.register() explicit bindings
 Explicit application/runtime overrides, where supported
 ```
 
-Implementation may stage these differently as long as explicit developer bindings deterministically win over convention defaults.
+Implementation may stage these differently as long as explicit developer bindings deterministically win over convention defaults. Core stages convention/default registrations before `Provider.register()` so the container's last-binding-wins behavior gives Provider-created bindings explicit precedence.
 
 ---
 

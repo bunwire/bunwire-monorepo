@@ -385,6 +385,8 @@ prepares invocation-level state before the target method executes
 
 Providers are automatically discovered and receive generated Provider registry entries so the application kernel can load and call their known lifecycle hooks.
 
+For v1, Bunwire constructs Provider classes with zero supplied constructor arguments and does not perform Provider constructor injection. Provider constructors must therefore be callable with no arguments. Startup dependencies and bindings are accessed through the framework-owned `register(container)` hook; `register()` parameters are not analyzed as ordinary method DI.
+
 Container entries should be called **bindings**, not Providers.
 
 ---

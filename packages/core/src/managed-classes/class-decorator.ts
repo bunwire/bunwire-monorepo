@@ -18,11 +18,14 @@ export interface ManagedClassDecoratorDefinition<
   readonly id: ClassDecoratorId<Id>;
   readonly kind: ManagedClassKind;
   readonly createMetadata: (options: Options) => Data;
+  readonly validateTarget: ((target: ManagedClassTarget) => void) | undefined;
 }
 
 type DecoratorFactory<Options> = [Options] extends [void]
-  ? (options?: Options) => ClassDecorator
-  : (options: Options) => ClassDecorator;
+  ? (options?: never) => ClassDecorator
+  : undefined extends Options
+    ? (options?: Exclude<Options, undefined>) => ClassDecorator
+    : (options: Options) => ClassDecorator;
 
 export type ManagedClassDecorator<Options, Data, Id extends string = string> =
   DecoratorFactory<Options> & {
@@ -37,6 +40,7 @@ export interface DefineManagedClassDecoratorOptions<
   readonly id: Id;
   readonly kind: ManagedClassKind;
   readonly createMetadata: (options: Options) => Data;
+  readonly validateTarget?: (target: ManagedClassTarget) => void;
 }
 
 export function defineManagedClassDecorator<
@@ -50,11 +54,13 @@ export function defineManagedClassDecorator<
     id: createClassDecoratorId(options.id),
     kind: options.kind,
     createMetadata: options.createMetadata,
+    validateTarget: options.validateTarget,
   });
 
   const factory = ((decoratorOptions: Options) => {
     return ((target: Function) => {
       const managedTarget = target as ManagedClassTarget;
+      definition.validateTarget?.(managedTarget);
       const metadata: ManagedClassMetadata<Data> = {
         decoratorId: definition.id,
         kindId: definition.kind.id,

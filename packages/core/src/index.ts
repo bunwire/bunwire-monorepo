@@ -23,6 +23,22 @@ export {
   type ManagedClassTarget,
 } from "./managed-classes/metadata.js";
 export {
+  CONTROLLER_KIND,
+  Controller,
+  PROVIDER_KIND,
+  PROVIDER_LIFECYCLE_HOOKS,
+  Provider,
+  SERVICE_KIND,
+  Service,
+  type ControllerClassMetadata,
+  type ProviderClassMetadata,
+  type ProviderConstructorPolicy,
+  type ProviderLifecycleHook,
+  type ServiceClassMetadata,
+  type ServiceOptions,
+  type ServiceScope,
+} from "./managed-classes/built-ins.js";
+export {
   createToken,
   describeToken,
   isClassToken,

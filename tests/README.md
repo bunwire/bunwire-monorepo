@@ -48,9 +48,27 @@ All tests below are in `tests/milestone-02/container.test.ts` and are separately
 | Missing token is actionable | Resolution-error test |
 | Circular dependency includes a useful chain | Resolution-error test |
 
+## Milestone 3
+
+All tests below are in `tests/milestone-03/built-in-kinds.test.ts`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| `@Service()` creates `core.service` metadata | Built-in Service metadata test |
+| `@Controller()` creates `core.controller` metadata | Built-in Controller metadata test |
+| `@Provider()` creates `core.provider` metadata | Built-in Provider metadata test |
+| Service has `managedMethods=false` | Service class-kind capability test |
+| Controller has `managedMethods=true` | Controller class-kind capability test |
+| Provider identifies `register`/`boot` without ordinary routes | Provider lifecycle metadata test |
+| Plain undecorated class has no managed capabilities | Plain-class boundary test |
+| All built-ins use the generic extension mechanism | Decorator-definition identity test |
+| Service scope metadata supports transient | Service scope test |
+| Controller prefix is retained generically for adapters | Controller prefix metadata test |
+| Provider follows the v1 zero-argument construction rule | Provider construction-policy test |
+
 ## Commands
 
-- `pnpm test` runs the 38 Vitest tests.
+- `pnpm test` runs the complete centralized Vitest suite.
 - `pnpm typecheck` checks production code, tests, and type-level assertions.
 - `pnpm test:clean-install` creates a temporary clean workspace, performs a frozen-lockfile install, and runs production and test typechecks.
 - `pnpm quality` runs boundary checks, typechecking, all Vitest tests, and all workspace builds.

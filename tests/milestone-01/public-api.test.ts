@@ -40,11 +40,12 @@ describe("Milestone 1 — public extension acceptance", () => {
 
   it("Core production source contains no concrete adapter-specific class-kind IDs", async () => {
     const sources = await collectProductionSources(path.join(workspaceRoot, "packages", "core", "src"));
-    const concreteIdDeclarations = sources.flatMap((source) => (
+    const adapterIdDeclarations = sources.flatMap((source) => (
       [...source.matchAll(/\bid\s*:\s*["']([a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+)["']/g)]
-        .map((match) => match[1])
+        .map((match) => match[1]!)
+        .filter((id) => !id.startsWith("core."))
     ));
 
-    expect(concreteIdDeclarations).toEqual([]);
+    expect(adapterIdDeclarations).toEqual([]);
   });
 });

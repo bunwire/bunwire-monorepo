@@ -21,7 +21,7 @@ Overall status:
 - Runtime DI container with explicit bindings, tokens, indexed constructor metadata, and singleton/transient scopes.
 - Built-in Service, Controller, and Provider kinds and decorators implemented through the generic managed-class extension APIs.
 - Instantiated Application/kernel lifecycle with Provider registries, explicit registration precedence, manual context, and isolated invocation scopes.
-- Generic managed-method kinds, explicit prebuilt parameter plans, custom resolver IDs, middleware, caller validation, and platform-independent invocation.
+- Generic managed-method kinds, canonical class-kind identity, strictly validated prebuilt parameter plans, custom resolver IDs, middleware, caller validation, and platform-independent invocation.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work

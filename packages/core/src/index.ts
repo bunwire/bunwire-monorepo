@@ -10,6 +10,7 @@ export {
   type ManagedClassKind,
   type ManagedClassKindDefinition,
 } from "./managed-classes/class-kind.js";
+export { ManagedClassKindRegistry } from "./managed-classes/class-kind-registry.js";
 export {
   defineManagedClassDecorator,
   type DefineManagedClassDecoratorOptions,

@@ -1,5 +1,6 @@
 import { Container } from "../container/container.js";
 import { PROVIDER_KIND } from "../managed-classes/built-ins.js";
+import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
 import { InvocationEngine, type InvocationResult } from "../managed-methods/invocation-engine.js";
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
@@ -78,6 +79,12 @@ export class Application<ApplicationContext = unknown> {
   ): this {
     this.assertConfiguring("withParameterResolver()");
     this.#invocationEngine.registerResolver(definition);
+    return this;
+  }
+
+  withManagedClassKind(kind: ManagedClassKind): this {
+    this.assertConfiguring("withManagedClassKind()");
+    this.#invocationEngine.registerClassKind(kind);
     return this;
   }
 

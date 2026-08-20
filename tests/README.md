@@ -113,6 +113,9 @@ All tests below are in `tests/milestone-05/managed-methods.test.ts`.
 | Middleware surrounds invocation in attachment order | Middleware order/transformation test |
 | Invocation results normalize sync/async behavior and failures | Result and error-propagation tests |
 | Metadata-only method kinds cannot invoke | Non-invocable-kind test |
+| Canonical class-kind registration is idempotent and rejects conflicting IDs | Class-kind registry test |
+| A shadow `core.service` descriptor cannot bypass Service restrictions | Canonical owning-kind invocation test |
+| Malformed runtime parameter records and middleware fail closed | Adversarial structural-validation test |
 
 ## Commands
 

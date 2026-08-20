@@ -1,6 +1,8 @@
 import type { InvocationContext } from "../application/invocation-context.js";
-import type { Constructable, RuntimeToken } from "../container/tokens.js";
+import { isClassToken, isToken, type Constructable, type RuntimeToken } from "../container/tokens.js";
+import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
+import { isNamespacedIdentifier } from "../managed-classes/identifiers.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
 import { ManagedMethodPlanError } from "./errors.js";
 import type { ParameterResolverId } from "./identifiers.js";
@@ -79,24 +81,26 @@ export interface DefineManagedMethodPlanOptions<
   readonly middleware?: readonly ManagedMethodMiddleware[];
 }
 
-function assertIndex(index: number, label: string): void {
-  if (!Number.isSafeInteger(index) || index < 0) {
+function assertIndex(index: unknown, label: string): asserts index is number {
+  if (typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) {
     throw new ManagedMethodPlanError(`${label} must be a non-negative safe integer; received ${index}.`);
   }
 }
 
-export function validateManagedMethodPlan(plan: ManagedMethodPlan): void {
-  if (!plan.ownerKind.managedMethods) {
+function validateOwnerKind(plan: ManagedMethodPlan, ownerKind: ManagedClassKind): void {
+  if (!ownerKind.managedMethods) {
     throw new ManagedMethodPlanError(
-      `Owning class kind "${plan.ownerKind.id}" does not allow managed methods.`,
+      `Owning class kind "${ownerKind.id}" does not allow managed methods.`,
     );
   }
-  if (!plan.kind.allowedOn.includes(plan.ownerKind.id)) {
+  if (!plan.kind.allowedOn.includes(ownerKind.id)) {
     throw new ManagedMethodPlanError(
-      `Managed method kind "${plan.kind.id}" is not allowed on owning class kind "${plan.ownerKind.id}".`,
+      `Managed method kind "${plan.kind.id}" is not allowed on owning class kind "${ownerKind.id}".`,
     );
   }
+}
 
+function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
   const targetMetadata = getManagedClassMetadata(plan.target);
   if (targetMetadata?.kindId !== plan.ownerKind.id) {
     throw new ManagedMethodPlanError(
@@ -109,9 +113,33 @@ export function validateManagedMethodPlan(plan: ManagedMethodPlan): void {
     );
   }
 
+  if (!Array.isArray(plan.parameters)) {
+    throw new ManagedMethodPlanError(
+      `Managed method "${String(plan.method)}" parameters must be an array.`,
+    );
+  }
+  if (!Array.isArray(plan.middleware)) {
+    throw new ManagedMethodPlanError(
+      `Managed method "${String(plan.method)}" middleware must be an array.`,
+    );
+  }
+  for (const middleware of plan.middleware) {
+    if (typeof middleware !== "function") {
+      throw new ManagedMethodPlanError(
+        `Managed method "${String(plan.method)}" middleware entries must be callable.`,
+      );
+    }
+  }
+
   const methodIndexes = new Set<number>();
   const argumentIndexes = new Set<number>();
-  for (const parameter of plan.parameters) {
+  for (const rawParameter of plan.parameters as readonly unknown[]) {
+    if (typeof rawParameter !== "object" || rawParameter === null) {
+      throw new ManagedMethodPlanError(
+        `Managed method "${String(plan.method)}" parameter entries must be objects.`,
+      );
+    }
+    const parameter = rawParameter as Record<string, unknown>;
     assertIndex(parameter.methodIndex, "Method parameter index");
     if (methodIndexes.has(parameter.methodIndex)) {
       throw new ManagedMethodPlanError(
@@ -120,14 +148,41 @@ export function validateManagedMethodPlan(plan: ManagedMethodPlan): void {
     }
     methodIndexes.add(parameter.methodIndex);
 
-    if (parameter.source === "transport") {
-      assertIndex(parameter.argumentIndex, "Caller argument index");
-      if (argumentIndexes.has(parameter.argumentIndex)) {
+    switch (parameter.source) {
+      case "transport":
+        assertIndex(parameter.argumentIndex, "Caller argument index");
+        if (typeof parameter.optional !== "boolean") {
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" transport parameter at method index ${parameter.methodIndex} must declare a boolean optional value.`,
+          );
+        }
+        if (argumentIndexes.has(parameter.argumentIndex)) {
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" contains duplicate caller argument index ${parameter.argumentIndex}.`,
+          );
+        }
+        argumentIndexes.add(parameter.argumentIndex);
+        break;
+      case "container":
+        if (!isToken(parameter.token) && !isClassToken(parameter.token)) {
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" container parameter at method index ${parameter.methodIndex} must declare a valid runtime token.`,
+          );
+        }
+        break;
+      case "resolver":
+        if (!isNamespacedIdentifier(parameter.resolverId)) {
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" resolver parameter at method index ${parameter.methodIndex} must declare a namespaced resolver ID.`,
+          );
+        }
+        break;
+      case "context":
+        break;
+      default:
         throw new ManagedMethodPlanError(
-          `Managed method "${String(plan.method)}" contains duplicate caller argument index ${parameter.argumentIndex}.`,
+          `Managed method "${String(plan.method)}" contains unknown parameter source "${String(parameter.source)}" at method index ${parameter.methodIndex}.`,
         );
-      }
-      argumentIndexes.add(parameter.argumentIndex);
     }
   }
 
@@ -147,6 +202,25 @@ export function validateManagedMethodPlan(plan: ManagedMethodPlan): void {
   }
 }
 
+export function validateManagedMethodPlan(
+  plan: ManagedMethodPlan,
+  classKinds: ManagedClassKindRegistry,
+): void {
+  const canonicalOwnerKind = classKinds.get(plan.ownerKind.id);
+  if (!canonicalOwnerKind) {
+    throw new ManagedMethodPlanError(
+      `Owning class kind "${plan.ownerKind.id}" is not registered for managed invocation.`,
+    );
+  }
+  if (canonicalOwnerKind !== plan.ownerKind) {
+    throw new ManagedMethodPlanError(
+      `Owning class kind "${plan.ownerKind.id}" does not use the canonical registered descriptor.`,
+    );
+  }
+  validateOwnerKind(plan, canonicalOwnerKind);
+  validateManagedMethodPlanStructure(plan);
+}
+
 export function defineManagedMethodPlan<
   Target extends Constructable<object>,
   Data,
@@ -163,6 +237,7 @@ export function defineManagedMethodPlan<
     middleware: Object.freeze([...(options.middleware ?? [])]),
   } satisfies ManagedMethodPlan<Target, Data>;
 
-  validateManagedMethodPlan(plan);
+  validateOwnerKind(plan, plan.ownerKind);
+  validateManagedMethodPlanStructure(plan);
   return Object.freeze(plan);
 }

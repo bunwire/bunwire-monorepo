@@ -1,4 +1,7 @@
 import type { InvocationContext } from "../application/invocation-context.js";
+import { CONTROLLER_KIND, PROVIDER_KIND, SERVICE_KIND } from "../managed-classes/built-ins.js";
+import type { ManagedClassKind } from "../managed-classes/class-kind.js";
+import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry.js";
 import { CallerArgumentError, ManagedMethodPlanError } from "./errors.js";
 import type { ParameterResolverDefinition } from "./resolvers.js";
 import { ParameterResolverRegistry } from "./resolvers.js";
@@ -30,6 +33,16 @@ function callerArgumentBounds(parameters: readonly ManagedMethodParameterPlan[])
 
 export class InvocationEngine {
   readonly #resolvers = new ParameterResolverRegistry();
+  readonly #classKinds = new ManagedClassKindRegistry([
+    SERVICE_KIND,
+    CONTROLLER_KIND,
+    PROVIDER_KIND,
+  ]);
+
+  registerClassKind(kind: ManagedClassKind): this {
+    this.#classKinds.register(kind);
+    return this;
+  }
 
   registerResolver<Id extends string, Data>(
     definition: ParameterResolverDefinition<Id, Data>,
@@ -43,7 +56,7 @@ export class InvocationEngine {
     context: InvocationContext,
     callerArguments: readonly unknown[],
   ): InvocationResult<Result> {
-    validateManagedMethodPlan(plan);
+    validateManagedMethodPlan(plan, this.#classKinds);
     if (!plan.kind.invocable) {
       throw new ManagedMethodPlanError(
         `Managed method kind "${plan.kind.id}" is metadata-only and cannot be invoked.`,
@@ -76,6 +89,10 @@ export class InvocationEngine {
         case "context":
           argumentsList[parameter.methodIndex] = context;
           break;
+        default:
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" contains unknown parameter source "${String((parameter as { source?: unknown }).source)}".`,
+          );
       }
     }
 

@@ -5,6 +5,7 @@ import {
   Container,
   Controller,
   InvocationEngine,
+  ManagedClassKindRegistry,
   ManagedMethodPlanError,
   Provider,
   SERVICE_KIND,
@@ -20,6 +21,7 @@ import {
   defineParameterResolver,
   type InvocationContext,
   type ManagedMethodMiddleware,
+  type ManagedMethodParameterPlan,
   type ParameterResolutionRequest,
 } from "@bunwire/core";
 
@@ -55,6 +57,64 @@ describe("Milestone 5 — managed method kinds and plans", () => {
       // @ts-expect-error Method-kind IDs must be namespaced.
       defineMethodKind({ id: "invalid", allowedOn: [HANDLER_KIND], invocable: true });
     }
+  });
+
+  it("registers canonical class kinds idempotently and rejects conflicting same-ID descriptors", () => {
+    const registry = new ManagedClassKindRegistry([SERVICE_KIND]);
+    const shadowServiceKind = defineClassKind({
+      id: "core.service",
+      injectable: true,
+      autoDiscover: true,
+      analyzeConstructor: true,
+      managedMethods: true,
+      registry: true,
+    });
+
+    expect(registry.register(SERVICE_KIND)).toBe(registry);
+    expect(registry.get(SERVICE_KIND.id)).toBe(SERVICE_KIND);
+    expect(() => registry.register(shadowServiceKind)).toThrow(
+      /core\.service.*already registered with a different descriptor/i,
+    );
+  });
+
+  it("cannot bypass Service method restrictions with a conflicting same-ID descriptor", async () => {
+    const shadowServiceKind = defineClassKind({
+      id: "core.service",
+      injectable: true,
+      autoDiscover: true,
+      analyzeConstructor: true,
+      managedMethods: true,
+      registry: true,
+    });
+    const shadowMethodKind = defineMethodKind({
+      id: "test.shadow-service-method",
+      allowedOn: [shadowServiceKind],
+      invocable: true,
+    });
+
+    @Service()
+    class ProtectedService {
+      internal(): string {
+        return "must-not-run";
+      }
+    }
+
+    const plan = defineManagedMethodPlan({
+      kind: shadowMethodKind,
+      ownerKind: shadowServiceKind,
+      target: ProtectedService,
+      method: "internal",
+      data: undefined,
+      parameters: [],
+    });
+    const app = defineApp().withConventionBindings((container) => {
+      container.singleton(ProtectedService);
+    });
+    await app.start();
+
+    await expect(app.invokeManagedMethod(plan)).rejects.toThrow(
+      /core\.service.*canonical registered descriptor/i,
+    );
   });
 
   it("rejects method kinds on disallowed or method-disabled owning class kinds", () => {
@@ -123,6 +183,49 @@ describe("Milestone 5 — managed method kinds and plans", () => {
       ],
     })).toThrow(/missing caller argument index 1/i);
   });
+
+  it("rejects malformed runtime parameter records and middleware", () => {
+    @ManagedHandler()
+    class Target {
+      execute(_value: unknown): void {}
+    }
+
+    const defineWithParameter = (parameter: unknown) => defineManagedMethodPlan({
+      kind: COMMAND_KIND,
+      ownerKind: HANDLER_KIND,
+      target: Target,
+      method: "execute",
+      data: undefined,
+      parameters: [parameter as ManagedMethodParameterPlan],
+    });
+
+    expect(() => defineWithParameter({ source: "unknown", methodIndex: 0 })).toThrow(
+      /unknown parameter source "unknown"/i,
+    );
+    expect(() => defineWithParameter({
+      source: "transport",
+      methodIndex: 0,
+      argumentIndex: 0,
+      optional: "false",
+    })).toThrow(/must declare a boolean optional value/i);
+    expect(() => defineWithParameter({ source: "container", methodIndex: 0 })).toThrow(
+      /must declare a valid runtime token/i,
+    );
+    expect(() => defineWithParameter({
+      source: "resolver",
+      methodIndex: 0,
+      resolverId: "invalid",
+    })).toThrow(/must declare a namespaced resolver ID/i);
+    expect(() => defineManagedMethodPlan({
+      kind: COMMAND_KIND,
+      ownerKind: HANDLER_KIND,
+      target: Target,
+      method: "execute",
+      data: undefined,
+      parameters: [{ source: "context", methodIndex: 0 }],
+      middleware: [42 as unknown as ManagedMethodMiddleware],
+    })).toThrow(/middleware entries must be callable/i);
+  });
 });
 
 describe("Milestone 5 — prebuilt parameter reconstruction", () => {
@@ -161,6 +264,7 @@ describe("Milestone 5 — prebuilt parameter reconstruction", () => {
       ],
     });
     const app = defineApp()
+      .withManagedClassKind(HANDLER_KIND)
       .withConventionBindings((container) => {
         container.transient(ScrambledTarget).value(DEPENDENCY, "container");
       })
@@ -204,7 +308,7 @@ describe("Milestone 5 — prebuilt parameter reconstruction", () => {
         { source: "transport", methodIndex: 2, argumentIndex: 1, optional: false },
       ],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container
         .transient(ContainerTarget)
         .value(FIRST, "first-container")
@@ -253,6 +357,7 @@ describe("Milestone 5 — prebuilt parameter reconstruction", () => {
       ],
     });
     const app = defineApp()
+      .withManagedClassKind(HANDLER_KIND)
       .withConventionBindings((container) => {
         container.transient(ResolverTarget).value(SHARED, "container");
       })
@@ -294,7 +399,7 @@ describe("Milestone 5 — caller validation and resolver diagnostics", () => {
         { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
       ],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container.transient(OptionalTarget).value(INJECTED, "injected");
     });
     await app.start();
@@ -337,7 +442,7 @@ describe("Milestone 5 — caller validation and resolver diagnostics", () => {
         { source: "transport", methodIndex: 1, argumentIndex: 1, optional: false },
       ],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container.transient(DefaultBeforeRequiredTarget);
     });
     await app.start();
@@ -369,7 +474,7 @@ describe("Milestone 5 — caller validation and resolver diagnostics", () => {
         { source: "resolver", methodIndex: 0, resolverId: missingId },
       ],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container.transient(MissingResolverTarget);
     });
     await app.start();
@@ -411,7 +516,7 @@ describe("Milestone 5 — middleware and result semantics", () => {
       data: undefined,
       parameters: [],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container.singleton(ResultTarget);
     });
     await app.start();
@@ -454,7 +559,7 @@ describe("Milestone 5 — middleware and result semantics", () => {
       ],
       middleware: [outer, inner],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container.transient(MiddlewareTarget);
     });
     await app.start();
@@ -487,7 +592,7 @@ describe("Milestone 5 — middleware and result semantics", () => {
       data: undefined,
       parameters: [],
     });
-    const app = defineApp().withConventionBindings((container) => {
+    const app = defineApp().withManagedClassKind(HANDLER_KIND).withConventionBindings((container) => {
       container.transient(FailingTarget);
     });
     await app.start();
@@ -515,7 +620,7 @@ describe("Milestone 5 — middleware and result semantics", () => {
       data: undefined,
       parameters: [],
     });
-    const engine = new InvocationEngine();
+    const engine = new InvocationEngine().registerClassKind(HANDLER_KIND);
     const app = defineApp().withConventionBindings((container) => {
       container.transient(MetadataTarget);
     });
@@ -583,6 +688,7 @@ describe("Milestone 5 — platform-independent fake kind integration", () => {
       ],
     });
     const app = defineApp()
+      .withManagedClassKind(CONSUMER_KIND)
       .withConventionBindings((container) => {
         container.transient(OrderConsumer).value(AUDIT, "audited");
       })

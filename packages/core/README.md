@@ -37,6 +37,8 @@ Plan array order has no positional meaning. `methodIndex` reconstructs the real 
 
 `InvocationEngine` consumes the prebuilt plan without inspecting source or reclassifying parameters. It validates caller counts, resolves the declared sources, wraps the call in plan middleware, and returns a Promise-normalized result. `Application.invokeManagedMethod()` executes that engine through `runInvocation()`, preserving invocation scope and Provider boot ordering. Unknown resolver IDs and malformed plans fail with dedicated actionable errors.
 
+Every engine owns a `ManagedClassKindRegistry` seeded with Service, Controller, and Provider. Applications register extension kinds through `withManagedClassKind()` while still configuring. The same descriptor may be registered repeatedly, but a different descriptor cannot reuse an existing kind ID. Invocation validation uses this canonical registry entry for owning-kind capabilities. Runtime plan validation also checks all parameter discriminants and source-specific fields, boolean optionality, runtime tokens, resolver IDs, and middleware callability before execution.
+
 ## Container
 
 `Container` supports class, singleton, transient, value, factory, alias, and existing-instance bindings. Custom runtime identities come from `createToken<T>(description)`; concrete or abstract class constructors can also be tokens.

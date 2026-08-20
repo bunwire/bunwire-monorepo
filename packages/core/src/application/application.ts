@@ -1,6 +1,9 @@
 import { Container } from "../container/container.js";
 import { PROVIDER_KIND } from "../managed-classes/built-ins.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
+import { InvocationEngine, type InvocationResult } from "../managed-methods/invocation-engine.js";
+import type { ManagedMethodPlan } from "../managed-methods/plan.js";
+import type { ParameterResolverDefinition } from "../managed-methods/resolvers.js";
 import { ApplicationStateError } from "./errors.js";
 import {
   APPLICATION_CONTEXT,
@@ -26,6 +29,7 @@ export class Application<ApplicationContext = unknown> {
   #rootContainer: Container | undefined;
   #providerInstances: readonly ProviderLifecycle[] = Object.freeze([]);
   #nextInvocationId = 1;
+  readonly #invocationEngine = new InvocationEngine();
 
   get state(): ApplicationState {
     return this.#state;
@@ -66,6 +70,14 @@ export class Application<ApplicationContext = unknown> {
   withConventionBindings(registration: ConventionRegistration): this {
     this.assertConfiguring("withConventionBindings()");
     this.#conventionRegistrations.push(registration);
+    return this;
+  }
+
+  withParameterResolver<Id extends string, Data>(
+    definition: ParameterResolverDefinition<Id, Data>,
+  ): this {
+    this.assertConfiguring("withParameterResolver()");
+    this.#invocationEngine.registerResolver(definition);
     return this;
   }
 
@@ -143,6 +155,17 @@ export class Application<ApplicationContext = unknown> {
     }
 
     return handler(context);
+  }
+
+  invokeManagedMethod<Result = unknown>(
+    plan: ManagedMethodPlan,
+    callerArguments: readonly unknown[] = [],
+    options: ManagedInvocationOptions<ApplicationContext> = {},
+  ): InvocationResult<Result> {
+    return this.runInvocation(
+      (context) => this.#invocationEngine.invoke<Result>(plan, context, callerArguments),
+      options,
+    ) as InvocationResult<Result>;
   }
 
   private assertConfiguring(operation: string): void {

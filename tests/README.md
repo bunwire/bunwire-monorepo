@@ -95,6 +95,25 @@ All tests below are in `tests/milestone-04/application-kernel.test.ts`.
 | Undecorated Provider subclasses are rejected | Provider metadata-ownership registry test |
 | Runtime Provider entries require callable `register(container)` | Provider lifecycle-shape diagnostic test |
 
+## Milestone 5
+
+All tests below are in `tests/milestone-05/managed-methods.test.ts`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Arbitrary prebuilt plan reconstructs method parameters | Scrambled-plan reconstruction test |
+| Method and caller argument indexes are independent | Scrambled-plan reconstruction test with reversed caller coordinates |
+| Container parameters interleave with caller arguments | Multi-container interleaving test |
+| Resolver values interleave with caller and container values | Async multi-resolver interleaving test |
+| Required and optional caller validation | Argument-boundary tests, including optional-before-required coordinates |
+| Unknown resolver IDs fail clearly | Unknown-resolver diagnostic test |
+| Fake method kind invokes without platform dependencies | Fake consumer/subscribe integration test |
+| Owning class-kind restrictions are enforced | Disallowed and method-disabled owner tests |
+| Plan indexes are complete and unique | Coordinate-system validation tests |
+| Middleware surrounds invocation in attachment order | Middleware order/transformation test |
+| Invocation results normalize sync/async behavior and failures | Result and error-propagation tests |
+| Metadata-only method kinds cannot invoke | Non-invocable-kind test |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

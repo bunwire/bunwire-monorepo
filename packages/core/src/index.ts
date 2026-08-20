@@ -83,3 +83,46 @@ export {
   type ProviderLifecycle,
   type ProviderRegistry,
 } from "./application/registry.js";
+export {
+  createMethodKindId,
+  createParameterResolverId,
+  type MethodKindId,
+  type ParameterResolverId,
+} from "./managed-methods/identifiers.js";
+export {
+  defineMethodKind,
+  type ManagedMethodKind,
+  type ManagedMethodKindDefinition,
+} from "./managed-methods/method-kind.js";
+export {
+  defineManagedMethodPlan,
+  validateManagedMethodPlan,
+  type ContainerParameterPlan,
+  type ContextParameterPlan,
+  type DefineManagedMethodPlanOptions,
+  type ManagedMethodInvocation,
+  type ManagedMethodMiddleware,
+  type ManagedMethodNext,
+  type ManagedMethodParameterPlan,
+  type ManagedMethodPlan,
+  type ParameterSourceKind,
+  type ResolverParameterPlan,
+  type TransportParameterPlan,
+} from "./managed-methods/plan.js";
+export {
+  defineParameterResolver,
+  ParameterResolverRegistry,
+  type DefineParameterResolverOptions,
+  type ParameterResolutionRequest,
+  type ParameterResolver,
+  type ParameterResolverDefinition,
+} from "./managed-methods/resolvers.js";
+export {
+  InvocationEngine,
+  type InvocationResult,
+} from "./managed-methods/invocation-engine.js";
+export {
+  CallerArgumentError,
+  ManagedMethodPlanError,
+  UnknownParameterResolverError,
+} from "./managed-methods/errors.js";

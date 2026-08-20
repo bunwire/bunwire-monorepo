@@ -13,7 +13,7 @@ export type ClassDecoratorId<Value extends string = string> = Value & {
 
 const namespacedIdentifierPattern = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+$/;
 
-function assertNamespacedIdentifier(value: string, label: string): void {
+export function assertNamespacedIdentifier(value: string, label: string): void {
   if (!namespacedIdentifierPattern.test(value)) {
     throw new TypeError(
       `${label} "${value}" must be a stable, lowercase namespaced identifier such as "core.service".`,

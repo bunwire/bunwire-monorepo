@@ -836,6 +836,12 @@ function invokeUsersGet(controller, container, incoming) {
 
 Both honor the same semantic model.
 
+Core's initial metadata interpreter represents parameter sources as `transport`, `container`, `resolver`, and `context`. The parameter-plan array may be emitted in any order: `methodIndex` is the sole authority for the reconstructed server-side argument position, and `argumentIndex` independently identifies the caller-visible position. Custom resolver IDs are stable namespaced IDs registered before Application startup.
+
+The runtime validates that method and caller indexes are complete and unique, validates caller counts from the highest required caller index through the total caller-visible count, then executes the explicit plan. It does not inspect TypeScript types, decorator syntax, parameter names, or platform concepts. Plan-attached middleware wraps a Promise-normalized method result and may transform or short-circuit it.
+
+`Application.invokeManagedMethod(plan, incoming, options?)` connects this interpreter to the Application invocation scope and Provider boot boundary. Adapters and generated registries may feed plans into this generic API later; calling it does not make ordinary Service methods or undecorated methods dynamically invocable.
+
 ---
 
 # 19. Provider Registration vs Build-Time Compilation

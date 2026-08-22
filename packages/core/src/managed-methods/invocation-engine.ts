@@ -5,6 +5,8 @@ import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry
 import { CallerArgumentError, ManagedMethodPlanError } from "./errors.js";
 import type { ParameterResolverDefinition } from "./resolvers.js";
 import { ParameterResolverRegistry } from "./resolvers.js";
+import type { ManagedMethodKind } from "./method-kind.js";
+import { ManagedMethodKindRegistry } from "./method-kind-registry.js";
 import {
   validateManagedMethodPlan,
   type ManagedMethodInvocation,
@@ -38,9 +40,15 @@ export class InvocationEngine {
     CONTROLLER_KIND,
     PROVIDER_KIND,
   ]);
+  readonly #methodKinds = new ManagedMethodKindRegistry();
 
   registerClassKind(kind: ManagedClassKind): this {
     this.#classKinds.register(kind);
+    return this;
+  }
+
+  registerMethodKind(kind: ManagedMethodKind): this {
+    this.#methodKinds.register(kind);
     return this;
   }
 
@@ -51,12 +59,30 @@ export class InvocationEngine {
     return this;
   }
 
+  getClassKind(kind: ManagedClassKind["id"]): ManagedClassKind | undefined {
+    return this.#classKinds.get(kind);
+  }
+
+  getMethodKind(kind: ManagedMethodKind["id"]): ManagedMethodKind | undefined {
+    return this.#methodKinds.get(kind);
+  }
+
+  getResolver(
+    resolverId: ParameterResolverDefinition["id"],
+  ): ParameterResolverDefinition | undefined {
+    return this.#resolvers.get(resolverId);
+  }
+
+  validate(plan: ManagedMethodPlan): void {
+    validateManagedMethodPlan(plan, this.#classKinds, this.#methodKinds);
+  }
+
   async invoke<Result = unknown>(
     plan: ManagedMethodPlan,
     context: InvocationContext,
     callerArguments: readonly unknown[],
   ): InvocationResult<Result> {
-    validateManagedMethodPlan(plan, this.#classKinds);
+    this.validate(plan);
     if (!plan.kind.invocable) {
       throw new ManagedMethodPlanError(
         `Managed method kind "${plan.kind.id}" is metadata-only and cannot be invoked.`,

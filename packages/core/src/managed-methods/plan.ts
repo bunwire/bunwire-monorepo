@@ -7,6 +7,7 @@ import { getManagedClassMetadata } from "../managed-classes/metadata.js";
 import { ManagedMethodPlanError } from "./errors.js";
 import type { ParameterResolverId } from "./identifiers.js";
 import type { ManagedMethodKind } from "./method-kind.js";
+import type { ManagedMethodKindRegistry } from "./method-kind-registry.js";
 
 interface IndexedMethodParameter {
   readonly methodIndex: number;
@@ -205,6 +206,7 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
 export function validateManagedMethodPlan(
   plan: ManagedMethodPlan,
   classKinds: ManagedClassKindRegistry,
+  methodKinds?: ManagedMethodKindRegistry,
 ): void {
   const canonicalOwnerKind = classKinds.get(plan.ownerKind.id);
   if (!canonicalOwnerKind) {
@@ -215,6 +217,12 @@ export function validateManagedMethodPlan(
   if (canonicalOwnerKind !== plan.ownerKind) {
     throw new ManagedMethodPlanError(
       `Owning class kind "${plan.ownerKind.id}" does not use the canonical registered descriptor.`,
+    );
+  }
+  const canonicalMethodKind = methodKinds?.get(plan.kind.id);
+  if (canonicalMethodKind && canonicalMethodKind !== plan.kind) {
+    throw new ManagedMethodPlanError(
+      `Managed method kind "${plan.kind.id}" does not use the canonical registered descriptor.`,
     );
   }
   validateOwnerKind(plan, canonicalOwnerKind);

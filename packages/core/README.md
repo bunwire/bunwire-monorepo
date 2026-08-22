@@ -39,6 +39,41 @@ Plan array order has no positional meaning. `methodIndex` reconstructs the real 
 
 Every engine owns a `ManagedClassKindRegistry` seeded with Service, Controller, and Provider. Applications register extension kinds through `withManagedClassKind()` while still configuring. The same descriptor may be registered repeatedly, but a different descriptor cannot reuse an existing kind ID. Invocation validation uses this canonical registry entry for owning-kind capabilities. Runtime plan validation also checks all parameter discriminants and source-specific fields, boolean optionality, runtime tokens, resolver IDs, and middleware callability before execution.
 
+## Adapters and extension descriptors
+
+A runtime host adapter is a class instance extending `Adapter<Context>`. Its class declares an own static `compiler` descriptor created with `defineAdapterCompilerDescriptor()`, while its constructor passes runtime contributions to `super()`. This keeps compiler-visible class kinds, class/method decorators, parameter injectors, and metadata-handler descriptors independent from arbitrary instance configuration.
+
+```ts
+class QueueAdapter extends Adapter<QueueContext> {
+  static readonly compiler = defineAdapterCompilerDescriptor({
+    id: "queue.host",
+    classKinds: [CONSUMER_KIND],
+    classDecorators: [Consumer.definition],
+    methodKinds: [SUBSCRIBE_KIND],
+    methodDecorators: [Subscribe.definition],
+    parameterInjectors: [Delivery.definition],
+  });
+
+  constructor() {
+    super({
+      providers: [QueueProvider],
+      parameterResolvers: [DELIVERY_RESOLVER],
+      registryConsumers: [QUEUE_REGISTRY_CONSUMER],
+    });
+  }
+}
+
+const app = defineApp().withAdapter(new QueueAdapter());
+```
+
+V1 permits one primary host adapter. `withAdapter()` requires an `Adapter` instance, attaches the same unstarted `Application`, registers contributions through the existing canonical registries, and rejects conflicting IDs rather than replacing descriptors. Class-kind, method-kind, parameter-injector/resolver, registry-consumer, validation-hook, and compiler-metadata IDs are stable lowercase namespaces.
+
+Adapter startup extends the existing kernel ordering: Core creates the root container and applies convention defaults; the adapter prepares a native context without accepting managed traffic; Core stores that context as `APPLICATION_CONTEXT`; adapter validation hooks run; all application and adapter-owned Providers register; runtime registry consumers connect managed metadata; and the adapter completes host start. Only then does the Application enter `running`. Each host dispatch uses the existing `invokeManagedMethod()` boundary, so Provider boot, invocation scopes, caller validation, and parameter resolution retain their established order.
+
+`defineRuntimeRegistry()` is the Milestone 6 runtime-consumer contract for class entries and prebuilt method plans. It lets a host adapter prove registry integration before compiler generation is added; it does not scan source or classify parameters at runtime. `defineManagedMethodDecorator()` and `defineParameterInjector()` expose source-independent definitions and decorator metadata for future compiler consumption. Runtime invocation still follows the explicit generated/prebuilt plan.
+
+The base `Adapter.prepareHost()` implements the manual escape hatch: if the application was configured with `withContext(existingContext)`, that exact context is used. Full adapters override `prepareHost()` to create native objects and may still explicitly honor the manual context path. Native configuration callbacks are adapter-owned typed callbacks and receive the actual host objects, not Core wrappers.
+
 ## Container
 
 `Container` supports class, singleton, transient, value, factory, alias, and existing-instance bindings. Custom runtime identities come from `createToken<T>(description)`; concrete or abstract class constructors can also be tokens.

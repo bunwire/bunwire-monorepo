@@ -6,6 +6,7 @@ import {
 } from "./identifiers.js";
 import type { ManagedMethodPlan, ResolverParameterPlan } from "./plan.js";
 import type { NamespacedIdentifier } from "../managed-classes/identifiers.js";
+import { isNamespacedIdentifier } from "../managed-classes/identifiers.js";
 
 export interface ParameterResolutionRequest<Data = unknown> {
   readonly context: InvocationContext;
@@ -46,24 +47,41 @@ export function defineParameterResolver<
 }
 
 export class ParameterResolverRegistry {
-  readonly #resolvers = new Map<ParameterResolverId, ParameterResolver>();
+  readonly #resolvers = new Map<ParameterResolverId, ParameterResolverDefinition>();
 
   register<Id extends string, Data>(definition: ParameterResolverDefinition<Id, Data>): this {
-    if (this.#resolvers.has(definition.id)) {
-      throw new TypeError(`Parameter resolver ID "${definition.id}" is already registered.`);
+    if (!definition || typeof definition !== "object"
+      || !isNamespacedIdentifier(definition.id)
+      || typeof definition.resolve !== "function") {
+      throw new TypeError(
+        "Parameter resolver descriptors are malformed; use defineParameterResolver().",
+      );
     }
-    this.#resolvers.set(definition.id, definition.resolve as ParameterResolver);
+    const existing = this.#resolvers.get(definition.id);
+    if (existing === definition) {
+      return this;
+    }
+    if (existing) {
+      throw new TypeError(
+        `Parameter resolver ID "${definition.id}" is already registered with a different descriptor.`,
+      );
+    }
+    this.#resolvers.set(definition.id, definition as ParameterResolverDefinition);
     return this;
+  }
+
+  get(id: ParameterResolverId): ParameterResolverDefinition | undefined {
+    return this.#resolvers.get(id);
   }
 
   async resolve(
     resolverId: ParameterResolverId,
     request: ParameterResolutionRequest,
   ): Promise<unknown> {
-    const resolver = this.#resolvers.get(resolverId);
-    if (!resolver) {
+    const definition = this.#resolvers.get(resolverId);
+    if (!definition) {
       throw new UnknownParameterResolverError(resolverId);
     }
-    return resolver(request);
+    return definition.resolve(request);
   }
 }

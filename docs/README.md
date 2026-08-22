@@ -1218,6 +1218,12 @@ For v1, Bunwire assumes one primary host adapter controls application startup. S
 
 A full adapter owns the normal host bootstrap. A manual adapter variant may instead consume context supplied through `app.withContext(...)`.
 
+Core's initial adapter API represents this contract with `Adapter<Context>`. Each concrete adapter class declares its own static compiler descriptor, created through `defineAdapterCompilerDescriptor()`, so class/method/injector definitions and other source-independent compiler metadata can be resolved from the adapter class rather than from arbitrary instance configuration. The adapter constructor contributes runtime Providers, parameter resolvers, validation hooks, and runtime registry consumers through the base class. `Application.withAdapter()` accepts one primary adapter instance in v1, attaches the same already-created Application, and registers all contributions through application-scoped canonical registries. Reusing an ID with a conflicting descriptor is rejected; adapter contribution APIs cannot replace Core's authoritative class-kind capabilities.
+
+Until compiler-generated registries arrive in the later compiler milestones, `defineRuntimeRegistry()` is the prebuilt registry boundary used to prove adapter consumption. It carries managed class entries and complete managed-method plans; registry consumers connect that metadata to host transports after Provider registration. Dispatch still enters through `Application.invokeManagedMethod()`, so Provider boot, invocation scopes, caller validation, resolvers, and middleware retain their established order. This is a runtime contract for generated/prebuilt metadata, not runtime source discovery or parameter inference.
+
+Adapter preparation receives any explicit manual context but otherwise may create the real native host objects. The prepared context is stored under `APPLICATION_CONTEXT` before adapter/application Provider registration. Validation hooks then run, Providers register, registry consumers connect methods, and the adapter completes host start before the Application becomes running. Typed native-object callbacks receive the exact adapter-owned native object and do not introduce a Core wrapper.
+
 ---
 
 # 28. Electrobun Adapter

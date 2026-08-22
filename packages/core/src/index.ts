@@ -86,8 +86,12 @@ export {
 } from "./application/registry.js";
 export {
   createMethodKindId,
+  createMethodDecoratorId,
+  createParameterInjectorId,
   createParameterResolverId,
+  type MethodDecoratorId,
   type MethodKindId,
+  type ParameterInjectorId,
   type ParameterResolverId,
 } from "./managed-methods/identifiers.js";
 export {
@@ -95,6 +99,25 @@ export {
   type ManagedMethodKind,
   type ManagedMethodKindDefinition,
 } from "./managed-methods/method-kind.js";
+export { ManagedMethodKindRegistry } from "./managed-methods/method-kind-registry.js";
+export {
+  defineManagedMethodDecorator,
+  getManagedMethodMetadata,
+  MANAGED_METHOD_METADATA,
+  type DefineManagedMethodDecoratorOptions,
+  type ManagedMethodDecorator,
+  type ManagedMethodDecoratorDefinition,
+  type ManagedMethodMetadata,
+} from "./managed-methods/method-decorator.js";
+export {
+  defineParameterInjector,
+  getParameterInjectorMetadata,
+  PARAMETER_INJECTOR_METADATA,
+  type DefineParameterInjectorOptions,
+  type ParameterInjector,
+  type ParameterInjectorDefinition,
+  type ParameterInjectorMetadata,
+} from "./managed-methods/parameter-injector.js";
 export {
   defineManagedMethodPlan,
   validateManagedMethodPlan,
@@ -127,3 +150,41 @@ export {
   ManagedMethodPlanError,
   UnknownParameterResolverError,
 } from "./managed-methods/errors.js";
+export {
+  createAdapterId,
+  createAdapterValidationHookId,
+  createCompilerMetadataHandlerId,
+  createRegistryConsumerId,
+  type AdapterId,
+  type AdapterValidationHookId,
+  type CompilerMetadataHandlerId,
+  type RegistryConsumerId,
+} from "./adapters/identifiers.js";
+export {
+  defineAdapterCompilerDescriptor,
+  defineCompilerMetadataHandler,
+  type AdapterCompilerDescriptor,
+  type CompilerMetadataHandlerDescriptor,
+  type DefineAdapterCompilerDescriptorOptions,
+  type DefineCompilerMetadataHandlerOptions,
+} from "./adapters/compiler-descriptor.js";
+export {
+  Adapter,
+  defineAdapterValidationHook,
+  type AdapterHostContext,
+  type AdapterPreparationContext,
+  type AdapterRuntimeDefinition,
+  type AdapterValidationHookDefinition,
+  type DefineAdapterValidationHookOptions,
+  type NativeObjectConfigurationCallback,
+} from "./adapters/adapter.js";
+export {
+  defineRuntimeRegistry,
+  defineRuntimeRegistryConsumer,
+  type DefineRuntimeRegistryConsumerOptions,
+  type DefineRuntimeRegistryOptions,
+  type ManagedClassRegistryEntry,
+  type RuntimeRegistry,
+  type RuntimeRegistryConsumerContext,
+  type RuntimeRegistryConsumerDefinition,
+} from "./adapters/runtime-registry.js";

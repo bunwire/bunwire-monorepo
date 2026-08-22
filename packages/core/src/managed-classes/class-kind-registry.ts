@@ -1,5 +1,5 @@
 import type { ManagedClassKind } from "./class-kind.js";
-import type { ClassKindId } from "./identifiers.js";
+import { isNamespacedIdentifier, type ClassKindId } from "./identifiers.js";
 
 export class ManagedClassKindRegistry {
   readonly #kinds = new Map<ClassKindId, ManagedClassKind>();
@@ -11,6 +11,14 @@ export class ManagedClassKindRegistry {
   }
 
   register(kind: ManagedClassKind): this {
+    if (!kind || typeof kind !== "object" || !isNamespacedIdentifier(kind.id)
+      || typeof kind.injectable !== "boolean"
+      || typeof kind.autoDiscover !== "boolean"
+      || typeof kind.analyzeConstructor !== "boolean"
+      || typeof kind.managedMethods !== "boolean"
+      || typeof kind.registry !== "boolean") {
+      throw new TypeError("Managed class-kind descriptors are malformed; use defineClassKind().");
+    }
     const existing = this.#kinds.get(kind.id);
     if (existing === kind) {
       return this;

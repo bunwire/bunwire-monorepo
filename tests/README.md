@@ -117,6 +117,30 @@ All tests below are in `tests/milestone-05/managed-methods.test.ts`.
 | A shadow `core.service` descriptor cannot bypass Service restrictions | Canonical owning-kind invocation test |
 | Malformed runtime parameter records and middleware fail closed | Adversarial structural-validation test |
 
+## Milestone 6
+
+All tests below are in `tests/milestone-06/adapter-extension.test.ts`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Adapter is a class instance matching the contract | Plain-object rejection and `Adapter` subclass attachment test |
+| `withAdapter()` attaches the existing Application | Same-object and `onAttach()` identity assertions |
+| Adapter contributes a Provider before startup | Fake adapter Provider registration/lifecycle tests |
+| Prepared context is available during Provider registration | `APPLICATION_CONTEXT` identity and ordered-event assertions |
+| Fake adapter adds a managed class kind without Core changes | Public `defineClassKind()`/decorator fixture plus Core source scan |
+| Fake adapter adds a managed method kind without Vite changes | Public method-kind/decorator fixture plus Vite source scan |
+| Fake adapter receives generated metadata | Runtime registry consumer capture test |
+| Fake parameter injector is caller-invisible | Host invocation succeeds with one transport argument and rejects a second injected value |
+| Invalid method decorator placement is rejected | `@Subscribe()` on a Core Controller produces an owning-kind diagnostic |
+| Injector/class/method IDs are namespaced | Namespaced-ID unit test across all extension categories |
+| Host waits for Providers and registries | Deferred Provider gate and host-acceptance integration test |
+| Native callback receives the real host object | FakeHost reference/instance identity test |
+| Manual adapter uses `withContext(existingContext).start()` | Existing-context host invocation integration test |
+| One-primary-adapter and attachment state are enforced | Second-adapter and cross-Application reuse tests |
+| Compiler metadata and validation hooks are contributed | Static metadata-handler and ordered validation-hook test |
+| Canonical class/method identities cannot be shadowed | Shadow Core class-kind and adapter method-kind adversarial tests |
+| Duplicate/missing/malformed contributions fail closed | Duplicate IDs, missing compiler/resolver, invalid owner, malformed registry, and missing manual context tests |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

@@ -161,6 +161,7 @@ export {
   type RegistryConsumerId,
 } from "./adapters/identifiers.js";
 export {
+  assertAdapterCompilerDescriptor,
   defineAdapterCompilerDescriptor,
   defineCompilerMetadataHandler,
   type AdapterCompilerDescriptor,

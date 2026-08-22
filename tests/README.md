@@ -116,6 +116,7 @@ All tests below are in `tests/milestone-05/managed-methods.test.ts`.
 | Canonical class-kind registration is idempotent and rejects conflicting IDs | Class-kind registry test |
 | A shadow `core.service` descriptor cannot bypass Service restrictions | Canonical owning-kind invocation test |
 | Malformed runtime parameter records and middleware fail closed | Adversarial structural-validation test |
+| Unregistered method kinds cannot invoke | Missing method-kind registration test |
 
 ## Milestone 6
 
@@ -140,6 +141,30 @@ All tests below are in `tests/milestone-06/adapter-extension.test.ts`.
 | Compiler metadata and validation hooks are contributed | Static metadata-handler and ordered validation-hook test |
 | Canonical class/method identities cannot be shadowed | Shadow Core class-kind and adapter method-kind adversarial tests |
 | Duplicate/missing/malformed contributions fail closed | Duplicate IDs, missing compiler/resolver, invalid owner, malformed registry, and missing manual context tests |
+| Runtime plans require registered canonical method kinds | Missing and shadow method-kind registry tests |
+| Runtime registries expose only decorated methods of the matching kind | Undecorated-method and decorator/plan-kind mismatch tests |
+
+## Milestone 7
+
+All tests below are in `tests/milestone-07/compiler-discovery.test.ts`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Config resolves a relative source root | Config resolution test |
+| Config resolves a relative bootstrap path | Config resolution test |
+| Multiple source files are discovered deterministically | Repeated bounded-discovery test |
+| Files outside the configured source area are ignored | Bounded-discovery test with an adjacent outside file |
+| Adapter compiler extensions are found from bootstrap | Aliased imported adapter/extension aggregation test |
+| Adapter packages resolve through ESM import exports | Temporary package-style compiler fixture test |
+| Runtime adapter configuration is not duplicated in config | Config/bootstrap composition-root source test |
+| Discovery does not execute callbacks or arbitrary adapter runtime configuration | Adapter construction and native-callback counters remain zero |
+| Invalid source root produces an actionable diagnostic | Typed missing-source diagnostic test |
+| Unresolvable adapter compiler integration produces an actionable diagnostic | Factory-expression and missing-descriptor tests |
+| Runtime has no source-tree scanning dependency | Production runtime-package source scan |
+| Extension identities fail closed | Shadow Core kind and invalid owner tests |
+| Duplicate extension contribution IDs fail closed | Repeated identical compiler metadata-handler test |
+| Malformed and escaping configuration fails closed | Dynamic-config, missing-bootstrap, and root-escape tests |
+| Virtual generated-module namespace is reserved | `virtual:bunwire/*` resolution test |
 
 ## Commands
 

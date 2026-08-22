@@ -220,7 +220,12 @@ export function validateManagedMethodPlan(
     );
   }
   const canonicalMethodKind = methodKinds?.get(plan.kind.id);
-  if (canonicalMethodKind && canonicalMethodKind !== plan.kind) {
+  if (!canonicalMethodKind) {
+    throw new ManagedMethodPlanError(
+      `Managed method kind "${plan.kind.id}" is not registered for managed invocation.`,
+    );
+  }
+  if (canonicalMethodKind !== plan.kind) {
     throw new ManagedMethodPlanError(
       `Managed method kind "${plan.kind.id}" does not use the canonical registered descriptor.`,
     );

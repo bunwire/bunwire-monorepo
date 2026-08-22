@@ -11,7 +11,8 @@
     "experimentalDecorators": true,
     "noEmit": true,
     "paths": {
-      "@bunwire/core": ["packages/core/src/index.ts"]
+      "@bunwire/core": ["packages/core/src/index.ts"],
+      "@bunwire/vite": ["packages/vite/src/index.ts"]
     },
     "types": ["node", "vitest/globals"]
   },

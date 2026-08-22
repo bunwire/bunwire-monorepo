@@ -615,6 +615,104 @@ describe("Milestone 6 — extension identity and malformed contribution defenses
     expect(app.state).toBe("failed");
   });
 
+  it("rejects an unregistered method kind before Providers, consumers, or host start", async () => {
+    const unregisteredKind = defineMethodKind({
+      id: "fake.unregistered-subscribe",
+      allowedOn: [CONSUMER_KIND],
+      invocable: true,
+    });
+    const unregisteredPlan = defineManagedMethodPlan({
+      kind: unregisteredKind,
+      ownerKind: CONSUMER_KIND,
+      target: OrderConsumer,
+      method: "handle",
+      data: { topic: "orders.created" },
+      parameters: ORDER_PLAN.parameters,
+    });
+    const adapter = new FakeAdapter();
+    const app = defineApp()
+      .withAdapter(adapter)
+      .withRuntimeRegistry(defineRuntimeRegistry({
+        classes: ORDER_REGISTRY.classes,
+        methods: [unregisteredPlan],
+      }));
+
+    await expect(app.start()).rejects.toThrow(
+      /method kind "fake\.unregistered-subscribe" is not registered for managed invocation/i,
+    );
+    expect(adapter.preparedContext?.events).toEqual(["host:prepare", "native:configured"]);
+    expect(adapter.preparedContext?.host.handlers.size).toBe(0);
+    expect(adapter.preparedContext?.host.accepting).toBe(false);
+    expect(app.state).toBe("failed");
+  });
+
+  it("rejects an undecorated runtime-registry method before host connection", async () => {
+    @Consumer("undecorated")
+    class UndecoratedConsumer {
+      handle(): string {
+        return "must-not-run";
+      }
+    }
+
+    const plan = defineManagedMethodPlan({
+      kind: SUBSCRIBE_KIND,
+      ownerKind: CONSUMER_KIND,
+      target: UndecoratedConsumer,
+      method: "handle",
+      data: { topic: "orders.undecorated" },
+      parameters: [],
+    });
+    const adapter = new FakeAdapter();
+    const app = defineApp()
+      .withAdapter(adapter)
+      .withRuntimeRegistry(defineRuntimeRegistry({
+        classes: [{
+          kind: CONSUMER_KIND,
+          target: UndecoratedConsumer,
+          data: getManagedClassMetadata(UndecoratedConsumer)?.data,
+        }],
+        methods: [plan],
+      }));
+
+    await expect(app.start()).rejects.toThrow(/must have own managed-method decorator metadata/i);
+    expect(adapter.preparedContext?.events).toEqual(["host:prepare", "native:configured"]);
+    expect(adapter.preparedContext?.host.handlers.size).toBe(0);
+    expect(adapter.preparedContext?.host.accepting).toBe(false);
+    expect(app.state).toBe("failed");
+  });
+
+  it("rejects a runtime plan whose canonical kind differs from its decorator kind", async () => {
+    const alternateKind = defineMethodKind({
+      id: "fake.alternate-subscribe",
+      allowedOn: [CONSUMER_KIND],
+      invocable: true,
+    });
+    const mismatchedPlan = defineManagedMethodPlan({
+      kind: alternateKind,
+      ownerKind: CONSUMER_KIND,
+      target: OrderConsumer,
+      method: "handle",
+      data: { topic: "orders.created" },
+      parameters: ORDER_PLAN.parameters,
+    });
+    const adapter = new FakeAdapter();
+    const app = defineApp()
+      .withAdapter(adapter)
+      .withManagedMethodKind(alternateKind)
+      .withRuntimeRegistry(defineRuntimeRegistry({
+        classes: ORDER_REGISTRY.classes,
+        methods: [mismatchedPlan],
+      }));
+
+    await expect(app.start()).rejects.toThrow(
+      /decorator kind "fake\.subscribe" does not match its canonical plan kind "fake\.alternate-subscribe"/i,
+    );
+    expect(adapter.preparedContext?.events).toEqual(["host:prepare", "native:configured"]);
+    expect(adapter.preparedContext?.host.handlers.size).toBe(0);
+    expect(adapter.preparedContext?.host.accepting).toBe(false);
+    expect(app.state).toBe("failed");
+  });
+
   it("rejects duplicate compiler and runtime extension IDs instead of replacing definitions", () => {
     expect(() => defineAdapterCompilerDescriptor({
       id: "duplicate.host",

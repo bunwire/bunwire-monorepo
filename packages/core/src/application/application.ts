@@ -9,6 +9,7 @@ import { PROVIDER_KIND } from "../managed-classes/built-ins.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
 import { InvocationEngine, type InvocationResult } from "../managed-methods/invocation-engine.js";
+import { getManagedMethodMetadata } from "../managed-methods/method-decorator.js";
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import type { ManagedMethodKind } from "../managed-methods/method-kind.js";
 import type { ParameterResolverDefinition } from "../managed-methods/resolvers.js";
@@ -387,6 +388,17 @@ export class Application<ApplicationContext = unknown> {
       if (!targets.has(plan.target)) {
         throw new TypeError(
           `Runtime registry managed method "${String(plan.method)}" references class "${plan.target.name}" without a managed-class registry entry.`,
+        );
+      }
+      const metadata = getManagedMethodMetadata(plan.target.prototype, plan.method);
+      if (!metadata) {
+        throw new TypeError(
+          `Runtime registry managed method "${plan.target.name}.${String(plan.method)}" must have own managed-method decorator metadata.`,
+        );
+      }
+      if (metadata.kind !== plan.kind) {
+        throw new TypeError(
+          `Runtime registry managed method "${plan.target.name}.${String(plan.method)}" decorator kind "${metadata.kind.id}" does not match its canonical plan kind "${plan.kind.id}".`,
         );
       }
     }

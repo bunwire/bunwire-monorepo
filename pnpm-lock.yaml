@@ -40,6 +40,9 @@ importers:
       '@bunwire/core':
         specifier: workspace:*
         version: link:../core
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
 packages:
 

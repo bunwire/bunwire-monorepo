@@ -21,6 +21,7 @@ Status: Complete
 - Application/engine-scoped `ManagedClassKindRegistry` instances establish canonical kind identity and reject conflicting same-ID descriptors.
 - Invocation validation resolves owning capabilities from the canonical registry descriptor.
 - Runtime plan validation fails closed for malformed parameter sources, source-specific fields, optionality, resolver IDs, tokens, and middleware.
+- Invocation requires every method plan to use a registered canonical method-kind descriptor.
 
 ## Remaining
 
@@ -41,6 +42,7 @@ Status: Complete
 - [x] Runtime execution consumes metadata without classifying or inferring parameter sources.
 - [x] Conflicting descriptors cannot reuse a canonical managed-class-kind ID to replace owning-kind capabilities.
 - [x] Malformed runtime parameter and middleware records fail before target invocation.
+- [x] Unregistered and conflicting method-kind descriptors fail before target invocation.
 
 ## Tests Added
 
@@ -82,6 +84,16 @@ Status: Complete
 - Passed: package boundaries, production/test typechecking, all workspace builds, built-output public-export smoke check, clean frozen-lockfile installation/typechecking, and repository diff validation.
 - Failed: none.
 
+## Method-Kind Identity Hardening — 2026-08-22
+
+- Closed the remaining missing-registration path in canonical method-kind validation while preserving the existing conflicting-descriptor rejection.
+- Updated every intentional direct-plan fixture to register its method kind explicitly.
+- Added a regression proving an unregistered method kind cannot invoke its target.
+- Passed: focused Milestones 5–6 suite, 2 files and 42 tests.
+- Passed: Core regression suite, 7 files and 102 tests.
+- Passed: full quality gate, 9 files and 112 tests, package boundaries, production/test typechecking, and all four workspace builds.
+- Failed: none.
+
 ## Regression Checks
 
 - Milestones 0–4 pass alongside Milestone 5.
@@ -116,6 +128,7 @@ After this milestone:
 
 - Owning-kind validation initially trusted capabilities from the plan-supplied descriptor while matching target identity only by ID, allowing a conflicting same-ID descriptor to bypass `managedMethods=false`. Corrected through canonical application/engine-scoped registration and descriptor validation.
 - Runtime plan validation initially checked indexes but not parameter-source discriminants or source-specific value types, allowing malformed plans to alter invocation semantics or silently supply `undefined`. Corrected with strict branch validation and an exhaustive execution failure.
+- Canonical method-kind validation initially rejected only a conflicting registered descriptor, allowing an entirely unregistered kind to invoke. Corrected by requiring a canonical registration for every invocation.
 
 ## Deviations or Unresolved Questions
 

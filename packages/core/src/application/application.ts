@@ -142,7 +142,9 @@ export class Application<ApplicationContext = unknown> {
     for (const resolver of runtime.parameterResolvers) {
       this.#invocationEngine.registerResolver(resolver);
     }
-    this.#providerClasses.push(...runtime.providers);
+    // Adapter defaults register before application Providers regardless of
+    // fluent configuration-call order, so explicit application bindings win.
+    this.#providerClasses.unshift(...runtime.providers);
     this.#adapter = adapter;
     return this as unknown as Application<AdapterContext>;
   }

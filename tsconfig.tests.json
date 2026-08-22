@@ -13,6 +13,7 @@
     "paths": {
       "@bunwire/core": ["packages/core/src/index.ts"],
       "@bunwire/vite": ["packages/vite/src/index.ts"],
+      "@bunwire/electrobun": ["packages/electrobun/src/index.ts"],
       "@bunwire/test-analysis-extensions": ["tests/fixtures/milestone-8-analysis/extensions.ts"]
     },
     "types": ["node", "vitest/globals"]

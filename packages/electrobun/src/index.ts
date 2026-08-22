@@ -1,2 +1,37 @@
-// The Electrobun adapter begins in Milestone 11.
-export {};
+export {
+  Context,
+  ELECTROBUN_COMPILER_DESCRIPTOR,
+  ELECTROBUN_CONTEXT_RESOLVER_ID,
+  ELECTROBUN_MESSAGE_KIND,
+  ELECTROBUN_ROUTE_KIND,
+  ELECTROBUN_WEBVIEW_RESOLVER_ID,
+  ELECTROBUN_WINDOW_RESOLVER_ID,
+  Message,
+  Route,
+  Webview,
+  Window,
+  type ElectrobunMethodMetadata,
+} from "./definitions.js";
+export {
+  ELECTROBUN_CONTEXT,
+  ELECTROBUN_RPC,
+  ELECTROBUN_WEBVIEW,
+  ELECTROBUN_WINDOW,
+  ElectrobunAdapter,
+  ElectrobunAdapterError,
+  ElectrobunBindingsProvider,
+  ElectrobunTrafficNotReadyError,
+  ManualElectrobunAdapter,
+  assertElectrobunContext,
+  defineElectrobunContext,
+  type BunwireElectrobunSchema,
+  type ElectrobunAdapterOptions,
+  type ElectrobunContext,
+  type ElectrobunMainWindowOptions,
+  type ElectrobunMessageErrorContext,
+  type ElectrobunRPC,
+  type ElectrobunRpcOptions,
+  type ElectrobunWebview,
+  type ElectrobunWindow,
+} from "./runtime.js";
+export { ElectrobunPathError, normalizeElectrobunPath } from "./path.js";

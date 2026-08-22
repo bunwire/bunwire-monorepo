@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 10 — Generated Registries and Runtime Execution (complete)
+Current milestone: Milestone 11 — Electrobun Adapter (complete)
 
 Overall status:
 
@@ -17,7 +17,8 @@ Overall status:
 - Milestone 8: Complete — [details](progress/milestone-08.md)
 - Milestone 9: Complete — [details](progress/milestone-09.md)
 - Milestone 10: Complete — [details](progress/milestone-10.md)
-- Milestone 11+: Not started
+- Milestone 11: Complete — [details](progress/milestone-11.md)
+- Milestone 12+: Not started
 
 ## Implemented
 
@@ -33,15 +34,16 @@ Overall status:
 - Complete managed-method parameter plans with independent method/caller indexes, injector precedence, optional/rest semantics, caller bounds, and compile-time placement/source validation.
 - Canonical compiler-symbol authorization, strict runtime-token validation, inherited-constructor safeguards, managed dependency-cycle detection, and concrete instance-method enforcement.
 - Deterministic generated registries and `virtual:bunwire/registry`, with exported runtime imports, class scopes, constructor plans, generated Providers, managed methods, resolver IDs, adapter metadata, middleware arrays, stable hashes, and direct Core runtime execution.
+- Full class-based Electrobun host integration with native RPC/window bootstrap, Route/Message dispatch, Window/Webview/Context injection, readiness gating, native bindings/callbacks/outgoing APIs, normalized endpoint paths, and a documented manual-context path.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Milestone 10 is complete and verified.
+- None. Milestone 11 is complete and verified.
 
 ## Next
 
-- Milestone 11 — Electrobun Adapter (not started).
+- Milestone 12 — Generated RPC Contracts and End-to-End Application (not started).
 
 ## Blockers
 
@@ -60,3 +62,4 @@ Overall status:
 - [Milestone 8](progress/milestone-08.md)
 - [Milestone 9](progress/milestone-09.md)
 - [Milestone 10](progress/milestone-10.md)
+- [Milestone 11](progress/milestone-11.md)

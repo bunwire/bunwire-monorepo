@@ -14,6 +14,8 @@ export default defineConfig({
     alias: {
       "@bunwire/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
       "@bunwire/vite": fileURLToPath(new URL("./packages/vite/src/index.ts", import.meta.url)),
+      "@bunwire/electrobun": fileURLToPath(new URL("./packages/electrobun/src/index.ts", import.meta.url)),
+      "electrobun/bun": fileURLToPath(new URL("./tests/fixtures/milestone-11-electrobun/fake-native.ts", import.meta.url)),
       "@bunwire/test-analysis-extensions": fileURLToPath(new URL("./tests/fixtures/milestone-8-analysis/extensions.ts", import.meta.url)),
     },
   },

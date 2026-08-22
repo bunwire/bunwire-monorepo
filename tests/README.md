@@ -156,6 +156,8 @@ All tests below are in `tests/milestone-07/compiler-discovery.test.ts`.
 | Files outside the configured source area are ignored | Bounded-discovery test with an adjacent outside file |
 | Adapter compiler extensions are found from bootstrap | Aliased imported adapter/extension aggregation test |
 | Adapter packages resolve through ESM import exports | Temporary package-style compiler fixture test |
+| Dual-export packages select the ESM adapter entry | Divergent `import`/`require` descriptor fixture |
+| Adapter discovery is anchored to the exported Application chain | Valid exported-chain and unused-adapter bootstrap fixtures |
 | Runtime adapter configuration is not duplicated in config | Config/bootstrap composition-root source test |
 | Discovery does not execute callbacks or arbitrary adapter runtime configuration | Adapter construction and native-callback counters remain zero |
 | Invalid source root produces an actionable diagnostic | Typed missing-source diagnostic test |
@@ -165,6 +167,8 @@ All tests below are in `tests/milestone-07/compiler-discovery.test.ts`.
 | Duplicate extension contribution IDs fail closed | Repeated identical compiler metadata-handler test |
 | Malformed and escaping configuration fails closed | Dynamic-config, missing-bootstrap, and root-escape tests |
 | Virtual generated-module namespace is reserved | `virtual:bunwire/*` resolution test |
+| Contained filesystem-link cycles terminate deterministically | Canonical-directory cycle test |
+| Broken source-graph links fail with typed diagnostics | Broken-link source-discovery test |
 
 ## Commands
 

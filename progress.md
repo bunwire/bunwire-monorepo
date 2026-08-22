@@ -25,7 +25,7 @@ Overall status:
 - Instantiated Application/kernel lifecycle with Provider registries, explicit registration precedence, manual context, and isolated invocation scopes.
 - Generic managed-method kinds, canonical class- and method-kind identity, strictly validated prebuilt parameter plans, custom resolver IDs, middleware, caller validation, and platform-independent invocation.
 - Class-based primary-host adapters with guarded compiler/runtime contributions, prepared/manual host context, adapter-owned Providers, validation hooks, decorator-bound runtime registry consumers, native callbacks, and fake-adapter end-to-end proof.
-- Declarative bounded Bunwire config, deterministic source/bootstrap discovery, static primary-adapter compiler-descriptor resolution, canonical extension aggregation, typed diagnostics, and the reserved `virtual:bunwire/*` namespace.
+- Declarative bounded Bunwire config, cycle-safe source discovery, default-export-anchored bootstrap analysis, ESM-authoritative adapter resolution, canonical extension aggregation, typed diagnostics, and the reserved `virtual:bunwire/*` namespace.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work

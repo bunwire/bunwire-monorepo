@@ -16,8 +16,10 @@ Status: Complete
 - Added deterministic config-file selection for `bunwire.config.{ts,mts,cts,js,mjs,cjs}` and typed `BunwireCompilerError` diagnostics.
 - Resolved source roots and bootstrap paths relative to the real project root, rejecting absolute, missing, malformed, ambiguous, lexically escaping, and filesystem-link escaping paths.
 - Added deterministic recursive JavaScript/TypeScript source discovery across configured roots, excluding declaration files and bounded outside files.
-- Added limited bootstrap composition analysis for one direct `defineApp().withAdapter(new ImportedAdapter(...))` expression with named, aliased, default, or namespace imports.
+- Added cycle-safe deterministic source traversal that visits canonical directories once and reports broken/inaccessible links through typed diagnostics.
+- Added limited bootstrap composition analysis for one direct `defineApp().withAdapter(new ImportedAdapter(...))` on the default-exported Application receiver chain, with named, aliased, default, or namespace imports.
 - Resolved the selected adapter's executable module and own static compiler data property without importing the bootstrap, constructing the adapter, evaluating constructor arguments, invoking callbacks, or starting the Application.
+- Made ESM package export conditions authoritative so a conflicting CommonJS `require` entry cannot supply different compiler metadata.
 - Aggregated Core and adapter compiler class kinds, class decorators, method kinds, method decorators, parameter injectors, and metadata handlers through existing canonical registries.
 - Preserved Milestone 5/6 identity protections: shadow canonical descriptors, duplicate identities, unknown owners, method-disabled owners, and noncanonical decorator references fail closed.
 - Reserved and exported the `virtual:bunwire/*` generated-module namespace without generating Milestone 8 registries.
@@ -41,11 +43,14 @@ Status: Complete
 - [x] Runtime code has no source-tree scanning dependency.
 - [x] Malformed config/bootstrap paths and source-root escapes fail closed.
 - [x] Discovery and extension aggregation remain deterministic and conflict-safe.
+- [x] Dual-export adapter packages select the ESM entry used by the bootstrap.
+- [x] Unrelated or dormant adapter calls cannot replace the default-exported Application adapter.
+- [x] Contained filesystem-link cycles terminate and invalid links fail with typed diagnostics.
 
 ## Tests Added
 
-- `tests/milestone-07/compiler-discovery.test.ts` — 17 compiler-fixture, architecture, and adversarial tests.
-- `tests/fixtures/milestone-7-discovery` — bounded graph, ignored outside file, declarative config variants, invalid bootstraps, and a counter-instrumented compiled fake adapter.
+- `tests/milestone-07/compiler-discovery.test.ts` — 22 compiler-fixture, architecture, and adversarial tests.
+- `tests/fixtures/milestone-7-discovery` — bounded graph, ignored outside file, declarative config variants, exported/decoy/invalid bootstraps, and a counter-instrumented compiled fake adapter.
 
 ## Tests Run
 
@@ -58,13 +63,22 @@ Status: Complete
 
 ## Test Results
 
-- Focused Milestone 7: 17 passed, 0 failed, 0 skipped.
-- Full repository suite: 129 passed, 0 failed, 0 skipped across 10 files.
+- Focused Milestone 7: 22 passed, 0 failed, 0 skipped.
+- Full repository suite: 134 passed, 0 failed, 0 skipped across 10 files.
 - Typechecking: production and test projects passed.
 - Package boundaries: passed.
 - Workspace builds: Core, Vite, Electrobun, and example application passed.
 - Clean verification: frozen-lockfile install and workspace typecheck passed in a fresh temporary workspace.
 - Diff whitespace check: passed.
+
+## Corrective Verification — 2026-08-22
+
+- Reproduced and corrected CommonJS-first resolution selecting a package's `require` descriptor instead of the ESM bootstrap's `import` descriptor.
+- Reproduced and corrected whole-file bootstrap scanning that allowed unused or dormant adapter calls to affect composition-root discovery.
+- Reproduced and corrected unbounded traversal through a contained directory-link cycle and raw failure for a broken link.
+- Passed: focused Milestone 7/Vite suite, 1 file and 22 tests.
+- Passed: full quality gate, 10 files and 134 tests, production/test typechecking, package boundaries, and all four workspace builds.
+- Failed: none.
 
 ## Regression Checks
 
@@ -81,6 +95,8 @@ After this milestone:
 - build tooling has one deterministic, project-contained Bunwire source graph and bootstrap path;
 - the bootstrap remains the only location for runtime adapter options;
 - discovery can identify the statically imported primary adapter and aggregate its declarative compiler extensions;
+- dual-export packages use the ESM-compatible adapter entry and unrelated bootstrap expressions are ignored;
+- contained source-directory aliases and cycles terminate deterministically;
 - invalid configuration or integration fails with a stable typed diagnostic;
 - discovery performs no adapter instance lifecycle or callback execution; and
 - no runtime package scans application source trees.
@@ -96,14 +112,19 @@ After this milestone:
 
 - Config loading parses a narrow literal object instead of executing the build-config module, keeping source bounds deterministic and preventing arbitrary config code execution.
 - Bootstrap analysis is intentionally limited to the direct, statically imported adapter-class composition shape documented for v1. Factories and otherwise indeterminate expressions receive actionable diagnostics.
+- Bootstrap analysis follows only the default-exported Application receiver chain and never searches callback bodies, constructor arguments, dormant branches, or unrelated expressions for adapters.
 - Only the selected adapter's compiled JavaScript module is imported to read its own static compiler data property. Normal module initialization can occur, so adapter compiler descriptors must be declarative and side-effect-free; adapter construction and runtime configuration never occur.
 - Compiler extension aggregation reuses Core's public canonical registries rather than maintaining a weaker Vite-only identity map.
 - Package adapter resolution honors ESM `import` exports (with `module`/`main` fallbacks) instead of relying only on CommonJS resolution.
+- Conditional package exports are evaluated in declaration order using active `node`, `import`, and `default` conditions; `require` is not an active compiler-bootstrap condition.
+- Canonical source directories are visited once per configured root, making contained aliases idempotent and cycles finite.
 - The Core change only exports its already-existing `assertAdapterCompilerDescriptor()` boundary; Vite does not import Core internals.
 
 ## Architectural Issues Encountered
 
-- No conflict with the authoritative architecture was found.
+- CommonJS-first package resolution could select different compiler metadata from the ESM bootstrap entry. Corrected by making ESM export conditions authoritative.
+- Whole-file `withAdapter()` scanning was not bound to the exported composition root. Corrected with receiver-chain analysis of the single default export.
+- Contained directory symlinks could revisit an ancestor indefinitely. Corrected with canonical-directory visitation tracking and typed link diagnostics.
 - The first full quality run exposed the existing 10-second Vitest hook ceiling while Milestone 0 performed its isolated copy/build under concurrent load. The global hook ceiling was aligned with that test's existing 120-second subprocess ceiling; no test or assertion was weakened.
 - The first clean-install attempt was denied registry access by the sandbox after accepting the lockfile. The identical frozen-lockfile check passed when rerun with network permission.
 

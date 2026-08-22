@@ -1,5 +1,4 @@
 import { readFile, realpath, stat } from "node:fs/promises";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -59,14 +58,23 @@ function collectImportBindings(sourceFile: ts.SourceFile): Map<string, ImportBin
   return bindings;
 }
 
-function isDefineAppCall(
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)
+    || ts.isAsExpression(current)
+    || ts.isSatisfiesExpression(current)
+    || ts.isTypeAssertionExpression(current)
+    || ts.isNonNullExpression(current)) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function isImportedDefineApp(
   expression: ts.Expression,
   bindings: ReadonlyMap<string, ImportBinding>,
 ): boolean {
-  if (!ts.isCallExpression(expression)) {
-    return false;
-  }
-  const called = expression.expression;
+  const called = unwrapExpression(expression);
   if (ts.isIdentifier(called)) {
     const binding = bindings.get(called.text);
     return binding?.moduleSpecifier === "@bunwire/core" && binding.exportName === "defineApp";
@@ -80,9 +88,36 @@ function isDefineAppCall(
         return true;
       }
     }
-    return isDefineAppCall(called.expression, bindings);
   }
   return false;
+}
+
+function applicationCallChain(
+  exportedExpression: ts.Expression,
+  bindings: ReadonlyMap<string, ImportBinding>,
+  bootstrap: string,
+): readonly ts.CallExpression[] {
+  const calls: ts.CallExpression[] = [];
+  let current = unwrapExpression(exportedExpression);
+  while (ts.isCallExpression(current)) {
+    const called = unwrapExpression(current.expression);
+    if (isImportedDefineApp(called, bindings)) {
+      if (current.arguments.length !== 0) {
+        break;
+      }
+      return calls;
+    }
+    if (!ts.isPropertyAccessExpression(called)) {
+      break;
+    }
+    calls.push(current);
+    current = unwrapExpression(called.expression);
+  }
+  throw new BunwireCompilerError(
+    "ADAPTER_EXPRESSION_UNRESOLVABLE",
+    `Bootstrap "${bootstrap}" default export must be a direct Application chain rooted in the imported defineApp().`,
+    { filePath: bootstrap },
+  );
 }
 
 function adapterImportFromExpression(
@@ -122,11 +157,7 @@ async function resolveExecutableModule(
       resolved = path.resolve(path.dirname(bootstrap), moduleSpecifier);
       await stat(resolved);
     } else {
-      try {
-        resolved = createRequire(bootstrap).resolve(moduleSpecifier);
-      } catch {
-        resolved = await resolveEsmPackageModule(moduleSpecifier, bootstrap);
-      }
+      resolved = await resolveEsmPackageModule(moduleSpecifier, bootstrap);
     }
   } catch (cause) {
     throw new BunwireCompilerError(
@@ -176,8 +207,12 @@ function selectImportTarget(value: unknown): string | undefined {
   }
   if (value && typeof value === "object") {
     const conditions = value as Record<string, unknown>;
-    for (const condition of ["import", "node", "default"]) {
-      const selected = selectImportTarget(conditions[condition]);
+    const activeConditions = new Set(["node", "import", "default"]);
+    for (const [condition, conditionalValue] of Object.entries(conditions)) {
+      if (!activeConditions.has(condition)) {
+        continue;
+      }
+      const selected = selectImportTarget(conditionalValue);
       if (selected) {
         return selected;
       }
@@ -313,17 +348,24 @@ export async function discoverBootstrapAdapter(
     );
   }
   const bindings = collectImportBindings(sourceFile);
-  const adapterCalls: ts.CallExpression[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)
-      && ts.isPropertyAccessExpression(node.expression)
-      && node.expression.name.text === "withAdapter"
-      && isDefineAppCall(node.expression.expression, bindings)) {
-      adapterCalls.push(node);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  const defaultExports = sourceFile.statements.filter(
+    (statement): statement is ts.ExportAssignment => (
+      ts.isExportAssignment(statement) && !statement.isExportEquals
+    ),
+  );
+  if (defaultExports.length !== 1) {
+    throw new BunwireCompilerError(
+      "ADAPTER_EXPRESSION_UNRESOLVABLE",
+      `Bootstrap "${bootstrap}" must contain exactly one default-exported Application composition root.`,
+      { filePath: bootstrap },
+    );
+  }
+  const exportedApplication = defaultExports[0] as ts.ExportAssignment;
+  const applicationCalls = applicationCallChain(exportedApplication.expression, bindings, bootstrap);
+  const adapterCalls = applicationCalls.filter((call) => (
+    ts.isPropertyAccessExpression(unwrapExpression(call.expression))
+      && (unwrapExpression(call.expression) as ts.PropertyAccessExpression).name.text === "withAdapter"
+  ));
 
   if (adapterCalls.length !== 1) {
     throw new BunwireCompilerError(

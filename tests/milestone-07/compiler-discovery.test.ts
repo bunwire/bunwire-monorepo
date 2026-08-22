@@ -1,4 +1,14 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -156,6 +166,150 @@ describe.sequential("Milestone 7 compiler discovery", () => {
       );
       expect(result.adapter.compilerDescriptor.id).toBe("fixture.esm-host");
     } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("selects the ESM import condition when a package also exposes require", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "bunwire-m7-dual-adapter-"));
+    try {
+      await mkdir(path.join(project, "src/bun"), { recursive: true });
+      await mkdir(path.join(project, "node_modules/@fixture/dual-host"), { recursive: true });
+      await writeFile(path.join(project, "bunwire.config.ts"), `
+        export default defineBunwireConfig({
+          source: "./src/bun",
+          bootstrap: "./src/bun/bootstrap.ts",
+        });
+      `);
+      await writeFile(path.join(project, "src/bun/bootstrap.ts"), `
+        import { defineApp } from "@bunwire/core";
+        import { DualHostAdapter } from "@fixture/dual-host";
+        export default defineApp().withAdapter(new DualHostAdapter());
+      `);
+      await writeFile(
+        path.join(project, "node_modules/@fixture/dual-host/package.json"),
+        JSON.stringify({
+          name: "@fixture/dual-host",
+          type: "module",
+          exports: {
+            ".": {
+              import: "./import.mjs",
+              require: "./require.cjs",
+            },
+          },
+        }),
+      );
+      await writeFile(path.join(project, "node_modules/@fixture/dual-host/import.mjs"), `
+        export class DualHostAdapter {
+          static compiler = Object.freeze({
+            id: "fixture.import-host",
+            classKinds: Object.freeze([]),
+            classDecorators: Object.freeze([]),
+            methodKinds: Object.freeze([]),
+            methodDecorators: Object.freeze([]),
+            parameterInjectors: Object.freeze([]),
+            metadataHandlers: Object.freeze([]),
+          });
+        }
+      `);
+      await writeFile(path.join(project, "node_modules/@fixture/dual-host/require.cjs"), `
+        exports.DualHostAdapter = class DualHostAdapter {
+          static compiler = Object.freeze({
+            id: "fixture.require-host",
+            classKinds: Object.freeze([]),
+            classDecorators: Object.freeze([]),
+            methodKinds: Object.freeze([]),
+            methodDecorators: Object.freeze([]),
+            parameterInjectors: Object.freeze([]),
+            metadataHandlers: Object.freeze([]),
+          });
+        };
+      `);
+
+      const result = await discoverBunwireApplication({ root: project });
+
+      expect(result.adapter.resolvedModule).toBe(
+        path.join(project, "node_modules/@fixture/dual-host/import.mjs"),
+      );
+      expect(result.adapter.compilerDescriptor.id).toBe("fixture.import-host");
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("discovers only the adapter on the default-exported Application chain", async () => {
+    const result = await discoverBunwireApplication({
+      root: fixtureRoot,
+      configFile: "bunwire.exported-chain.config.ts",
+    });
+
+    expect(result.adapter.exportName).toBe("FixtureAdapter");
+    expect(result.adapter.compilerDescriptor.id).toBe("fixture.host");
+  });
+
+  it("does not treat an unused adapter call as the exported Application adapter", async () => {
+    const error = await expectCompilerError(
+      discoverBunwireApplication({
+        root: fixtureRoot,
+        configFile: "bunwire.unattached-adapter.config.ts",
+      }),
+      "ADAPTER_EXPRESSION_UNRESOLVABLE",
+    );
+
+    expect(error.message).toContain("must configure one primary adapter");
+  });
+
+  it("terminates contained directory-link cycles and emits each source once", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "bunwire-m7-source-cycle-"));
+    const sourceRoot = path.join(project, "src");
+    const link = path.join(sourceRoot, "nested", "back");
+    try {
+      await mkdir(path.dirname(link), { recursive: true });
+      await writeFile(path.join(sourceRoot, "entry.ts"), "export const entry = true;");
+      await symlink(sourceRoot, link, process.platform === "win32" ? "junction" : "dir");
+      const canonicalProject = await realpath(project);
+      const canonicalSource = await realpath(sourceRoot);
+
+      const files = await discoverBunwireSourceFiles({
+        root: canonicalProject,
+        configFile: path.join(canonicalProject, "bunwire.config.ts"),
+        sourceRoots: [canonicalSource],
+        bootstrap: path.join(canonicalSource, "bootstrap.ts"),
+      });
+
+      expect(files).toEqual([path.join(canonicalSource, "entry.ts")]);
+    } finally {
+      await unlink(link).catch(() => undefined);
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a typed diagnostic for a broken source-graph link", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "bunwire-m7-broken-link-"));
+    const sourceRoot = path.join(project, "src");
+    const target = path.join(sourceRoot, "target");
+    const link = path.join(sourceRoot, "broken");
+    try {
+      await mkdir(target, { recursive: true });
+      await symlink(target, link, process.platform === "win32" ? "junction" : "dir");
+      await rm(target, { recursive: true, force: true });
+      const canonicalProject = await realpath(project);
+      const canonicalSource = await realpath(sourceRoot);
+
+      const error = await expectCompilerError(
+        discoverBunwireSourceFiles({
+          root: canonicalProject,
+          configFile: path.join(canonicalProject, "bunwire.config.ts"),
+          sourceRoots: [canonicalSource],
+          bootstrap: path.join(canonicalSource, "bootstrap.ts"),
+        }),
+        "SOURCE_GRAPH_ESCAPE",
+      );
+
+      expect(error.message).toContain("broken or inaccessible");
+      expect(error.filePath).toBe(link);
+    } finally {
+      await unlink(link).catch(() => undefined);
       await rm(project, { recursive: true, force: true });
     }
   });

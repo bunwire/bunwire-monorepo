@@ -50,6 +50,15 @@ export {
   type Token,
 } from "./container/tokens.js";
 export {
+  getInjectParameterMetadata,
+  Inject,
+  INJECT_DECORATOR_ID,
+  INJECT_PARAMETER_METADATA,
+  type InjectDecorator,
+  type InjectDecoratorDefinition,
+  type InjectParameterMetadata,
+} from "./container/inject.js";
+export {
   type ConstructorDependencyMetadata,
   type ConstructorMetadata,
 } from "./container/metadata.js";

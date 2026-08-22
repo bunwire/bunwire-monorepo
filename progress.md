@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 7 — Complete; Milestone 8 not started
+Current milestone: Milestone 9 — Complete; Milestone 10 not started
 
 Overall status:
 
@@ -14,7 +14,9 @@ Overall status:
 - Milestone 5: Complete — [details](progress/milestone-05.md)
 - Milestone 6: Complete — [details](progress/milestone-06.md)
 - Milestone 7: Complete — [details](progress/milestone-07.md)
-- Milestone 8+: Not started
+- Milestone 8: Complete — [details](progress/milestone-08.md)
+- Milestone 9: Complete — [details](progress/milestone-09.md)
+- Milestone 10+: Not started
 
 ## Implemented
 
@@ -26,15 +28,17 @@ Overall status:
 - Generic managed-method kinds, canonical class- and method-kind identity, strictly validated prebuilt parameter plans, custom resolver IDs, middleware, caller validation, and platform-independent invocation.
 - Class-based primary-host adapters with guarded compiler/runtime contributions, prepared/manual host context, adapter-owned Providers, validation hooks, decorator-bound runtime registry consumers, native callbacks, and fake-adapter end-to-end proof.
 - Declarative bounded Bunwire config, cycle-safe source discovery, default-export-anchored bootstrap analysis, ESM-authoritative adapter resolution, canonical extension aggregation, typed diagnostics, and the reserved `virtual:bunwire/*` namespace.
+- Symbol-resolved managed-class discovery and indexed constructor DI plans with explicit token/class injection and strict plain-class/interface boundaries.
+- Complete managed-method parameter plans with independent method/caller indexes, injector precedence, optional/rest semantics, caller bounds, and compile-time placement/source validation.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Milestone 7 is complete.
+- None. Milestones 8 and 9 are complete and independently verified.
 
 ## Next
 
-- Milestone 8 — TypeScript Symbol Analysis and Managed-Class Discovery (not started).
+- Milestone 10 — Generated Registries and Runtime Execution (not started).
 
 ## Blockers
 
@@ -50,3 +54,5 @@ Overall status:
 - [Milestone 5](progress/milestone-05.md)
 - [Milestone 6](progress/milestone-06.md)
 - [Milestone 7](progress/milestone-07.md)
+- [Milestone 8](progress/milestone-08.md)
+- [Milestone 9](progress/milestone-09.md)

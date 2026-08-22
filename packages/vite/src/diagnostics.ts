@@ -12,16 +12,32 @@ export type BunwireCompilerErrorCode =
   | "ADAPTER_MODULE_UNRESOLVABLE"
   | "ADAPTER_EXPORT_INVALID"
   | "ADAPTER_DESCRIPTOR_INVALID"
-  | "EXTENSION_CONFLICT";
+  | "EXTENSION_CONFLICT"
+  | "TYPESCRIPT_PROGRAM_ERROR"
+  | "MANAGED_CLASS_INVALID"
+  | "CONSTRUCTOR_INJECTION_INVALID"
+  | "MANAGED_METHOD_INVALID"
+  | "PARAMETER_SOURCE_CONFLICT"
+  | "DECORATOR_ARGUMENT_INVALID";
+
+export interface BunwireSourceLocation {
+  readonly filePath: string;
+  readonly line: number;
+  readonly column: number;
+  readonly endLine: number;
+  readonly endColumn: number;
+}
 
 export interface BunwireCompilerErrorOptions {
   readonly filePath?: string;
+  readonly location?: BunwireSourceLocation;
   readonly cause?: unknown;
 }
 
 export class BunwireCompilerError extends Error {
   readonly code: BunwireCompilerErrorCode;
   readonly filePath: string | undefined;
+  readonly location: BunwireSourceLocation | undefined;
 
   constructor(
     code: BunwireCompilerErrorCode,
@@ -31,6 +47,7 @@ export class BunwireCompilerError extends Error {
     super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "BunwireCompilerError";
     this.code = code;
-    this.filePath = options.filePath;
+    this.filePath = options.filePath ?? options.location?.filePath;
+    this.location = options.location;
   }
 }

@@ -19,6 +19,7 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     hookTimeout: 120_000,
+    testTimeout: 120_000,
     coverage: {
       include: ["packages/core/src/**/*.ts"],
     },

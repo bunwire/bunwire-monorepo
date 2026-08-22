@@ -53,7 +53,8 @@ export const PROVIDER_KIND = defineClassKind({
 
 export const Service = defineManagedClassDecorator<
   ServiceOptions | undefined,
-  ServiceClassMetadata
+  ServiceClassMetadata,
+  "core.service.decorator"
 >({
   id: "core.service.decorator",
   kind: SERVICE_KIND,
@@ -64,14 +65,19 @@ export const Service = defineManagedClassDecorator<
 
 export const Controller = defineManagedClassDecorator<
   string | undefined,
-  ControllerClassMetadata
+  ControllerClassMetadata,
+  "core.controller.decorator"
 >({
   id: "core.controller.decorator",
   kind: CONTROLLER_KIND,
   createMetadata: (prefix) => Object.freeze({ prefix }),
 });
 
-export const Provider = defineManagedClassDecorator<void, ProviderClassMetadata>({
+export const Provider = defineManagedClassDecorator<
+  void,
+  ProviderClassMetadata,
+  "core.provider.decorator"
+>({
   id: "core.provider.decorator",
   kind: PROVIDER_KIND,
   createMetadata: () => Object.freeze({

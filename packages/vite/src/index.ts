@@ -9,7 +9,25 @@ export {
   BunwireCompilerError,
   type BunwireCompilerErrorCode,
   type BunwireCompilerErrorOptions,
+  type BunwireSourceLocation,
 } from "./diagnostics.js";
+export {
+  analyzeBunwireProgram,
+  createBunwireProgram,
+  type AnalyzedConstructorDependency,
+  type AnalyzedConstructorPlan,
+  type AnalyzedContainerParameter,
+  type AnalyzedManagedClass,
+  type AnalyzedManagedMethod,
+  type AnalyzedMethodParameter,
+  type AnalyzedResolverParameter,
+  type AnalyzedTransportParameter,
+  type BunwireAnalysisOptions,
+  type BunwireCompilerAnalysis,
+  type BunwireProgramContext,
+  type BunwireProgramOptions,
+  type CompilerRuntimeReference,
+} from "./compiler-analysis.js";
 export { discoverBunwireSourceFiles } from "./source-discovery.js";
 export {
   discoverBootstrapAdapter,
@@ -20,7 +38,10 @@ export {
   type DiscoveredCompilerExtensions,
 } from "./extensions.js";
 export {
+  analyzeBunwireApplication,
   discoverBunwireApplication,
+  type AnalyzeBunwireApplicationOptions,
+  type AnalyzedBunwireApplication,
   type BunwireDiscoveryResult,
 } from "./discovery.js";
 export {

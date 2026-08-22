@@ -28,12 +28,12 @@ In v1 Bunwire constructs Providers with zero supplied constructor arguments and 
 
 Plans support four parameter sources:
 
-- `transport` — reads a separately indexed caller argument and records whether that caller position is optional;
+- `transport` — reads a separately indexed caller argument and records optional/rest semantics;
 - `container` — resolves an explicit runtime token from the invocation container;
 - `resolver` — invokes a registered, namespaced custom parameter resolver;
 - `context` — supplies the framework `InvocationContext` directly.
 
-Plan array order has no positional meaning. `methodIndex` reconstructs the real method argument list, while `argumentIndex` independently addresses the caller-visible argument list. Caller indexes must be contiguous; argument counts range from one past the highest required caller index through the total caller-visible count. This also handles a defaulted/optional caller position before a later required position.
+Plan array order has no positional meaning. `methodIndex` reconstructs the real method argument list, while `argumentIndex` independently addresses the caller-visible argument list. Caller indexes must be contiguous; argument counts range from one past the highest required caller index through the total caller-visible count. A final caller-visible rest parameter removes the maximum bound and is expanded into the real invocation. This also handles a defaulted/optional caller position before a later required position.
 
 `InvocationEngine` consumes the prebuilt plan without inspecting source or reclassifying parameters. It requires both the owning class kind and method kind to use their registered canonical descriptors, validates caller counts, resolves the declared sources, wraps the call in plan middleware, and returns a Promise-normalized result. `Application.invokeManagedMethod()` executes that engine through `runInvocation()`, preserving invocation scope and Provider boot ordering. Unknown method kinds, resolver IDs, and malformed plans fail with dedicated actionable errors.
 
@@ -79,3 +79,5 @@ The base `Adapter.prepareHost()` implements the manual escape hatch: if the appl
 `Container` supports class, singleton, transient, value, factory, alias, and existing-instance bindings. Custom runtime identities come from `createToken<T>(description)`; concrete or abstract class constructors can also be tokens.
 
 Constructor resolution is driven by explicit `registerConstructorMetadata({ target, dependencies })` entries. Dependency indexes are sorted and preserved, so runtime performs no source analysis. Bindings are required even for class tokens, and the most recent explicit binding wins. Singleton caches belong to each `Container`; aliases resolve through the target binding and preserve its identity.
+
+`@Inject(TOKEN)` marks a constructor or managed-method parameter as an explicit container source. Use it for interfaces, aliases, arbitrary values, and deliberately bound plain classes. Automatic type-based injection remains limited to compiler-discovered class kinds whose canonical descriptor declares `injectable: true`.

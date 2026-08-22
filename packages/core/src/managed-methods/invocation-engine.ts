@@ -29,7 +29,9 @@ function callerArgumentBounds(parameters: readonly ManagedMethodParameterPlan[])
   );
   return {
     minimum: highestRequiredIndex + 1,
-    maximum: transportParameters.length,
+    maximum: transportParameters.some((parameter) => parameter.rest === true)
+      ? Number.POSITIVE_INFINITY
+      : transportParameters.length,
   };
 }
 
@@ -101,7 +103,15 @@ export class InvocationEngine {
     for (const parameter of orderedParameters) {
       switch (parameter.source) {
         case "transport":
-          argumentsList[parameter.methodIndex] = callerArguments[parameter.argumentIndex];
+          if (parameter.rest === true) {
+            argumentsList.splice(
+              parameter.methodIndex,
+              1,
+              ...callerArguments.slice(parameter.argumentIndex),
+            );
+          } else {
+            argumentsList[parameter.methodIndex] = callerArguments[parameter.argumentIndex];
+          }
           break;
         case "container":
           argumentsList[parameter.methodIndex] = context.container.get(parameter.token);

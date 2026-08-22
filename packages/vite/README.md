@@ -1,6 +1,6 @@
 # `@bunwire/vite`
 
-Milestone 7 establishes Bunwire's bounded build-time discovery layer. The package does not yet implement a Vite plugin hook or generate runtime registries; those belong to later milestones.
+Milestones 7–9 establish Bunwire's bounded discovery and TypeScript analysis layer. The package does not yet generate runtime registry modules; that begins in Milestone 10.
 
 ## Configuration
 
@@ -29,6 +29,14 @@ export default defineApp().withAdapter(new HostAdapter({ /* runtime options */ }
 
 Discovery follows only the receiver-call chain of that default export. Adapter-like calls in unused functions, dormant branches, callbacks, constructor arguments, or unrelated expressions do not participate. It resolves the imported adapter class and reads its own static `compiler` data property. Package exports use ESM-compatible `node`, `import`, and `default` conditions in declaration order; a `require` condition cannot silently select different compiler metadata. Discovery does not import the bootstrap, construct the adapter, evaluate constructor arguments, invoke configuration callbacks, or start the Application. Loading the selected adapter's compiled JavaScript module performs normal module initialization, so compiler descriptors must remain declarative and side-effect-free.
 
-Compiler-extension aggregation seeds Core's canonical built-in class kinds, validates adapter class/method/decorator ownership, and rejects conflicting IDs. The `virtual:bunwire/*` namespace is reserved for generated modules, but Milestone 7 emits none.
+Compiler-extension aggregation seeds Core's canonical built-in class kinds, validates adapter class/method/decorator ownership, and rejects conflicting IDs. The `virtual:bunwire/*` namespace is reserved for generated modules, but Milestones 7–9 emit none.
 
-Managed-class discovery, TypeScript symbol/type analysis, constructor DI inference, invocation-plan compilation, and registry generation begin in Milestone 8 or later.
+## Symbol and parameter analysis
+
+`createBunwireProgram()` creates one TypeScript `Program` and checker over the configured source universe. `analyzeBunwireProgram()` reuses that context to resolve decorator/type aliases by symbol, discover canonical managed class kinds, compile indexed constructor dependencies, and compile every managed-method parameter.
+
+`analyzeBunwireApplication()` is the integrated entrypoint: it runs Milestone 7 configuration/source/adapter discovery and returns that result together with the Milestones 8–9 analysis.
+
+Constructor parameters must use explicit `@Inject(TOKEN)` or resolve to a managed class kind with `injectable: true`; plain classes and erased interfaces produce source-located diagnostics. Managed methods classify registered parameter injectors first, explicit `@Inject()` second, injectable managed types third, and every remaining parameter as caller-visible transport input. Each method result preserves true `methodIndex` values independently from compact `argumentIndex` values, including optional and final-rest semantics plus minimum/maximum caller bounds.
+
+Compiler runtime references retain the source expression, resolved symbol name, use location, and declaration location. Runtime packages do not scan source or infer signatures. Registry module generation remains intentionally deferred to Milestone 10.

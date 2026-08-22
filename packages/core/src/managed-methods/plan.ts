@@ -17,6 +17,7 @@ export interface TransportParameterPlan extends IndexedMethodParameter {
   readonly source: "transport";
   readonly argumentIndex: number;
   readonly optional: boolean;
+  readonly rest?: boolean;
 }
 
 export interface ContainerParameterPlan extends IndexedMethodParameter {
@@ -134,6 +135,7 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
 
   const methodIndexes = new Set<number>();
   const argumentIndexes = new Set<number>();
+  let restParameter: { readonly methodIndex: number; readonly argumentIndex: number } | undefined;
   for (const rawParameter of plan.parameters as readonly unknown[]) {
     if (typeof rawParameter !== "object" || rawParameter === null) {
       throw new ManagedMethodPlanError(
@@ -156,6 +158,22 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
           throw new ManagedMethodPlanError(
             `Managed method "${String(plan.method)}" transport parameter at method index ${parameter.methodIndex} must declare a boolean optional value.`,
           );
+        }
+        if (parameter.rest !== undefined && typeof parameter.rest !== "boolean") {
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" transport parameter at method index ${parameter.methodIndex} must declare a boolean rest value when present.`,
+          );
+        }
+        if (parameter.rest === true) {
+          if (restParameter) {
+            throw new ManagedMethodPlanError(
+              `Managed method "${String(plan.method)}" may contain only one caller-visible rest parameter.`,
+            );
+          }
+          restParameter = {
+            methodIndex: parameter.methodIndex as number,
+            argumentIndex: parameter.argumentIndex as number,
+          };
         }
         if (argumentIndexes.has(parameter.argumentIndex)) {
           throw new ManagedMethodPlanError(
@@ -200,6 +218,13 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
         `Managed method "${String(plan.method)}" transport plan is missing caller argument index ${index}.`,
       );
     }
+  }
+  if (restParameter
+    && (restParameter.methodIndex !== methodIndexes.size - 1
+      || restParameter.argumentIndex !== argumentIndexes.size - 1)) {
+    throw new ManagedMethodPlanError(
+      `Managed method "${String(plan.method)}" caller-visible rest parameter must be the final method and caller parameter.`,
+    );
   }
 }
 

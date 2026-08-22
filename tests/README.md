@@ -170,6 +170,42 @@ All tests below are in `tests/milestone-07/compiler-discovery.test.ts`.
 | Contained filesystem-link cycles terminate deterministically | Canonical-directory cycle test |
 | Broken source-graph links fail with typed diagnostics | Broken-link source-discovery test |
 
+## Milestone 8
+
+All tests below are in `tests/milestone-08/constructor-analysis.test.ts` with sources in `tests/fixtures/milestone-8-analysis`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Aliased `@Service()` is recognized by symbol | Aliased decorator plus same-named unrelated decorator adversarial test |
+| Imported managed class dependency auto-injects | Cross-file Controller-to-Service dependency test |
+| Plain undecorated class does not auto-inject | Typed constructor diagnostic fixture |
+| `@Inject(RandomUtility)` is an explicit container source | Indexed explicit-class reference assertion |
+| `@Inject(CACHE)` supports an interface parameter | Indexed explicit-token reference assertion |
+| Interface without `@Inject()` fails clearly | Source-located interface diagnostic fixture |
+| Constructor parameter positions are preserved | Three-position mixed inferred/explicit plan assertion |
+| Cross-file and aliased class symbols resolve | Canonical symbol/declaration-location assertion |
+
+## Milestone 9
+
+All tests below are in `tests/milestone-09/method-analysis.test.ts` with sources in `tests/fixtures/milestone-8-analysis`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| No-injection indexes map directly | Two-parameter `direct` fixture |
+| One middle injection compacts caller indexes | `strict` fixture |
+| Multiple interleaved injections compact | Seven-parameter `interleaved` fixture |
+| Explicit token is caller-invisible | Interface-token parameter assertion |
+| Framework injector is caller-invisible | Resolver source/index assertion |
+| Optional caller parameters remain optional | Optional `active` caller assertion |
+| Managed injectable type auto-injects | `MethodUserService` source assertion |
+| Plain DTO/class remains caller-visible | `PayloadDto` transport assertion |
+| Interface plus `@Inject(TOKEN)` is container-resolved | `MethodCache`/`METHOD_CACHE` assertion |
+| Parameter injector wins over type DI | Managed-type parameter with `@FrameworkValue()` fixture |
+| Too few/too many caller args fail at runtime | Generated strict-plan Application invocation test |
+| Invalid method placement fails at compile time | `@Subscribe()` on `@Service()` fixture |
+| Incompatible parameter-source decorators fail | Combined framework-injector/`@Inject()` fixture |
+| Rest semantics are preserved | Unbounded compiled rest-plan runtime invocation test |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

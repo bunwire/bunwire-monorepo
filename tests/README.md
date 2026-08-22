@@ -184,10 +184,18 @@ All tests below are in `tests/milestone-08/constructor-analysis.test.ts` with so
 | Interface without `@Inject()` fails clearly | Source-located interface diagnostic fixture |
 | Constructor parameter positions are preserved | Three-position mixed inferred/explicit plan assertion |
 | Cross-file and aliased class symbols resolve | Canonical symbol/declaration-location assertion |
+| Canonical decorators survive re-exports | Re-exported Service fixture |
+| Same-ID counterfeit class and Inject decorators fail | Canonical compiler-symbol adversarial fixtures |
+| Invalid compiler-symbol declarations fail closed | Missing, unresolvable, missing-export, and duplicate-symbol tests |
+| Explicit injection accepts only runtime tokens | Primitive, object, function, `any`, and `unknown` rejection fixtures |
+| Hidden inherited constructor parameters fail | Implicit and explicit forwarding-constructor fixtures |
+| Detectable managed constructor cycles fail | Direct and two-class cycle fixtures |
 
 ## Milestone 9
 
 All tests below are in `tests/milestone-09/method-analysis.test.ts` with sources in `tests/fixtures/milestone-8-analysis`.
+
+Additional adversarial coverage proves same-ID method/injector symbols cannot impersonate registered exports and that static, abstract, or declaration-only managed methods fail before runtime plan generation.
 
 | Milestone test | Automated evidence |
 |---|---|
@@ -205,6 +213,23 @@ All tests below are in `tests/milestone-09/method-analysis.test.ts` with sources
 | Invalid method placement fails at compile time | `@Subscribe()` on `@Service()` fixture |
 | Incompatible parameter-source decorators fail | Combined framework-injector/`@Inject()` fixture |
 | Rest semantics are preserved | Unbounded compiled rest-plan runtime invocation test |
+
+## Milestone 10
+
+All tests below are in `tests/milestone-10/generated-registry.test.ts` with the platform-independent source in `tests/fixtures/milestone-10-registry`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Generated TypeScript typechecks | Real TypeScript Program semantic typecheck over emitted registry source |
+| Same source is byte-stable | Reversed analysis-record input emits the identical source and hash |
+| Runtime performs no source scanning | Core runtime and generated-source architecture scan |
+| Constructor plan constructs a Controller | Generated registry installs `RegistryController` dependency metadata in the Container |
+| Interleaved method plan executes | Fake adapter invokes caller, managed-class, token, and resolver parameters end to end |
+| Provider lifecycle integrates | Generated Provider registers once and boots once per invocation |
+| Fake adapter metadata executes | Generic class/method descriptor, resolver, registry-consumer, and Application flow |
+| Missing token uses Container diagnostics | Generated missing-token plan rejects with `ContainerResolutionError` |
+| Virtual module loads correctly | Canonical resolve/load/cache/rebuild hook test plus unknown-module rejection |
+| Generated identities fail closed | Duplicate generation and malformed runtime registry adversarial tests |
 
 ## Commands
 

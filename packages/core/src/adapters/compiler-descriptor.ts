@@ -6,6 +6,7 @@ import type { ManagedMethodDecoratorDefinition } from "../managed-methods/method
 import type { ManagedMethodKind } from "../managed-methods/method-kind.js";
 import { ManagedMethodKindRegistry } from "../managed-methods/method-kind-registry.js";
 import type { ParameterInjectorDefinition } from "../managed-methods/parameter-injector.js";
+import { assertCompilerSymbolReference } from "../compiler/compiler-symbol.js";
 import {
   createAdapterId,
   createCompilerMetadataHandlerId,
@@ -96,6 +97,7 @@ export function defineAdapterCompilerDescriptor<const Id extends NamespacedIdent
 
   const classKindById = new Map(classKinds.map((kind) => [kind.id, kind]));
   for (const decorator of classDecorators) {
+    assertCompilerSymbolReference(decorator.compilerSymbol, `Managed class decorator "${decorator.id}"`);
     if (classKindById.get(decorator.kind.id) !== decorator.kind) {
       throw new TypeError(
         `Managed class decorator "${decorator.id}" must reference its canonical contributed class-kind descriptor "${decorator.kind.id}".`,
@@ -105,6 +107,7 @@ export function defineAdapterCompilerDescriptor<const Id extends NamespacedIdent
 
   const methodKindById = new Map(methodKinds.map((kind) => [kind.id, kind]));
   for (const decorator of methodDecorators) {
+    assertCompilerSymbolReference(decorator.compilerSymbol, `Managed method decorator "${decorator.id}"`);
     if (methodKindById.get(decorator.kind.id) !== decorator.kind) {
       throw new TypeError(
         `Managed method decorator "${decorator.id}" must reference its canonical contributed method-kind descriptor "${decorator.kind.id}".`,
@@ -158,6 +161,7 @@ export function assertAdapterCompilerDescriptor(
   assertUniqueIds(metadataHandlers, "Compiler metadata-handler");
 
   for (const decorator of classDecorators) {
+    assertCompilerSymbolReference(decorator.compilerSymbol, `Managed class decorator "${decorator.id}"`);
     if (typeof decorator.createMetadata !== "function"
       || classRegistry.get(decorator.kind?.id) !== decorator.kind) {
       throw new TypeError(
@@ -166,6 +170,7 @@ export function assertAdapterCompilerDescriptor(
     }
   }
   for (const decorator of methodDecorators) {
+    assertCompilerSymbolReference(decorator.compilerSymbol, `Managed method decorator "${decorator.id}"`);
     if (typeof decorator.createMetadata !== "function"
       || methodRegistry.get(decorator.kind?.id) !== decorator.kind) {
       throw new TypeError(
@@ -174,6 +179,7 @@ export function assertAdapterCompilerDescriptor(
     }
   }
   for (const injector of parameterInjectors) {
+    assertCompilerSymbolReference(injector.compilerSymbol, `Parameter injector "${injector.id}"`);
     if (!isNamespacedIdentifier(injector.resolverId)
       || typeof injector.createMetadata !== "function") {
       throw new TypeError(

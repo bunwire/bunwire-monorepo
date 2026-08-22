@@ -18,6 +18,7 @@ const consumerKind = Object.freeze({
 
 const consumerDecorator = Object.freeze({
   id: "fixture.consumer.decorator",
+  compilerSymbol: Object.freeze({ moduleSpecifier: "./adapter/fake-adapter.mjs", exportName: "Consumer" }),
   kind: consumerKind,
   createMetadata: () => Object.freeze({}),
   validateTarget: undefined,
@@ -31,12 +32,14 @@ const subscribeKind = Object.freeze({
 
 const subscribeDecorator = Object.freeze({
   id: "fixture.subscribe.decorator",
+  compilerSymbol: Object.freeze({ moduleSpecifier: "./adapter/fake-adapter.mjs", exportName: "Subscribe" }),
   kind: subscribeKind,
   createMetadata: () => Object.freeze({}),
 });
 
 const deliveryInjector = Object.freeze({
   id: "fixture.delivery.decorator",
+  compilerSymbol: Object.freeze({ moduleSpecifier: "./adapter/fake-adapter.mjs", exportName: "Delivery" }),
   resolverId: "fixture.delivery",
   createMetadata: () => Object.freeze({}),
 });
@@ -54,6 +57,16 @@ const compilerDescriptor = Object.freeze({
 });
 
 export { fixtureState };
+
+function decoratorFactory(definition) {
+  const factory = () => () => undefined;
+  Object.defineProperty(factory, "definition", { enumerable: true, value: definition });
+  return factory;
+}
+
+export const Consumer = decoratorFactory(consumerDecorator);
+export const Subscribe = decoratorFactory(subscribeDecorator);
+export const Delivery = decoratorFactory(deliveryInjector);
 
 export class FixtureAdapter {
   static compiler = compilerDescriptor;

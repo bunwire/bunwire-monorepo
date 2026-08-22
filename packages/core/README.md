@@ -4,7 +4,7 @@ Core is platform-independent. It defines generic managed-class metadata and the 
 
 ## Managed class definitions
 
-Use `defineClassKind()` to describe capabilities and `defineManagedClassDecorator()` to associate an outer decorator with that meaning. IDs must be stable lowercase namespaces such as `queue.consumer`.
+Use `defineClassKind()` to describe capabilities and `defineManagedClassDecorator()` to associate an outer decorator with that meaning. IDs must be stable lowercase namespaces such as `queue.consumer`. Every compiler-visible decorator or parameter injector also declares `compilerSymbol: { moduleSpecifier, exportName }`, identifying its canonical public TypeScript export. Vite authorizes that exact resolved symbol; IDs alone never authorize compiler behavior.
 
 Core's built-in specializations use that same API:
 
@@ -70,7 +70,7 @@ V1 permits one primary host adapter. `withAdapter()` requires an `Adapter` insta
 
 Adapter startup extends the existing kernel ordering: Core creates the root container and applies convention defaults; the adapter prepares a native context without accepting managed traffic; Core stores that context as `APPLICATION_CONTEXT`; adapter validation hooks run; all application and adapter-owned Providers register; runtime registry consumers connect managed metadata; and the adapter completes host start. Only then does the Application enter `running`. Each host dispatch uses the existing `invokeManagedMethod()` boundary, so Provider boot, invocation scopes, caller validation, and parameter resolution retain their established order.
 
-`defineRuntimeRegistry()` is the Milestone 6 runtime-consumer contract for class entries and prebuilt method plans. It lets a host adapter prove registry integration before compiler generation is added; it does not scan source or classify parameters at runtime. Registry validation requires every exposed method to carry own managed-method decorator metadata whose kind matches the plan's canonical registered method kind. Low-level direct plans may remain undecorated, but they still require canonical class- and method-kind registration. `defineManagedMethodDecorator()` and `defineParameterInjector()` expose source-independent definitions and decorator metadata for future compiler consumption.
+`defineRuntimeRegistry()` is the compiler/runtime contract for generated and prebuilt metadata. It carries managed class entries with scope and indexed constructor dependencies, a generated Provider list, and complete managed-method plans. Application startup validates canonical kind/decorator identities and malformed entries, registers constructor metadata and convention class bindings, then runs generated and explicitly contributed Providers through the same lifecycle. Registry consumers connect methods only after Provider registration. Runtime never scans source or reclassifies parameters.
 
 The base `Adapter.prepareHost()` implements the manual escape hatch: if the application was configured with `withContext(existingContext)`, that exact context is used. Full adapters override `prepareHost()` to create native objects and may still explicitly honor the manual context path. Native configuration callbacks are adapter-owned typed callbacks and receive the actual host objects, not Core wrappers.
 
@@ -80,4 +80,4 @@ The base `Adapter.prepareHost()` implements the manual escape hatch: if the appl
 
 Constructor resolution is driven by explicit `registerConstructorMetadata({ target, dependencies })` entries. Dependency indexes are sorted and preserved, so runtime performs no source analysis. Bindings are required even for class tokens, and the most recent explicit binding wins. Singleton caches belong to each `Container`; aliases resolve through the target binding and preserve its identity.
 
-`@Inject(TOKEN)` marks a constructor or managed-method parameter as an explicit container source. Use it for interfaces, aliases, arbitrary values, and deliberately bound plain classes. Automatic type-based injection remains limited to compiler-discovered class kinds whose canonical descriptor declares `injectable: true`.
+`@Inject(TOKEN)` marks a constructor or managed-method parameter as an explicit container source. Use it for interfaces, aliases, arbitrary values represented by `createToken()`, and deliberately bound plain classes. Compiler analysis rejects primitives, plain objects, non-constructable functions, `any`, `unknown`, and erased type-only declarations as tokens. Automatic type-based injection remains limited to compiler-discovered class kinds whose canonical descriptor declares `injectable: true`.

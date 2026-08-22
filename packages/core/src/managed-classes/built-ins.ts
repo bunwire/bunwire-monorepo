@@ -57,6 +57,7 @@ export const Service = defineManagedClassDecorator<
   "core.service.decorator"
 >({
   id: "core.service.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/core", exportName: "Service" },
   kind: SERVICE_KIND,
   createMetadata: (options) => Object.freeze({
     scope: options?.scope ?? "singleton",
@@ -69,6 +70,7 @@ export const Controller = defineManagedClassDecorator<
   "core.controller.decorator"
 >({
   id: "core.controller.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/core", exportName: "Controller" },
   kind: CONTROLLER_KIND,
   createMetadata: (prefix) => Object.freeze({ prefix }),
 });
@@ -79,6 +81,7 @@ export const Provider = defineManagedClassDecorator<
   "core.provider.decorator"
 >({
   id: "core.provider.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/core", exportName: "Provider" },
   kind: PROVIDER_KIND,
   createMetadata: () => Object.freeze({
     lifecycleHooks: PROVIDER_LIFECYCLE_HOOKS,

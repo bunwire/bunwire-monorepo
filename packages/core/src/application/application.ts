@@ -1,4 +1,5 @@
 import { Container } from "../container/container.js";
+import { normalizeConstructorMetadata } from "../container/metadata.js";
 import { Adapter, type AdapterHostContext } from "../adapters/adapter.js";
 import {
   defineRuntimeRegistry,
@@ -219,6 +220,20 @@ export class Application<ApplicationContext = unknown> {
 
       this.validateRuntimeRegistry(this.#runtimeRegistry);
 
+      for (const entry of this.#runtimeRegistry.classes) {
+        rootContainer.registerConstructorMetadata({
+          target: entry.target,
+          dependencies: entry.dependencies,
+        });
+        if (entry.kind.injectable && entry.kind.autoDiscover) {
+          if (entry.scope === "singleton") {
+            rootContainer.singleton(entry.target);
+          } else {
+            rootContainer.transient(entry.target);
+          }
+        }
+      }
+
       const adapterRuntime = this.#adapter
         ? Adapter.runtimeDefinition(this.#adapter)
         : undefined;
@@ -233,7 +248,10 @@ export class Application<ApplicationContext = unknown> {
         }
       }
 
-      const providerClasses = [...new Set(this.#providerClasses)];
+      const providerClasses = [...new Set([
+        ...this.#providerClasses,
+        ...this.#runtimeRegistry.providers as readonly ProviderConstructor[],
+      ])];
       const providerInstances = providerClasses.map((ProviderClass) => {
         this.assertProviderClass(ProviderClass);
         const provider = new ProviderClass();
@@ -356,7 +374,10 @@ export class Application<ApplicationContext = unknown> {
   }
 
   private validateRuntimeRegistry(registry: RuntimeRegistry): void {
-    if (!registry || !Array.isArray(registry.classes) || !Array.isArray(registry.methods)) {
+      if (!registry
+        || !Array.isArray(registry.classes)
+        || !Array.isArray(registry.providers)
+        || !Array.isArray(registry.methods)) {
       throw new TypeError("Runtime registry is malformed; use defineRuntimeRegistry().");
     }
     const targets = new Set<Function>();
@@ -382,7 +403,41 @@ export class Application<ApplicationContext = unknown> {
           `Runtime registry class "${entry.target.name}" must have own managed metadata for class kind "${canonicalKind.id}".`,
         );
       }
+      if (entry.scope !== "singleton" && entry.scope !== "transient") {
+        throw new TypeError(
+          `Runtime registry class "${entry.target.name}" must declare scope "singleton" or "transient".`,
+        );
+      }
+      if (!Array.isArray(entry.dependencies)) {
+        throw new TypeError(
+          `Runtime registry class "${entry.target.name}" constructor dependencies must be an array.`,
+        );
+      }
+      normalizeConstructorMetadata({
+        target: entry.target,
+        dependencies: entry.dependencies,
+      });
     }
+    const providerTargets = new Set<Function>();
+    for (const ProviderClass of registry.providers) {
+      if (typeof ProviderClass !== "function") {
+        throw new TypeError("Runtime Provider registry entries must declare a class target.");
+      }
+      if (providerTargets.has(ProviderClass)) {
+        throw new TypeError(
+          `Runtime registry contains duplicate Provider target "${ProviderClass.name}".`,
+        );
+      }
+      providerTargets.add(ProviderClass);
+      const entry = registry.classes.find(({ target }) => target === ProviderClass);
+      if (!entry || entry.kind.id !== PROVIDER_KIND.id) {
+        throw new TypeError(
+          `Runtime Provider registry entry "${ProviderClass.name}" must reference a managed class entry of kind "${PROVIDER_KIND.id}".`,
+        );
+      }
+      this.assertProviderClass(ProviderClass as ProviderConstructor);
+    }
+    const methodIdentities = new Set<string>();
     for (const plan of registry.methods) {
       this.#invocationEngine.validate(plan);
       if (!targets.has(plan.target)) {
@@ -401,6 +456,14 @@ export class Application<ApplicationContext = unknown> {
           `Runtime registry managed method "${plan.target.name}.${String(plan.method)}" decorator kind "${metadata.kind.id}" does not match its canonical plan kind "${plan.kind.id}".`,
         );
       }
+      const targetIndex = registry.classes.findIndex(({ target }) => target === plan.target);
+      const identity = `${targetIndex}\0${String(plan.method)}\0${plan.kind.id}`;
+      if (methodIdentities.has(identity)) {
+        throw new TypeError(
+          `Runtime registry contains duplicate managed method identity "${plan.target.name}.${String(plan.method)}" for kind "${plan.kind.id}".`,
+        );
+      }
+      methodIdentities.add(identity);
     }
   }
 }

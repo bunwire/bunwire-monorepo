@@ -1,6 +1,8 @@
 import path from "node:path";
 import {
+  Inject,
   INJECT_DECORATOR_ID,
+  type CompilerSymbolReference,
   type ManagedClassKind,
   type ManagedMethodKind,
   type ParameterResolverId,
@@ -32,6 +34,8 @@ export interface BunwireProgramContext {
 export interface CompilerRuntimeReference {
   readonly expression: string;
   readonly symbolName: string;
+  readonly exportName: string;
+  readonly moduleSpecifier: string | undefined;
   readonly location: BunwireSourceLocation;
   readonly declaration: BunwireSourceLocation;
 }
@@ -115,6 +119,31 @@ interface DecoratorMatch<Definition> {
   readonly definition: Definition;
 }
 
+interface CompilerDefinition {
+  readonly id: string;
+  readonly compilerSymbol: CompilerSymbolReference;
+}
+
+interface ResolvedCompilerDefinitions<Definition extends CompilerDefinition> {
+  readonly byId: ReadonlyMap<string, Definition>;
+  readonly bySymbol: ReadonlyMap<ts.Symbol, Definition>;
+}
+
+interface ResolvedRuntimeToken {
+  readonly reference: CompilerRuntimeReference;
+  readonly symbol: ts.Symbol;
+}
+
+interface ConstructorDependencyEdge {
+  readonly target: ts.Symbol;
+  readonly location: ts.Node;
+}
+
+interface ConstructorAnalysisResult {
+  readonly plan: AnalyzedConstructorPlan;
+  readonly edges: readonly ConstructorDependencyEdge[];
+}
+
 function stablePath(filePath: string): string {
   return path.resolve(filePath).replaceAll("\\", "/").toLowerCase();
 }
@@ -160,6 +189,77 @@ function canonicalSymbol(checker: ts.TypeChecker, symbol: ts.Symbol): ts.Symbol 
     current = checker.getAliasedSymbol(current);
   }
   return current;
+}
+
+function resolveModuleExportSymbol(
+  context: BunwireProgramContext,
+  projectRoot: string,
+  reference: CompilerSymbolReference,
+  label: string,
+): ts.Symbol {
+  const containingFile = path.join(projectRoot, "__bunwire_compiler__.ts");
+  const resolved = ts.resolveModuleName(
+    reference.moduleSpecifier,
+    containingFile,
+    context.program.getCompilerOptions(),
+    ts.sys,
+  ).resolvedModule;
+  if (!resolved) {
+    throw new BunwireCompilerError(
+      "COMPILER_SYMBOL_INVALID",
+      `${label} compiler symbol module "${reference.moduleSpecifier}" cannot be resolved from "${projectRoot}".`,
+    );
+  }
+  const sourceFile = context.program.getSourceFile(resolved.resolvedFileName)
+    ?? context.program.getSourceFiles().find((candidate) => (
+      stablePath(candidate.fileName) === stablePath(resolved.resolvedFileName)
+    ));
+  const moduleSymbol = sourceFile ? context.checker.getSymbolAtLocation(sourceFile) : undefined;
+  if (!sourceFile || !moduleSymbol) {
+    throw new BunwireCompilerError(
+      "COMPILER_SYMBOL_INVALID",
+      `${label} compiler symbol module "${reference.moduleSpecifier}" is not part of the TypeScript Program.`,
+    );
+  }
+  const exported = context.checker.getExportsOfModule(moduleSymbol)
+    .find((candidate) => candidate.name === reference.exportName);
+  if (!exported) {
+    throw new BunwireCompilerError(
+      "COMPILER_SYMBOL_INVALID",
+      `${label} compiler symbol module "${reference.moduleSpecifier}" does not export "${reference.exportName}".`,
+    );
+  }
+  return canonicalSymbol(context.checker, exported);
+}
+
+function resolveCompilerDefinitions<Definition extends CompilerDefinition>(
+  context: BunwireProgramContext,
+  projectRoot: string,
+  definitions: readonly Definition[],
+  label: string,
+  occupiedSymbols: Map<ts.Symbol, CompilerDefinition>,
+): ResolvedCompilerDefinitions<Definition> {
+  const byId = new Map<string, Definition>();
+  const bySymbol = new Map<ts.Symbol, Definition>();
+  for (const definition of definitions) {
+    const symbol = resolveModuleExportSymbol(
+      context,
+      projectRoot,
+      definition.compilerSymbol,
+      `${label} "${definition.id}"`,
+    );
+    const existing = occupiedSymbols.get(symbol);
+    if (existing && existing !== definition) {
+      throw new BunwireCompilerError(
+        "COMPILER_SYMBOL_INVALID",
+        `Canonical compiler symbol "${definition.compilerSymbol.moduleSpecifier}" export "${definition.compilerSymbol.exportName}" is assigned to both "${existing.id}" and "${definition.id}".`,
+      );
+    }
+    occupiedSymbols.set(symbol, definition);
+    byId.set(definition.id, definition);
+    bySymbol.set(symbol, definition);
+  }
+  return { byId, bySymbol };
 }
 
 function symbolAtExpression(
@@ -211,10 +311,10 @@ function decoratorsOf(node: ts.Node): readonly ts.Decorator[] {
   return ts.canHaveDecorators(node) ? ts.getDecorators(node) ?? [] : [];
 }
 
-function matchDecorators<Definition extends { readonly id: string }>(
+function matchDecorators<Definition extends CompilerDefinition>(
   node: ts.Node,
   checker: ts.TypeChecker,
-  definitions: ReadonlyMap<string, Definition>,
+  definitions: ResolvedCompilerDefinitions<Definition>,
 ): readonly DecoratorMatch<Definition>[] {
   const matches: DecoratorMatch<Definition>[] = [];
   for (const decorator of decoratorsOf(node)) {
@@ -226,10 +326,18 @@ function matchDecorators<Definition extends { readonly id: string }>(
     if (!symbol) {
       continue;
     }
-    const id = decoratorIdentity(checker, expression, symbol);
-    const definition = id ? definitions.get(id) : undefined;
-    if (id && definition) {
-      matches.push({ decorator, call: expression, symbol, id, definition });
+    const definition = definitions.bySymbol.get(symbol);
+    if (definition) {
+      matches.push({ decorator, call: expression, symbol, id: definition.id, definition });
+      continue;
+    }
+    const claimedId = decoratorIdentity(checker, expression, symbol);
+    if (claimedId && definitions.byId.has(claimedId)) {
+      fail(
+        "DECORATOR_IDENTITY_CONFLICT",
+        `Decorator symbol "${checker.symbolToString(symbol)}" claims registered ID "${claimedId}" but is not the canonical registered export.`,
+        decorator,
+      );
     }
   }
   return matches;
@@ -238,6 +346,7 @@ function matchDecorators<Definition extends { readonly id: string }>(
 function explicitInjectDecorators(
   node: ts.Node,
   checker: ts.TypeChecker,
+  definitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
 ): readonly Omit<DecoratorMatch<never>, "definition">[] {
   const matches: Omit<DecoratorMatch<never>, "definition">[] = [];
   for (const decorator of decoratorsOf(node)) {
@@ -249,9 +358,17 @@ function explicitInjectDecorators(
     if (!symbol) {
       continue;
     }
-    const id = decoratorIdentity(checker, expression, symbol);
-    if (id === INJECT_DECORATOR_ID) {
-      matches.push({ decorator, call: expression, symbol, id });
+    if (definitions.bySymbol.has(symbol)) {
+      matches.push({ decorator, call: expression, symbol, id: INJECT_DECORATOR_ID });
+      continue;
+    }
+    const claimedId = decoratorIdentity(checker, expression, symbol);
+    if (claimedId === INJECT_DECORATOR_ID) {
+      fail(
+        "DECORATOR_IDENTITY_CONFLICT",
+        `Decorator symbol "${checker.symbolToString(symbol)}" claims registered ID "${INJECT_DECORATOR_ID}" but is not the canonical @Inject export.`,
+        decorator,
+      );
     }
   }
   return matches;
@@ -362,11 +479,38 @@ function readCompilerOptions(options: BunwireProgramOptions): ts.CompilerOptions
   };
 }
 
-export function createBunwireProgram(options: BunwireProgramOptions): BunwireProgramContext {
+function createBunwireProgramInternal(
+  options: BunwireProgramOptions,
+  additionalRootNames: readonly string[] = [],
+): BunwireProgramContext {
   const program = ts.createProgram({
-    rootNames: [...options.sourceFiles],
+    rootNames: [...new Set([...options.sourceFiles, ...additionalRootNames])],
     options: readCompilerOptions(options),
   });
+  const diagnostic = [
+    ...program.getOptionsDiagnostics(),
+    ...program.getSyntacticDiagnostics(),
+  ][0];
+  if (diagnostic) {
+    let location: BunwireSourceLocation | undefined;
+    if (diagnostic.file && diagnostic.start !== undefined) {
+      const start = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+      const endPosition = diagnostic.start + (diagnostic.length ?? 0);
+      const end = diagnostic.file.getLineAndCharacterOfPosition(endPosition);
+      location = Object.freeze({
+        filePath: path.resolve(diagnostic.file.fileName),
+        line: start.line + 1,
+        column: start.character + 1,
+        endLine: end.line + 1,
+        endColumn: end.character + 1,
+      });
+    }
+    throw new BunwireCompilerError(
+      "TYPESCRIPT_PROGRAM_ERROR",
+      `TypeScript Program validation failed: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`,
+      location ? { location } : {},
+    );
+  }
   const sourceUniverse = new Set(options.sourceFiles.map(stablePath));
   const sourceFiles = program.getSourceFiles()
     .filter((sourceFile) => sourceUniverse.has(stablePath(sourceFile.fileName)))
@@ -387,6 +531,34 @@ export function createBunwireProgram(options: BunwireProgramOptions): BunwirePro
   });
 }
 
+export function createBunwireProgram(options: BunwireProgramOptions): BunwireProgramContext {
+  return createBunwireProgramInternal(options);
+}
+
+function compilerSymbolRootNames(options: BunwireAnalysisOptions): readonly string[] {
+  const compilerOptions = readCompilerOptions(options);
+  const containingFile = path.join(options.projectRoot, "__bunwire_compiler__.ts");
+  const definitions: readonly CompilerDefinition[] = [
+    ...options.extensions.classDecorators,
+    ...options.extensions.methodDecorators,
+    ...options.extensions.parameterInjectors,
+    Inject.definition,
+  ];
+  const roots = new Set<string>();
+  for (const definition of definitions) {
+    const resolved = ts.resolveModuleName(
+      definition.compilerSymbol.moduleSpecifier,
+      containingFile,
+      compilerOptions,
+      ts.sys,
+    ).resolvedModule;
+    if (resolved) {
+      roots.add(resolved.resolvedFileName);
+    }
+  }
+  return [...roots];
+}
+
 function runtimeReference(
   checker: ts.TypeChecker,
   expression: ts.Expression | ts.TypeNode,
@@ -401,9 +573,46 @@ function runtimeReference(
       expression,
     );
   }
+  const sourceFile = declaration.getSourceFile();
+  const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+  const exported = moduleSymbol
+    ? checker.getExportsOfModule(moduleSymbol).find((candidate) => (
+      canonicalSymbol(checker, candidate) === canonical
+    ))
+    : undefined;
+  if (!exported) {
+    fail(
+      "REGISTRY_GENERATION_INVALID",
+      `Runtime reference "${expression.getText()}" resolves to "${checker.symbolToString(canonical)}", which is not exported from "${sourceFile.fileName}". Managed classes and runtime injection tokens must be exported so generated registries can import them.`,
+      expression,
+    );
+  }
+  let moduleSpecifier: string | undefined;
+  for (const statement of expression.getSourceFile().statements) {
+    if (!ts.isImportDeclaration(statement)
+      || !ts.isStringLiteralLike(statement.moduleSpecifier)
+      || statement.moduleSpecifier.text.startsWith(".")) {
+      continue;
+    }
+    const clause = statement.importClause;
+    const candidates: ts.Identifier[] = [];
+    if (clause?.name) candidates.push(clause.name);
+    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      candidates.push(...clause.namedBindings.elements.map((element) => element.name));
+    }
+    if (candidates.some((candidate) => {
+      const imported = checker.getSymbolAtLocation(candidate);
+      return imported ? canonicalSymbol(checker, imported) === canonical : false;
+    })) {
+      moduleSpecifier = statement.moduleSpecifier.text;
+      break;
+    }
+  }
   return Object.freeze({
     expression: expression.getText(),
     symbolName: checker.symbolToString(canonical),
+    exportName: exported.name,
+    moduleSpecifier,
     location: locationOf(expression),
     declaration: locationOf(declaration),
   });
@@ -459,6 +668,27 @@ function symbolFromRuntimeExpression(
       expression,
     );
   }
+  const expressionType = checker.getTypeAtLocation(expression);
+  const constructable = checker.getSignaturesOfType(expressionType, ts.SignatureKind.Construct).length > 0;
+  const kind = stringLiteralProperty(checker, expressionType, "kind", expression);
+  const id = checker.getPropertyOfType(expressionType, "id");
+  const description = checker.getPropertyOfType(expressionType, "description");
+  const toString = checker.getPropertyOfType(expressionType, "toString");
+  const tokenObject = kind === "bunwire.token"
+    && Boolean(id && (checker.getTypeOfSymbolAtLocation(id, expression).flags & ts.TypeFlags.ESSymbolLike) !== 0)
+    && Boolean(description && (checker.getTypeOfSymbolAtLocation(description, expression).flags & ts.TypeFlags.StringLike) !== 0)
+    && Boolean(toString && checker.getSignaturesOfType(
+      checker.getTypeOfSymbolAtLocation(toString, expression),
+      ts.SignatureKind.Call,
+    ).length > 0);
+  if ((expressionType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+    || (!constructable && !tokenObject)) {
+    fail(
+      diagnosticCode,
+      `Explicit injection token "${expression.getText()}" must be a createToken() value or a constructable class; received type "${checker.typeToString(expressionType)}".`,
+      expression,
+    );
+  }
   return symbol;
 }
 
@@ -469,8 +699,9 @@ function parameterOptional(parameter: ts.ParameterDeclaration): boolean {
 function explicitToken(
   parameter: ts.ParameterDeclaration,
   checker: ts.TypeChecker,
-): CompilerRuntimeReference | undefined {
-  const injectors = explicitInjectDecorators(parameter, checker);
+  injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
+): ResolvedRuntimeToken | undefined {
+  const injectors = explicitInjectDecorators(parameter, checker, injectDefinitions);
   if (injectors.length > 1) {
     fail(
       "PARAMETER_SOURCE_CONFLICT",
@@ -496,7 +727,10 @@ function explicitToken(
     tokenExpression,
     "CONSTRUCTOR_INJECTION_INVALID",
   );
-  return runtimeReference(checker, tokenExpression, symbol);
+  return Object.freeze({
+    reference: runtimeReference(checker, tokenExpression, symbol),
+    symbol: canonicalSymbol(checker, symbol),
+  });
 }
 
 function classDeclarations(context: BunwireProgramContext): readonly ts.ClassDeclaration[] {
@@ -522,23 +756,44 @@ function analyzeConstructor(
   declaration: ts.ClassDeclaration,
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>,
   checker: ts.TypeChecker,
-): AnalyzedConstructorPlan {
+  injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
+): ConstructorAnalysisResult {
   const constructors = declaration.members.filter(ts.isConstructorDeclaration);
   const implementation = constructors.find((constructor) => constructor.body) ?? constructors[0];
   if (!implementation) {
-    return Object.freeze({ parameterCount: 0, dependencies: Object.freeze([]) });
+    const classSymbol = declaration.name ? checker.getSymbolAtLocation(declaration.name) : undefined;
+    const constructorType = classSymbol
+      ? checker.getTypeOfSymbolAtLocation(classSymbol, declaration.name as ts.Identifier)
+      : undefined;
+    const inheritedSignature = constructorType
+      ? checker.getSignaturesOfType(constructorType, ts.SignatureKind.Construct)
+        .find((signature) => signature.parameters.length > 0)
+      : undefined;
+    if (inheritedSignature) {
+      fail(
+        "CONSTRUCTOR_INJECTION_INVALID",
+        `Managed class "${declaration.name?.text ?? "<anonymous>"}" inherits a constructor with parameters. Declare an explicit forwarding constructor so Bunwire can compile its dependency sources.`,
+        declaration,
+      );
+    }
+    return Object.freeze({
+      plan: Object.freeze({ parameterCount: 0, dependencies: Object.freeze([]) }),
+      edges: Object.freeze([]),
+    });
   }
   const dependencies: AnalyzedConstructorDependency[] = [];
+  const edges: ConstructorDependencyEdge[] = [];
   implementation.parameters.forEach((parameter, index) => {
-    const token = explicitToken(parameter, checker);
+    const token = explicitToken(parameter, checker, injectDefinitions);
     if (token) {
       dependencies.push(Object.freeze({
         index,
         source: "container",
-        token,
+        token: token.reference,
         explicit: true,
         optional: parameterOptional(parameter),
       }));
+      edges.push(Object.freeze({ target: token.symbol, location: parameter }));
       return;
     }
     const symbol = symbolFromTypeNode(checker, parameter.type);
@@ -551,6 +806,7 @@ function analyzeConstructor(
         explicit: false,
         optional: parameterOptional(parameter),
       }));
+      edges.push(Object.freeze({ target: symbol, location: parameter }));
       return;
     }
     const typeText = parameter.type?.getText() ?? checker.typeToString(checker.getTypeAtLocation(parameter));
@@ -561,8 +817,11 @@ function analyzeConstructor(
     );
   });
   return Object.freeze({
-    parameterCount: implementation.parameters.length,
-    dependencies: Object.freeze(dependencies),
+    plan: Object.freeze({
+      parameterCount: implementation.parameters.length,
+      dependencies: Object.freeze(dependencies),
+    }),
+    edges: Object.freeze(edges),
   });
 }
 
@@ -570,13 +829,14 @@ function analyzeMethodParameters(
   method: ts.MethodDeclaration,
   checker: ts.TypeChecker,
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind }>,
-  injectorDefinitions: ReadonlyMap<string, { readonly id: string; readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
+  injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
+  injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
 ): readonly AnalyzedMethodParameter[] {
   let argumentIndex = 0;
   const parameters: AnalyzedMethodParameter[] = [];
   method.parameters.forEach((parameter, methodIndex) => {
     const injectors = matchDecorators(parameter, checker, injectorDefinitions);
-    const explicitInjectors = explicitInjectDecorators(parameter, checker);
+    const explicitInjectors = explicitInjectDecorators(parameter, checker, injectDefinitions);
     if (injectors.length > 1 || explicitInjectors.length > 1 || (injectors.length > 0 && explicitInjectors.length > 0)) {
       fail(
         "PARAMETER_SOURCE_CONFLICT",
@@ -596,12 +856,12 @@ function analyzeMethodParameters(
       }));
       return;
     }
-    const explicit = explicitToken(parameter, checker);
+    const explicit = explicitToken(parameter, checker, injectDefinitions);
     if (explicit) {
       parameters.push(Object.freeze({
         source: "container",
         methodIndex,
-        token: explicit,
+        token: explicit.reference,
         explicit: true,
         location: locationOf(parameter),
       }));
@@ -637,8 +897,9 @@ function analyzeManagedMethods(
   ownerKind: ManagedClassKind | undefined,
   checker: ts.TypeChecker,
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind }>,
-  methodDefinitions: ReadonlyMap<string, { readonly id: string; readonly kind: ManagedMethodKind; readonly createMetadata: (options: any) => unknown }>,
-  injectorDefinitions: ReadonlyMap<string, { readonly id: string; readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
+  methodDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly kind: ManagedMethodKind; readonly createMetadata: (options: any) => unknown }>,
+  injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
+  injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
 ): readonly AnalyzedManagedMethod[] {
   const methods: AnalyzedManagedMethod[] = [];
   for (const member of declaration.members) {
@@ -671,6 +932,20 @@ function analyzeManagedMethods(
         decorator.decorator,
       );
     }
+    if (member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword)) {
+      fail(
+        "MANAGED_METHOD_INVALID",
+        `Managed method "${member.name.getText()}" must be an instance method; static managed methods are not supported.`,
+        member,
+      );
+    }
+    if (!member.body || member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword)) {
+      fail(
+        "MANAGED_METHOD_INVALID",
+        `Managed method "${member.name.getText()}" must declare a concrete runtime implementation.`,
+        member,
+      );
+    }
     if (!ts.isIdentifier(member.name) && !ts.isStringLiteralLike(member.name) && !ts.isNumericLiteral(member.name)) {
       fail(
         "MANAGED_METHOD_INVALID",
@@ -683,6 +958,7 @@ function analyzeManagedMethods(
       checker,
       managedBySymbol,
       injectorDefinitions,
+      injectDefinitions,
     );
     const caller = parameters.filter((parameter): parameter is AnalyzedTransportParameter => parameter.source === "transport");
     const highestRequired = caller.reduce(
@@ -711,12 +987,78 @@ function analyzeManagedMethods(
   return Object.freeze(methods);
 }
 
+function validateConstructorCycles(
+  analyses: ReadonlyMap<ts.Symbol, ConstructorAnalysisResult>,
+  managedBySymbol: ReadonlyMap<ts.Symbol, { readonly declaration: ts.ClassDeclaration }>,
+): void {
+  const states = new Map<ts.Symbol, "visiting" | "visited">();
+  const stack: ts.Symbol[] = [];
+  const visit = (symbol: ts.Symbol): void => {
+    states.set(symbol, "visiting");
+    stack.push(symbol);
+    const analysis = analyses.get(symbol);
+    for (const edge of analysis?.edges ?? []) {
+      if (!analyses.has(edge.target)) {
+        continue;
+      }
+      const state = states.get(edge.target);
+      if (state === "visiting") {
+        const cycleStart = stack.indexOf(edge.target);
+        const cycle = [...stack.slice(cycleStart), edge.target]
+          .map((entry) => managedBySymbol.get(entry)?.declaration.name?.text ?? entry.name)
+          .join(" -> ");
+        fail(
+          "CONSTRUCTOR_DEPENDENCY_CYCLE",
+          `Managed constructor dependency cycle detected: ${cycle}.`,
+          edge.location,
+        );
+      }
+      if (state !== "visited") {
+        visit(edge.target);
+      }
+    }
+    stack.pop();
+    states.set(symbol, "visited");
+  };
+  for (const symbol of analyses.keys()) {
+    if (!states.has(symbol)) {
+      visit(symbol);
+    }
+  }
+}
+
 export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireCompilerAnalysis {
-  const context = createBunwireProgram(options);
+  const context = createBunwireProgramInternal(options, compilerSymbolRootNames(options));
   const checker = context.checker;
-  const classDefinitions = new Map(options.extensions.classDecorators.map((definition) => [definition.id, definition]));
-  const methodDefinitions = new Map(options.extensions.methodDecorators.map((definition) => [definition.id, definition]));
-  const injectorDefinitions = new Map(options.extensions.parameterInjectors.map((definition) => [definition.id, definition]));
+  const occupiedSymbols = new Map<ts.Symbol, CompilerDefinition>();
+  const classDefinitions = resolveCompilerDefinitions(
+    context,
+    options.projectRoot,
+    options.extensions.classDecorators,
+    "Managed class decorator",
+    occupiedSymbols,
+  );
+  const methodDefinitions = resolveCompilerDefinitions(
+    context,
+    options.projectRoot,
+    options.extensions.methodDecorators,
+    "Managed method decorator",
+    occupiedSymbols,
+  );
+  const injectorDefinitions = resolveCompilerDefinitions(
+    context,
+    options.projectRoot,
+    options.extensions.parameterInjectors,
+    "Parameter injector",
+    occupiedSymbols,
+  );
+  const injectDefinitions = resolveCompilerDefinitions(
+    context,
+    options.projectRoot,
+    [Inject.definition],
+    "Core injection decorator",
+    occupiedSymbols,
+  );
   const declarations = classDeclarations(context);
   const discovered = new Map<ts.ClassDeclaration, DecoratorMatch<any>>();
   const managedBySymbol = new Map<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>();
@@ -750,6 +1092,25 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     managedBySymbol.set(canonical, { kind: match.definition.kind, declaration });
   }
 
+  const constructorsBySymbol = new Map<ts.Symbol, ConstructorAnalysisResult>();
+  const constructorsByDeclaration = new Map<ts.ClassDeclaration, ConstructorAnalysisResult>();
+  for (const [declaration, match] of discovered) {
+    if (!match.definition.kind.analyzeConstructor || !declaration.name) {
+      continue;
+    }
+    const symbol = checker.getSymbolAtLocation(declaration.name) as ts.Symbol;
+    const canonical = canonicalSymbol(checker, symbol);
+    const analysis = analyzeConstructor(
+      declaration,
+      managedBySymbol,
+      checker,
+      injectDefinitions,
+    );
+    constructorsBySymbol.set(canonical, analysis);
+    constructorsByDeclaration.set(declaration, analysis);
+  }
+  validateConstructorCycles(constructorsBySymbol, managedBySymbol);
+
   const classes: AnalyzedManagedClass[] = [];
   for (const declaration of declarations) {
     const match = discovered.get(declaration);
@@ -761,6 +1122,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       managedBySymbol,
       methodDefinitions,
       injectorDefinitions,
+      injectDefinitions,
     );
     if (!match || !declaration.name) {
       continue;
@@ -773,9 +1135,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       data: decoratorData(match),
       target: runtimeReference(checker, declaration.name, symbol),
       location: locationOf(declaration),
-      constructor: match.definition.kind.analyzeConstructor
-        ? analyzeConstructor(declaration, managedBySymbol, checker)
-        : undefined,
+      constructor: constructorsByDeclaration.get(declaration)?.plan,
       methods,
     }));
   }

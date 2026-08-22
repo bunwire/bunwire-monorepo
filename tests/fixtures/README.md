@@ -4,4 +4,6 @@ Compiler milestones place isolated TypeScript fixture projects here. Keeping the
 
 `milestone-7-discovery` is the first realistic compiler fixture. It contains a bounded Bunwire source root, an adjacent ignored file, declarative config variants, exported and decoy bootstrap variants, and a runtime-loadable fake adapter module whose counters prove compiler discovery does not construct the adapter or invoke its native callback.
 
-`milestone-8-analysis` is shared by Milestones 8 and 9. It contains aliased/cross-file managed symbols, explicit token and class injection, same-named unrelated decorators, plain/interface constructor failures, generic fake adapter class/method/injector extensions, interleaved method parameters, optional/rest caller parameters, invalid method placement, and conflicting parameter-source decorators.
+`milestone-8-analysis` is shared by Milestones 8 and 9. It contains aliased, re-exported, and cross-file canonical symbols; same-ID counterfeit decorators; valid and invalid explicit tokens; inherited-constructor and dependency-cycle cases; generic fake adapter extensions; interleaved method parameters; optional/rest caller parameters; invalid method placement and runtime-incompatible method shapes; and conflicting parameter-source decorators.
+
+`milestone-10-registry` is the platform-independent generated-runtime fixture. It contains a Service, constructor-injected Controller, generated Provider, fake adapter-managed class and methods, interleaved caller/container/resolver sources, and a deliberately missing runtime token.

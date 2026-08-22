@@ -22,6 +22,7 @@ export const Consumer = defineManagedClassDecorator<
   "fixture.consumer.decorator"
 >({
   id: "fixture.consumer.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/test-analysis-extensions", exportName: "Consumer" },
   kind: CONSUMER_KIND,
   createMetadata: (name) => Object.freeze({ name }),
 });
@@ -38,6 +39,7 @@ export const Subscribe = defineManagedMethodDecorator<
   "fixture.subscribe.decorator"
 >({
   id: "fixture.subscribe.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/test-analysis-extensions", exportName: "Subscribe" },
   kind: SUBSCRIBE_KIND,
   createMetadata: (topic) => Object.freeze({ topic }),
 });
@@ -48,6 +50,7 @@ export const FrameworkValue = defineParameterInjector<
   "fixture.framework-value.decorator"
 >({
   id: "fixture.framework-value.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/test-analysis-extensions", exportName: "FrameworkValue" },
   resolverId: createParameterResolverId("fixture.framework-value"),
   createMetadata: () => Object.freeze({}),
 });

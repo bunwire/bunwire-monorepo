@@ -7,6 +7,10 @@ import {
   type ParameterInjectorId,
   type ParameterResolverId,
 } from "./identifiers.js";
+import {
+  freezeCompilerSymbolReference,
+  type CompilerSymbolReference,
+} from "../compiler/compiler-symbol.js";
 
 export interface ParameterInjectorDefinition<
   Options = unknown,
@@ -14,6 +18,7 @@ export interface ParameterInjectorDefinition<
   Id extends string = string,
 > {
   readonly id: ParameterInjectorId<Id>;
+  readonly compilerSymbol: CompilerSymbolReference;
   readonly resolverId: ParameterResolverId;
   readonly createMetadata: (options: Options) => Data;
 }
@@ -43,6 +48,7 @@ export interface DefineParameterInjectorOptions<
   Id extends NamespacedIdentifier,
 > {
   readonly id: Id;
+  readonly compilerSymbol: CompilerSymbolReference;
   readonly resolverId: ParameterResolverId;
   readonly createMetadata: (options: Options) => Data;
 }
@@ -104,6 +110,10 @@ export function defineParameterInjector<
   }
   const definition = Object.freeze({
     id: createParameterInjectorId(options.id),
+    compilerSymbol: freezeCompilerSymbolReference(
+      options.compilerSymbol,
+      `Parameter injector "${options.id}"`,
+    ),
     resolverId: options.resolverId,
     createMetadata: options.createMetadata,
   });

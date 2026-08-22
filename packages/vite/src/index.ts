@@ -46,9 +46,21 @@ export {
 } from "./discovery.js";
 export {
   BUNWIRE_DISCOVERY_MODULE_ID,
+  BUNWIRE_REGISTRY_MODULE_ID,
   BUNWIRE_RESOLVED_VIRTUAL_MODULE_PREFIX,
+  BUNWIRE_RESOLVED_REGISTRY_MODULE_ID,
   BUNWIRE_VIRTUAL_MODULE_NAMESPACE,
   BUNWIRE_VIRTUAL_MODULE_PREFIX,
   isBunwireVirtualModuleId,
   resolveBunwireVirtualModuleId,
 } from "./virtual-modules.js";
+export {
+  generateRuntimeRegistryModule,
+  type GeneratedRuntimeRegistryModule,
+  type GenerateRuntimeRegistryModuleOptions,
+} from "./registry-generator.js";
+export {
+  bunwire,
+  type BunwireVitePlugin,
+  type BunwireVitePluginOptions,
+} from "./plugin.js";

@@ -45,7 +45,10 @@ function analyze(...files: string[]) {
     extensions,
     compilerOptions: {
       baseUrl: repositoryRoot,
-      paths: { "@bunwire/core": ["packages/core/src/index.ts"] },
+      paths: {
+        "@bunwire/core": ["packages/core/src/index.ts"],
+        "@bunwire/test-analysis-extensions": ["tests/fixtures/milestone-8-analysis/extensions.ts"],
+      },
     },
   });
 }
@@ -239,6 +242,28 @@ describe("Milestone 9 — managed-method parameter plans", () => {
         message: expect.stringMatching(/incompatible or duplicate parameter-source decorators/i),
       }),
     );
+  });
+
+  it("rejects same-ID counterfeit method and parameter-injector symbols", () => {
+    for (const fixture of ["invalid-shadow-method.ts", "invalid-shadow-parameter.ts"]) {
+      expect(() => analyze(fixture)).toThrowError(expect.objectContaining({
+        code: "DECORATOR_IDENTITY_CONFLICT",
+        message: expect.stringMatching(/claims registered ID.*not the canonical/i),
+      }));
+    }
+  });
+
+  it("rejects static, abstract, and declaration-only managed methods", () => {
+    expect(() => analyze("invalid-static-method.ts")).toThrowError(expect.objectContaining({
+      code: "MANAGED_METHOD_INVALID",
+      message: expect.stringMatching(/instance method.*static/i),
+    }));
+    for (const fixture of ["invalid-abstract-method.ts", "invalid-declaration-method.ts"]) {
+      expect(() => analyze(fixture)).toThrowError(expect.objectContaining({
+        code: "MANAGED_METHOD_INVALID",
+        message: expect.stringMatching(/concrete runtime implementation/i),
+      }));
+    }
   });
 
   it("does not expose undecorated public methods", () => {

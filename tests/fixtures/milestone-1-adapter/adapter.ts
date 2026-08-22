@@ -16,6 +16,7 @@ const subscriberKind = defineClassKind({
 
 export const Subscriber = defineManagedClassDecorator<{ topic: string }, { topic: string }>({
   id: "fixture.subscriber-decorator",
+  compilerSymbol: { moduleSpecifier: "fixture.adapter", exportName: "Subscriber" },
   kind: subscriberKind,
   createMetadata: ({ topic }) => ({ topic }),
 });

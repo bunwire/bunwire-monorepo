@@ -2,6 +2,7 @@ import type { Application } from "../application/application.js";
 import type { ManagedInvocationOptions } from "../application/invocation-context.js";
 import type { Container } from "../container/container.js";
 import type { Constructable } from "../container/tokens.js";
+import type { ConstructorDependencyMetadata } from "../container/metadata.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import {
@@ -14,21 +15,38 @@ export interface ManagedClassRegistryEntry<Data = unknown> {
   readonly kind: ManagedClassKind;
   readonly target: Constructable<object>;
   readonly data: Data;
+  readonly scope: "singleton" | "transient";
+  readonly dependencies: readonly ConstructorDependencyMetadata[];
 }
 
 export interface RuntimeRegistry {
   readonly classes: readonly ManagedClassRegistryEntry[];
+  readonly providers: readonly Constructable<object>[];
   readonly methods: readonly ManagedMethodPlan[];
 }
 
+export type ManagedClassRegistryEntryInput<Data = unknown> = Omit<
+  ManagedClassRegistryEntry<Data>,
+  "scope" | "dependencies"
+> & {
+  readonly scope?: ManagedClassRegistryEntry["scope"];
+  readonly dependencies?: readonly ConstructorDependencyMetadata[];
+};
+
 export interface DefineRuntimeRegistryOptions {
-  readonly classes?: readonly ManagedClassRegistryEntry[];
+  readonly classes?: readonly ManagedClassRegistryEntryInput[];
+  readonly providers?: readonly Constructable<object>[];
   readonly methods?: readonly ManagedMethodPlan[];
 }
 
 export function defineRuntimeRegistry(options: DefineRuntimeRegistryOptions = {}): RuntimeRegistry {
   return Object.freeze({
-    classes: Object.freeze((options.classes ?? []).map((entry) => Object.freeze({ ...entry }))),
+    classes: Object.freeze((options.classes ?? []).map((entry) => Object.freeze({
+      ...entry,
+      scope: entry.scope ?? "singleton",
+      dependencies: Object.freeze((entry.dependencies ?? []).map((dependency) => Object.freeze({ ...dependency }))),
+    }))),
+    providers: Object.freeze([...(options.providers ?? [])]),
     methods: Object.freeze([...(options.methods ?? [])]),
   });
 }

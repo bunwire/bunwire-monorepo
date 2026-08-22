@@ -1,9 +1,11 @@
 import type { RuntimeToken } from "./tokens.js";
+import type { CompilerSymbolReference } from "../compiler/compiler-symbol.js";
 
 export const INJECT_DECORATOR_ID = "core.inject.decorator" as const;
 
 export interface InjectDecoratorDefinition {
   readonly id: typeof INJECT_DECORATOR_ID;
+  readonly compilerSymbol: CompilerSymbolReference;
 }
 
 export interface InjectParameterMetadata {
@@ -36,7 +38,13 @@ export function getInjectParameterMetadata(
     ?.get(parameterIndex);
 }
 
-const definition = Object.freeze({ id: INJECT_DECORATOR_ID });
+const definition = Object.freeze({
+  id: INJECT_DECORATOR_ID,
+  compilerSymbol: Object.freeze({
+    moduleSpecifier: "@bunwire/core",
+    exportName: "Inject",
+  }),
+});
 
 export const Inject = ((token: RuntimeToken): ParameterDecorator => (
   target: object,

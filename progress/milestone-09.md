@@ -20,6 +20,8 @@ Status: Complete
 - Independent method and caller indexes, optional/rest flags, and precomputed minimum/maximum caller bounds.
 - Literal decorator metadata compilation for runtime-ready class, method, and resolver data.
 - Source-located diagnostics for duplicate managed decorators, invalid owners, malformed options, and conflicting parameter sources.
+- Exact canonical-symbol authorization for managed-method and parameter-injector decorators, including alias/re-export handling and same-ID counterfeit rejection.
+- Compile-time rejection of static, abstract, and declaration-only managed methods that cannot produce Core instance invocation plans.
 
 ## Remaining
 
@@ -37,7 +39,7 @@ Status: Complete
 
 ## Tests Added
 
-- `tests/milestone-09/method-analysis.test.ts` — ten compiler-fixture and runtime behavioral tests covering every required Milestone 9 checkbox plus rest execution and undecorated-method exclusion.
+- `tests/milestone-09/method-analysis.test.ts` — twelve compiler-fixture and runtime behavioral tests covering every required Milestone 9 checkbox plus rest execution, undecorated-method exclusion, counterfeit identities, and invalid runtime method shapes.
 - Shared method, extension, invalid-placement, and conflicting-source fixtures beneath `tests/fixtures/milestone-8-analysis`.
 
 ## Tests Run
@@ -53,9 +55,10 @@ Status: Complete
 
 ## Test Results
 
-- Passed: focused Milestones 8–9, 2 files and 17 tests, 0 failed, 0 skipped.
-- Passed: full quality gate, 12 files and 151 tests, production/test typechecking, package boundaries, and all four workspace builds.
-- Passed: Vite Milestones 7–9 regression suite, 3 files and 39 tests.
+- Passed: focused Milestones 8–9, 2 files and 25 tests, 0 failed, 0 skipped.
+- Passed: Core package suite, 7 files and 102 tests.
+- Passed: full quality gate, 12 files and 159 tests, production/test typechecking, package boundaries, and all four workspace builds.
+- Passed: Vite Milestones 7–9 regression suite, 3 files and 47 tests.
 - Passed: dedicated architecture suite, 3 tests.
 - Passed: isolated frozen-lockfile clean installation and workspace typecheck.
 - Failed initially: sandboxed clean-install npm downloads were denied with `EACCES`; the approved network-enabled rerun passed without repository changes.
@@ -79,6 +82,8 @@ After this milestone, runtime receives complete managed-method parameter plans a
 ## Important Decisions
 
 - Method analysis reuses Milestone 8's single Program/checker and canonical extension identities.
+- Managed-method and parameter-injector authority comes from exact registered module-export symbols, never matching IDs alone.
+- Managed methods remain concrete instance methods in v1; unsupported static/declaration shapes fail during compilation.
 - Parameter classification order is registered injector, explicit `@Inject()`, managed injectable class, then caller transport.
 - Caller bounds are emitted on compiler analysis records; Core may deterministically validate from the explicit plan and never inspects signatures.
 - A rest source is supported only as the final method/caller parameter and expands remaining caller values during invocation.

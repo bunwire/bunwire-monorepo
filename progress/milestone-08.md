@@ -22,6 +22,10 @@ Status: Complete
 - Added actionable diagnostics for plain classes, erased interfaces, malformed tokens, and conflicting sources.
 - Added an integrated `analyzeBunwireApplication()` orchestration API over Milestone 7 discovery.
 - Rejected type-only values passed directly to `@Inject()` with `createToken()` remediation.
+- Bound every compiler-visible decorator and injector to an exact canonical module export, with alias/re-export support and same-ID counterfeit rejection.
+- Restricted explicit injection tokens to constructable classes or structurally valid `createToken()` values; `any`, `unknown`, primitives, objects, and regular functions fail closed.
+- Rejected managed subclasses that hide inherited constructor parameters until they declare an explicit forwarding constructor.
+- Added compile-time detection for direct and multi-class managed constructor dependency cycles.
 
 ## Remaining
 
@@ -38,7 +42,7 @@ Status: Complete
 
 ## Tests Added
 
-- `tests/milestone-08/constructor-analysis.test.ts` — seven tests covering every required Milestone 8 fixture, same-name behavior, and type-only-token misuse.
+- `tests/milestone-08/constructor-analysis.test.ts` — thirteen tests covering every required Milestone 8 fixture plus canonical re-exports, counterfeit identities, compiler-symbol validation, invalid runtime tokens, inherited constructors, and dependency cycles.
 - `tests/fixtures/milestone-8-analysis/valid/*` plus invalid plain/interface fixtures.
 
 ## Tests Run
@@ -53,13 +57,14 @@ Status: Complete
 
 ## Test Results
 
-- Passed: focused Milestone 8, 1 file and 7 tests, 0 failed, 0 skipped.
+- Passed: focused Milestones 8–9, 2 files and 25 tests, 0 failed, 0 skipped.
+- Passed: Core package suite, 7 files and 102 tests.
 - Passed: Core and Vite production build/typecheck.
-- Passed: full quality gate, 12 files and 151 tests, production/test typechecking, package boundaries, and all four workspace builds.
-- Passed: Vite Milestones 7–9 regression suite, 3 files and 39 tests.
+- Passed: full quality gate, 12 files and 159 tests, production/test typechecking, package boundaries, and all four workspace builds.
+- Passed: Vite Milestones 7–9 regression suite, 3 files and 47 tests.
 - Passed: dedicated architecture suite, 3 tests.
 - Passed: isolated frozen-lockfile clean installation and workspace typecheck.
-- Failed initially: sandboxed clean-install npm downloads were denied with `EACCES`; the identical approved network-enabled rerun passed.
+- Failed initially: sandboxed clean-install downloads were denied with `EACCES`; the identical approved network-enabled rerun passed.
 
 ## Regression Checks
 
@@ -80,6 +85,8 @@ After this milestone, compiler analysis will emit complete constructor dependenc
 ## Important Decisions
 
 - Class, decorator, and dependency recognition will use TypeScript symbols and registered descriptor identities.
+- Registered descriptor identities include a required public `compilerSymbol` module/export reference; ID-only authorization is intentionally unsupported.
+- Managed subclasses with inherited constructor parameters must declare an explicit forwarding constructor.
 - Milestone 9 will reuse the same Program, checker, source graph, reference, and diagnostic infrastructure.
 - Decorator factory declarations must retain their literal namespaced ID in their public type; Core built-ins now do so explicitly, while symbols without a registered literal compiler identity are ignored rather than matched textually.
 - Compiler references retain expressions and resolved declaration locations but no runtime scanning or inference is introduced.

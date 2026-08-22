@@ -4,6 +4,10 @@ import {
   type MethodDecoratorId,
 } from "./identifiers.js";
 import type { NamespacedIdentifier } from "../managed-classes/identifiers.js";
+import {
+  freezeCompilerSymbolReference,
+  type CompilerSymbolReference,
+} from "../compiler/compiler-symbol.js";
 
 export interface ManagedMethodDecoratorDefinition<
   Options,
@@ -11,6 +15,7 @@ export interface ManagedMethodDecoratorDefinition<
   Id extends string = string,
 > {
   readonly id: MethodDecoratorId<Id>;
+  readonly compilerSymbol: CompilerSymbolReference;
   readonly kind: ManagedMethodKind;
   readonly createMetadata: (options: Options) => Data;
 }
@@ -39,6 +44,7 @@ export interface DefineManagedMethodDecoratorOptions<
   Id extends NamespacedIdentifier,
 > {
   readonly id: Id;
+  readonly compilerSymbol: CompilerSymbolReference;
   readonly kind: ManagedMethodKind;
   readonly createMetadata: (options: Options) => Data;
 }
@@ -92,6 +98,10 @@ export function defineManagedMethodDecorator<
 ): ManagedMethodDecorator<Options, Data, Id> {
   const definition = Object.freeze({
     id: createMethodDecoratorId(options.id),
+    compilerSymbol: freezeCompilerSymbolReference(
+      options.compilerSymbol,
+      `Managed method decorator "${options.id}"`,
+    ),
     kind: options.kind,
     createMetadata: options.createMetadata,
   });

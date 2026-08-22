@@ -9,6 +9,7 @@ import {
   Service,
   assertAdapterCompilerDescriptor,
   type AdapterCompilerDescriptor,
+  type CompilerSymbolReference,
   type CompilerMetadataHandlerDescriptor,
   type ManagedClassDecoratorDefinition,
   type ManagedClassKind,
@@ -50,6 +51,10 @@ function registerIdentity<T extends { readonly id: string }>(
   registry.set(definition.id, definition);
 }
 
+function compilerSymbolKey(reference: CompilerSymbolReference): string {
+  return `${reference.moduleSpecifier}\0${reference.exportName}`;
+}
+
 export function aggregateCompilerExtensions(
   adapter: AdapterCompilerDescriptor,
 ): DiscoveredCompilerExtensions {
@@ -72,10 +77,29 @@ export function aggregateCompilerExtensions(
   const methodDecorators = new Map<string, ManagedMethodDecoratorDefinition<any, any>>();
   const parameterInjectors = new Map<string, ParameterInjectorDefinition<any, any>>();
   const metadataHandlers = new Map<string, CompilerMetadataHandlerDescriptor>();
+  const compilerSymbols = new Map<string, { readonly id: string }>();
+
+  const registerCompilerSymbol = (definition: {
+    readonly id: string;
+    readonly compilerSymbol: CompilerSymbolReference;
+  }): void => {
+    const key = compilerSymbolKey(definition.compilerSymbol);
+    const existing = compilerSymbols.get(key);
+    if (existing && existing !== definition) {
+      throw new BunwireCompilerError(
+        "EXTENSION_CONFLICT",
+        `Compiler symbol "${definition.compilerSymbol.moduleSpecifier}" export "${definition.compilerSymbol.exportName}" is assigned to both "${existing.id}" and "${definition.id}".`,
+      );
+    }
+    compilerSymbols.set(key, definition);
+  };
 
   registerIdentity(classDecorators, Service.definition, "Managed class-decorator");
   registerIdentity(classDecorators, Controller.definition, "Managed class-decorator");
   registerIdentity(classDecorators, Provider.definition, "Managed class-decorator");
+  registerCompilerSymbol(Service.definition);
+  registerCompilerSymbol(Controller.definition);
+  registerCompilerSymbol(Provider.definition);
 
   try {
     for (const kind of adapter.classKinds) {
@@ -118,6 +142,7 @@ export function aggregateCompilerExtensions(
       );
     }
     registerIdentity(classDecorators, definition, "Managed class-decorator");
+    registerCompilerSymbol(definition);
   }
   for (const definition of adapter.methodDecorators) {
     if (methodKinds.get(definition.kind.id) !== definition.kind) {
@@ -127,9 +152,11 @@ export function aggregateCompilerExtensions(
       );
     }
     registerIdentity(methodDecorators, definition, "Managed method-decorator");
+    registerCompilerSymbol(definition);
   }
   for (const definition of adapter.parameterInjectors) {
     registerIdentity(parameterInjectors, definition, "Parameter-injector");
+    registerCompilerSymbol(definition);
   }
   for (const definition of adapter.metadataHandlers) {
     registerIdentity(metadataHandlers, definition, "Compiler metadata-handler");

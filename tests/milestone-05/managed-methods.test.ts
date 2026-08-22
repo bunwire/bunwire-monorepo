@@ -36,6 +36,7 @@ const HANDLER_KIND = defineClassKind({
 
 const ManagedHandler = defineManagedClassDecorator<void, Readonly<Record<string, never>>>({
   id: "test.handler.decorator",
+  compilerSymbol: { moduleSpecifier: "test.managed-methods", exportName: "ManagedHandler" },
   kind: HANDLER_KIND,
   createMetadata: () => Object.freeze({}),
 });
@@ -697,6 +698,7 @@ describe("Milestone 5 — platform-independent fake kind integration", () => {
     });
     const Consumer = defineManagedClassDecorator<void, Readonly<Record<string, never>>>({
       id: "fake.consumer.decorator",
+      compilerSymbol: { moduleSpecifier: "test.managed-methods", exportName: "Consumer" },
       kind: CONSUMER_KIND,
       createMetadata: () => Object.freeze({}),
     });

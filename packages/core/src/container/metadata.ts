@@ -1,4 +1,4 @@
-import type { Constructable, RuntimeToken } from "./tokens.js";
+import { isClassToken, isToken, type Constructable, type RuntimeToken } from "./tokens.js";
 
 export interface ConstructorDependencyMetadata {
   readonly index: number;
@@ -23,6 +23,11 @@ export function normalizeConstructorMetadata<Value>(
     if (indexes.has(dependency.index)) {
       throw new TypeError(
         `Constructor metadata for "${metadata.target.name}" contains duplicate dependency index ${dependency.index}.`,
+      );
+    }
+    if (!isToken(dependency.token) && !isClassToken(dependency.token)) {
+      throw new TypeError(
+        `Constructor dependency ${dependency.index} for "${metadata.target.name}" must declare a valid runtime token.`,
       );
     }
     indexes.add(dependency.index);

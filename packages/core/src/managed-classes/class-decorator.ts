@@ -1,5 +1,9 @@
 import type { ManagedClassKind } from "./class-kind.js";
 import {
+  freezeCompilerSymbolReference,
+  type CompilerSymbolReference,
+} from "../compiler/compiler-symbol.js";
+import {
   createClassDecoratorId,
   type ClassDecoratorId,
   type NamespacedIdentifier,
@@ -16,6 +20,7 @@ export interface ManagedClassDecoratorDefinition<
   Id extends string = string,
 > {
   readonly id: ClassDecoratorId<Id>;
+  readonly compilerSymbol: CompilerSymbolReference;
   readonly kind: ManagedClassKind;
   readonly createMetadata: (options: Options) => Data;
   readonly validateTarget: ((target: ManagedClassTarget) => void) | undefined;
@@ -38,6 +43,7 @@ export interface DefineManagedClassDecoratorOptions<
   Id extends NamespacedIdentifier,
 > {
   readonly id: Id;
+  readonly compilerSymbol: CompilerSymbolReference;
   readonly kind: ManagedClassKind;
   readonly createMetadata: (options: Options) => Data;
   readonly validateTarget?: (target: ManagedClassTarget) => void;
@@ -52,6 +58,10 @@ export function defineManagedClassDecorator<
 ): ManagedClassDecorator<Options, Data, Id> {
   const definition = Object.freeze({
     id: createClassDecoratorId(options.id),
+    compilerSymbol: freezeCompilerSymbolReference(
+      options.compilerSymbol,
+      `Managed class decorator "${options.id}"`,
+    ),
     kind: options.kind,
     createMetadata: options.createMetadata,
     validateTarget: options.validateTarget,

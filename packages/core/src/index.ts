@@ -1,4 +1,8 @@
 export {
+  assertCompilerSymbolReference,
+  type CompilerSymbolReference,
+} from "./compiler/compiler-symbol.js";
+export {
   createClassDecoratorId,
   createClassKindId,
   type ClassDecoratorId,
@@ -194,6 +198,7 @@ export {
   type DefineRuntimeRegistryConsumerOptions,
   type DefineRuntimeRegistryOptions,
   type ManagedClassRegistryEntry,
+  type ManagedClassRegistryEntryInput,
   type RuntimeRegistry,
   type RuntimeRegistryConsumerContext,
   type RuntimeRegistryConsumerDefinition,

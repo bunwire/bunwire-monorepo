@@ -91,6 +91,7 @@ describe("managed class decorators", () => {
     });
     const Subscriber = defineManagedClassDecorator<{ topic: string }, { topic: string }>({
       id: "events.subscriber-decorator",
+      compilerSymbol: { moduleSpecifier: "test.events", exportName: "Subscriber" },
       kind: subscriberKind,
       createMetadata: (options) => Object.freeze({ topic: options.topic }),
     });
@@ -118,6 +119,7 @@ describe("managed class decorators", () => {
     });
     const Worker = defineManagedClassDecorator<void, undefined>({
       id: "example.worker-decorator",
+      compilerSymbol: { moduleSpecifier: "test.example", exportName: "Worker" },
       kind,
       createMetadata: () => undefined,
     });

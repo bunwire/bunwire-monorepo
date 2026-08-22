@@ -59,6 +59,7 @@ const CONSUMER_KIND = defineClassKind({
 
 const Consumer = defineManagedClassDecorator<string | undefined, { readonly name: string | undefined }>({
   id: "fake.consumer.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/test-fake-adapter", exportName: "Consumer" },
   kind: CONSUMER_KIND,
   createMetadata: (name) => Object.freeze({ name }),
 });
@@ -71,6 +72,7 @@ const SUBSCRIBE_KIND = defineMethodKind({
 
 const Subscribe = defineManagedMethodDecorator<string, { readonly topic: string }>({
   id: "fake.subscribe.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/test-fake-adapter", exportName: "Subscribe" },
   kind: SUBSCRIBE_KIND,
   createMetadata: (topic) => Object.freeze({ topic }),
 });
@@ -84,6 +86,7 @@ const DELIVERY_RESOLVER = defineParameterResolver({
 
 const Delivery = defineParameterInjector<void, Readonly<Record<string, never>>>({
   id: "fake.delivery.decorator",
+  compilerSymbol: { moduleSpecifier: "@bunwire/test-fake-adapter", exportName: "Delivery" },
   resolverId: DELIVERY_RESOLVER.id,
   createMetadata: () => Object.freeze({}),
 });
@@ -555,6 +558,7 @@ describe("Milestone 6 — extension identity and malformed contribution defenses
     })).toThrow(/namespaced identifier/i);
     expect(() => defineParameterInjector({
       id: "invalid" as "invalid.name",
+      compilerSymbol: { moduleSpecifier: "test.invalid", exportName: "Invalid" },
       resolverId: DELIVERY_RESOLVER.id,
       createMetadata: () => undefined,
     })).toThrow(/namespaced identifier/i);

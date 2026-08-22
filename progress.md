@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 9 — Complete; Milestone 10 not started
+Current milestone: Milestone 10 — Generated Registries and Runtime Execution (complete)
 
 Overall status:
 
@@ -16,7 +16,8 @@ Overall status:
 - Milestone 7: Complete — [details](progress/milestone-07.md)
 - Milestone 8: Complete — [details](progress/milestone-08.md)
 - Milestone 9: Complete — [details](progress/milestone-09.md)
-- Milestone 10+: Not started
+- Milestone 10: Complete — [details](progress/milestone-10.md)
+- Milestone 11+: Not started
 
 ## Implemented
 
@@ -30,15 +31,17 @@ Overall status:
 - Declarative bounded Bunwire config, cycle-safe source discovery, default-export-anchored bootstrap analysis, ESM-authoritative adapter resolution, canonical extension aggregation, typed diagnostics, and the reserved `virtual:bunwire/*` namespace.
 - Symbol-resolved managed-class discovery and indexed constructor DI plans with explicit token/class injection and strict plain-class/interface boundaries.
 - Complete managed-method parameter plans with independent method/caller indexes, injector precedence, optional/rest semantics, caller bounds, and compile-time placement/source validation.
+- Canonical compiler-symbol authorization, strict runtime-token validation, inherited-constructor safeguards, managed dependency-cycle detection, and concrete instance-method enforcement.
+- Deterministic generated registries and `virtual:bunwire/registry`, with exported runtime imports, class scopes, constructor plans, generated Providers, managed methods, resolver IDs, adapter metadata, middleware arrays, stable hashes, and direct Core runtime execution.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Milestones 8 and 9 are complete and independently verified.
+- None. Milestone 10 is complete and verified.
 
 ## Next
 
-- Milestone 10 — Generated Registries and Runtime Execution (not started).
+- Milestone 11 — Electrobun Adapter (not started).
 
 ## Blockers
 
@@ -56,3 +59,4 @@ Overall status:
 - [Milestone 7](progress/milestone-07.md)
 - [Milestone 8](progress/milestone-08.md)
 - [Milestone 9](progress/milestone-09.md)
+- [Milestone 10](progress/milestone-10.md)

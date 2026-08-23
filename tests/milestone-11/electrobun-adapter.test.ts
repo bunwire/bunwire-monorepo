@@ -420,7 +420,7 @@ describe.sequential("Milestone 11 — Electrobun runtime", () => {
     ]);
   });
 
-  it("uses an unambiguous tagged argument envelope for zero, optional, rest, and array parameters", async () => {
+  it("decodes the private Electrobun wire payload for zero, optional, rest, and array parameters", async () => {
     const app = configuredApp(new ElectrobunAdapter({ mainWindow: { hidden: true } }));
     await app.start();
     const rpc = fakeRpc(app.rootContainer.get(ELECTROBUN_CONTEXT).rpc);
@@ -441,10 +441,10 @@ describe.sequential("Milestone 11 — Electrobun runtime", () => {
     const rpc = fakeRpc(app.rootContainer.get(ELECTROBUN_CONTEXT).rpc);
 
     for (const payload of [undefined, "legacy", ["legacy"], {}, { args: "not-an-array" }]) {
-      expect(() => rpc.receiveRequest("users/zero", payload)).toThrow(/tagged shape/i);
+      expect(() => rpc.receiveRequest("users/zero", payload)).toThrow(/wire payload.*args.*array/i);
     }
     expect(() => rpc.receiveMessage("users/selected", { args: "not-an-array" }))
-      .toThrow(/tagged shape/i);
+      .toThrow(/wire payload.*args.*array/i);
     expect(app.rootContainer.get(RuntimeController).messages).toEqual([]);
   });
 

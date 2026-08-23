@@ -221,7 +221,7 @@ export interface ElectrobunAdapterOptions {
   readonly rpc?: ElectrobunRpcOptions;
 }
 
-export interface ElectrobunInvocationPayload {
+interface ElectrobunInvocationPayload {
   readonly args: readonly unknown[];
 }
 
@@ -312,12 +312,18 @@ function stateFor(context: ElectrobunContext): RuntimeState {
 }
 
 function callerArguments(payload: unknown): readonly unknown[] {
-  if (!isObject(payload) || !Array.isArray(payload.args)) {
+  if (!isElectrobunInvocationPayload(payload)) {
     throw new ElectrobunAdapterError(
-      'Electrobun managed invocation payloads must use the tagged shape `{ args: readonly unknown[] }`.',
+      'The Electrobun Bunwire wire payload must contain an `args` array.',
     );
   }
   return [...payload.args];
+}
+
+function isElectrobunInvocationPayload(
+  payload: unknown,
+): payload is ElectrobunInvocationPayload {
+  return isObject(payload) && Array.isArray(payload.args);
 }
 
 function controllerPrefix(registry: RuntimeRegistry, plan: ManagedMethodPlan): string | undefined {

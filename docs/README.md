@@ -604,7 +604,7 @@ Generated plan:
 The frontend sends only:
 
 ```ts
-rpc.request("users/get", id, name, active);
+request("users/get", id, name, active);
 ```
 
 It never supplies `UserService` or `CACHE`.
@@ -1302,7 +1302,7 @@ export class UserController {
 Caller:
 
 ```ts
-rpc.request("users/get", id);
+request("users/get", id);
 ```
 
 The generated invocation plan injects `UserService`; the frontend never supplies it.
@@ -1497,27 +1497,20 @@ The compiler derives the caller-visible argument list from the same parameter pl
 
 # 37. Frontend API
 
-The generated API may remain close to Electrobun:
+The generated Bunwire API may remain transport-shaped while still accepting logical positional arguments:
 
 ```ts
-rpc.request("users/get", id);
-rpc.message("users/deleted", id);
+request("users/get", id);
+message("users/deleted", id);
 ```
 
-At the native Electrobun transport boundary, generated clients encode those positional arguments with Bunwire's tagged payload envelope:
+Generated clients translate those positional calls into Electrobun's single-payload native RPC API. The Electrobun adapter owns an unambiguous internal wire encoding for the logical argument tuple and decodes it before managed invocation. That encoding is not part of Bunwire's caller API and application code should not construct it directly.
+
+A higher-level generated API may provide:
 
 ```ts
-rpc.request["users/get"]({ args: [id] });
-rpc.send["users/deleted"]({ args: [id] });
-```
-
-The envelope is always required, including for zero arguments, and preserves array-valued arguments without scalar/tuple ambiguity.
-
-A future generated API may provide:
-
-```ts
-rpc.users.get(id);
-rpc.users.deleted(id);
+client.users.get(id);
+client.users.deleted(id);
 ```
 
 This is optional and should not distort the underlying transport semantics.

@@ -48,6 +48,6 @@ await defineApp()
   .start();
 ```
 
-`@Route()` handlers are Electrobun requests and return results. `@Message()` handlers are fire-and-forget messages. Bunwire-managed requests and messages use the unambiguous payload shape `{ args: [...] }`; for example, an array-valued first argument is sent as `{ args: [["a", "b"]] }`. Missing or malformed envelopes fail before Controller invocation. Milestone 12's generated client will create this envelope automatically.
+`@Route()` handlers are Electrobun requests and return results. `@Message()` handlers are fire-and-forget messages. Application callers use Bunwire's positional caller API; Milestone 12 supplies the generated client for that API. The adapter privately encodes those logical arguments into Electrobun's single native payload and decodes them before Controller invocation. That wire encoding is an adapter implementation detail, not a caller-facing Bunwire contract.
 
 `@Window()`, `@Webview()`, and `@Context()` are framework-supplied parameters and are excluded from caller arguments. Bunwire endpoints take precedence over the manual fallback; unknown requests delegate their original method and payload unchanged. Native message listeners and outgoing `rpc.send()` and `rpc.request()` remain available on the unchanged RPC object.

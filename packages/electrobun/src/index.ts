@@ -27,7 +27,6 @@ export {
   type BunwireElectrobunSchema,
   type ElectrobunAdapterOptions,
   type ElectrobunContext,
-  type ElectrobunInvocationPayload,
   type ElectrobunMainWindowOptions,
   type ElectrobunMessageErrorContext,
   type ElectrobunRPC,

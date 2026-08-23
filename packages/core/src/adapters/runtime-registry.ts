@@ -4,6 +4,7 @@ import type { Container } from "../container/container.js";
 import type { Constructable } from "../container/tokens.js";
 import type { ConstructorDependencyMetadata } from "../container/metadata.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
+import { MIDDLEWARE_KIND } from "../managed-classes/built-ins.js";
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import {
   createRegistryConsumerId,
@@ -43,7 +44,7 @@ export function defineRuntimeRegistry(options: DefineRuntimeRegistryOptions = {}
   return Object.freeze({
     classes: Object.freeze((options.classes ?? []).map((entry) => Object.freeze({
       ...entry,
-      scope: entry.scope ?? "singleton",
+      scope: entry.scope ?? (entry.kind === MIDDLEWARE_KIND ? "transient" : "singleton"),
       dependencies: Object.freeze((entry.dependencies ?? []).map((dependency) => Object.freeze({ ...dependency }))),
     }))),
     providers: Object.freeze([...(options.providers ?? [])]),
@@ -58,7 +59,7 @@ export interface RuntimeRegistryConsumerContext<Context = unknown> {
   readonly invoke: <Result = unknown>(
     plan: ManagedMethodPlan,
     callerArguments?: readonly unknown[],
-    options?: ManagedInvocationOptions<Context>,
+    options?: ManagedInvocationOptions<Context, Result>,
   ) => Promise<Awaited<Result>>;
 }
 

@@ -39,7 +39,29 @@ Plan array order has no positional meaning. `methodIndex` reconstructs the real 
 
 `@Use(exportedMiddleware)` attaches callable managed-method middleware for compiler-generated plans. The compiler authorizes the exact Core `Use` export, requires every referenced middleware value to be callable and publicly importable, and emits those references into the same plan consumed by `InvocationEngine`. Same-ID counterfeit decorators fail closed.
 
-Every engine owns a `ManagedClassKindRegistry` seeded with Service, Controller, and Provider and a `ManagedMethodKindRegistry` for explicitly contributed method kinds. Applications register extensions through `withManagedClassKind()` and `withManagedMethodKind()` while still configuring; adapters register their declared contributions automatically. The same descriptor may be registered repeatedly, but a missing registration or different descriptor using the same ID is rejected before invocation. Runtime plan validation also checks all parameter discriminants and source-specific fields, boolean optionality, runtime tokens, resolver IDs, and middleware callability before execution.
+## Managed middleware foundation
+
+`@Middleware()` opts a class into the canonical `core.middleware` managed kind. The decorator value and generic `Middleware<Context, Result>` contract intentionally share the same TypeScript name. Middleware classes are injectable, constructor-analyzed, registry-managed, unable to own managed methods, and always transient:
+
+```ts
+@Middleware()
+class AuditMiddleware implements Middleware<AuditContext, string> {
+  constructor(private readonly audit: AuditService) {}
+
+  async handle(context: AuditContext, next: () => Promise<string>) {
+    await this.audit.record(context);
+    return next();
+  }
+}
+```
+
+`defineMiddlewareDefinition()` creates a canonical transient registry entry with immutable compiled metadata and indexed constructor dependencies. `defineMiddlewareAttachment()` creates an immutable `{ target, parameters }` record and preserves parameter strings exactly. Runtime validation rejects counterfeit decorators, malformed targets, non-transient definitions, invalid constructor metadata, and mutable or malformed attachments before execution.
+
+`executeMiddlewareChain()` accepts canonical attachments, an existing `InvocationContext`, an adapter-supplied context factory, and a terminal continuation. It resolves every middleware instance from that invocation's child container, executes the declared around-chain order, supports short-circuiting and result transformation, and rejects repeated `next()` calls. Core stores filter metadata but never interprets adapter paths or transport names.
+
+`ManagedInvocationOptions.around` wraps the terminal managed invocation after Provider `boot()`. This allows an adapter to run `executeMiddlewareChain()` around `invokeManagedMethod()` without creating a second invocation scope. The historical callable `ManagedMethodMiddleware` and callback-oriented `@Use()` remain temporary migration scaffolding until the later middleware redesign milestones remove them.
+
+Every engine owns a `ManagedClassKindRegistry` seeded with Service, Controller, Provider, and Middleware and a `ManagedMethodKindRegistry` for explicitly contributed method kinds. Applications register extensions through `withManagedClassKind()` and `withManagedMethodKind()` while still configuring; adapters register their declared contributions automatically. The same descriptor may be registered repeatedly, but a missing registration or different descriptor using the same ID is rejected before invocation. Runtime plan validation also checks all parameter discriminants and source-specific fields, boolean optionality, runtime tokens, resolver IDs, and middleware callability before execution.
 
 ## Adapters and extension descriptors
 

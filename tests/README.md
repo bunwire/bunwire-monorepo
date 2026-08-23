@@ -254,6 +254,25 @@ Caller-contract and full-application coverage lives in `tests/milestone-12`, bac
 | No manual construction or handler table | Application-source architecture scan |
 | Actual native host accepts positional calls | Real pinned Electrobun process smoke request/message markers |
 
+## Middleware Redesign Milestone 12A
+
+All tests below are in `tests/milestone-12a/core-managed-middleware.test.ts`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Canonical middleware kind/decorator identity | Kind capabilities, compiler symbol, and own metadata assertions |
+| Malformed/counterfeit targets fail closed | Missing-handle, wrong-kind, and same-kind counterfeit decorator tests |
+| Definitions and attachments are canonical and immutable | Frozen metadata, filter, dependency, and ordered parameter assertions |
+| Middleware defaults to transient registry scope | Scope-default registry assertion |
+| Constructor DI resolves from the invocation child | Indexed singleton dependency integration test |
+| Concurrent invocations receive distinct instances | Barrier-synchronized transient isolation test |
+| Singleton dependencies retain root identity | Cross-invocation/root identity assertions |
+| Chain order and result transformation work | Nested before/after event and transformed-result test |
+| Short-circuit and errors behave correctly | Terminal suppression plus middleware/terminal rejection tests |
+| `next()` runs at most once | Dedicated `MiddlewareNextError` test |
+| Provider boot, middleware, and Controller share one scope | Around-invocation Controller integration with invocation-local bindings |
+| Core remains platform-independent | Middleware source/import boundary scan |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

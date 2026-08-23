@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 12 — Generated RPC Contracts and End-to-End Application (complete); Middleware Redesign Milestone 12A is next
+Current milestone: Middleware Redesign Milestone 12A — Core Managed Middleware Foundation (complete); Middleware Redesign Milestone 12B is next
 
 Overall status:
 
@@ -19,7 +19,8 @@ Overall status:
 - Milestone 10: Complete — [details](progress/milestone-10.md)
 - Milestone 11: Complete — [details](progress/milestone-11.md)
 - Milestone 12: Complete — [details](progress/milestone-12.md)
-- Middleware Redesign 12A–12F: Planned — [architecture](docs/MIDDLEWARE.md) · [milestones](docs/MIDDLEWARE_MILESTONES.md)
+- Middleware Redesign 12A: Complete — [details](progress/milestone-12a.md)
+- Middleware Redesign 12B–12F: Planned — [architecture](docs/MIDDLEWARE.md) · [milestones](docs/MIDDLEWARE_MILESTONES.md)
 - Milestone 13: Blocked until Middleware Redesign 12A–12F is complete
 
 ## Implemented
@@ -38,15 +39,16 @@ Overall status:
 - Deterministic generated registries and `virtual:bunwire/registry`, with exported runtime imports, class scopes, constructor plans, generated Providers, managed methods, resolver IDs, adapter metadata, middleware arrays, stable hashes, and direct Core runtime execution.
 - Full class-based Electrobun host integration with native RPC/window bootstrap, Route/Message dispatch, private wire-argument encoding, explicit manual request fallback, Window/Webview/Context injection, readiness gating, native bindings/callbacks/outgoing APIs, normalized endpoint paths, real-SDK compatibility verification, and a passing real native-process smoke gate.
 - Generated positional request/message contracts and real Electrobun frontend schemas derived from authoritative invocation-plan indexes, with injected parameters excluded, private wire encoding, typed results, message `void`, canonical `@Use()` middleware, full normal/manual E2E paths, and a complete generated example.
+- Core managed middleware foundation with canonical class identity, constructor DI, immutable definitions/attachments, transient invocation resolution, generic around-chain execution, strict runtime validation, and one shared Provider/Controller invocation scope.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Milestone 12 is complete and verified.
+- None. Middleware Redesign Milestone 12A is complete and verified.
 
 ## Next
 
-- Middleware Redesign Milestone 12A — Core Managed Middleware Foundation.
+- Middleware Redesign Milestone 12B — Compiler Discovery and Metadata.
 - Complete Milestones 12A–12F in order before beginning Milestone 13 — Hardening and First Release.
 
 ## Blockers
@@ -68,3 +70,4 @@ Overall status:
 - [Milestone 10](progress/milestone-10.md)
 - [Milestone 11](progress/milestone-11.md)
 - [Milestone 12](progress/milestone-12.md)
+- [Middleware Redesign Milestone 12A](progress/milestone-12a.md)

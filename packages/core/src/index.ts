@@ -37,6 +37,7 @@ export {
 export {
   CONTROLLER_KIND,
   Controller,
+  MIDDLEWARE_KIND,
   PROVIDER_KIND,
   PROVIDER_LIFECYCLE_HOOKS,
   Provider,
@@ -50,6 +51,32 @@ export {
   type ServiceOptions,
   type ServiceScope,
 } from "./managed-classes/built-ins.js";
+export {
+  Middleware,
+  assertMiddlewareTarget,
+  defineMiddlewareAttachment,
+  defineMiddlewareDefinition,
+  validateMiddlewareAttachment,
+  validateMiddlewareDefinition,
+  type DefineMiddlewareDefinitionOptions,
+  type MiddlewareAttachment,
+  type MiddlewareClassMetadata,
+  type MiddlewareConstructor,
+  type MiddlewareDefinition,
+  type MiddlewareNext,
+} from "./middleware/managed-middleware.js";
+export {
+  executeMiddlewareChain,
+  type ExecuteMiddlewareChainOptions,
+  type MiddlewareContextFactory,
+  type MiddlewareTerminal,
+} from "./middleware/chain.js";
+export {
+  MiddlewareAttachmentError,
+  MiddlewareDefinitionError,
+  MiddlewareExecutionError,
+  MiddlewareNextError,
+} from "./middleware/errors.js";
 export {
   createToken,
   describeToken,
@@ -95,6 +122,8 @@ export {
   APPLICATION_CONTEXT,
   INVOCATION_CONTEXT,
   type InvocationContext,
+  type ManagedInvocationAround,
+  type ManagedInvocationContinuation,
   type ManagedInvocationOptions,
 } from "./application/invocation-context.js";
 export {

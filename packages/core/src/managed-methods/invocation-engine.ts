@@ -1,5 +1,10 @@
 import type { InvocationContext } from "../application/invocation-context.js";
-import { CONTROLLER_KIND, PROVIDER_KIND, SERVICE_KIND } from "../managed-classes/built-ins.js";
+import {
+  CONTROLLER_KIND,
+  MIDDLEWARE_KIND,
+  PROVIDER_KIND,
+  SERVICE_KIND,
+} from "../managed-classes/built-ins.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry.js";
 import { CallerArgumentError, ManagedMethodPlanError } from "./errors.js";
@@ -41,6 +46,7 @@ export class InvocationEngine {
     SERVICE_KIND,
     CONTROLLER_KIND,
     PROVIDER_KIND,
+    MIDDLEWARE_KIND,
   ]);
   readonly #methodKinds = new ManagedMethodKindRegistry();
 

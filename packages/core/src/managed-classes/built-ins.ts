@@ -51,6 +51,15 @@ export const PROVIDER_KIND = defineClassKind({
   registry: true,
 });
 
+export const MIDDLEWARE_KIND = defineClassKind({
+  id: "core.middleware",
+  injectable: true,
+  autoDiscover: true,
+  analyzeConstructor: true,
+  managedMethods: false,
+  registry: true,
+});
+
 export const Service = defineManagedClassDecorator<
   ServiceOptions | undefined,
   ServiceClassMetadata,

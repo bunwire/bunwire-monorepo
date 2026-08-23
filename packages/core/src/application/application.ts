@@ -6,7 +6,7 @@ import {
   type RuntimeRegistry,
   type RuntimeRegistryConsumerContext,
 } from "../adapters/runtime-registry.js";
-import { PROVIDER_KIND } from "../managed-classes/built-ins.js";
+import { MIDDLEWARE_KIND, PROVIDER_KIND } from "../managed-classes/built-ins.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
 import { InvocationEngine, type InvocationResult } from "../managed-methods/invocation-engine.js";
@@ -14,6 +14,7 @@ import { getManagedMethodMetadata } from "../managed-methods/method-decorator.js
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import type { ManagedMethodKind } from "../managed-methods/method-kind.js";
 import type { ParameterResolverDefinition } from "../managed-methods/resolvers.js";
+import { validateMiddlewareDefinition } from "../middleware/managed-middleware.js";
 import { ApplicationStateError } from "./errors.js";
 import {
   APPLICATION_CONTEXT,
@@ -282,7 +283,7 @@ export class Application<ApplicationContext = unknown> {
           invoke: <Result = unknown>(
             plan: ManagedMethodPlan,
             callerArguments: readonly unknown[] = [],
-            options: ManagedInvocationOptions = {},
+            options: ManagedInvocationOptions<any, Result> = {},
           ) => this.invokeManagedMethod<Result>(plan, callerArguments, options),
         }) satisfies RuntimeRegistryConsumerContext;
         for (const consumer of adapterRuntime.registryConsumers) {
@@ -299,7 +300,7 @@ export class Application<ApplicationContext = unknown> {
 
   async runInvocation<Result>(
     handler: (context: InvocationContext<ApplicationContext>) => Result | Promise<Result>,
-    options: ManagedInvocationOptions<ApplicationContext> = {},
+    options: ManagedInvocationOptions<ApplicationContext, Result> = {},
   ): Promise<Result> {
     if (this.#state !== "running") {
       throw new ApplicationStateError(
@@ -326,13 +327,26 @@ export class Application<ApplicationContext = unknown> {
       await provider.boot?.(context);
     }
 
-    return handler(context);
+    if (!options.around) {
+      return handler(context);
+    }
+
+    let continued = false;
+    return options.around(context, async () => {
+      if (continued) {
+        throw new ApplicationStateError(
+          "Managed invocation around hook continuation may only be called once.",
+        );
+      }
+      continued = true;
+      return handler(context);
+    });
   }
 
   invokeManagedMethod<Result = unknown>(
     plan: ManagedMethodPlan,
     callerArguments: readonly unknown[] = [],
-    options: ManagedInvocationOptions<ApplicationContext> = {},
+    options: ManagedInvocationOptions<ApplicationContext, Result> = {},
   ): InvocationResult<Result> {
     return this.runInvocation(
       (context) => this.#invocationEngine.invoke<Result>(plan, context, callerArguments),
@@ -419,6 +433,9 @@ export class Application<ApplicationContext = unknown> {
         target: entry.target,
         dependencies: entry.dependencies,
       });
+      if (entry.kind === MIDDLEWARE_KIND) {
+        validateMiddlewareDefinition(entry);
+      }
     }
     const providerTargets = new Set<Function>();
     for (const ProviderClass of registry.providers) {

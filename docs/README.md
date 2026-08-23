@@ -840,9 +840,9 @@ Core's initial metadata interpreter represents parameter sources as `transport`,
 
 Each Application/InvocationEngine owns a managed-class-kind registry seeded with Core's built-in kinds and a managed-method-kind registry for contributed method kinds. Custom kinds are registered during application configuration. Re-registering the same descriptor is idempotent, while an absent method-kind registration or an existing ID with a different descriptor is rejected. Invocation validation requires the plan to use both canonical descriptors, so owning capabilities and method semantics cannot be supplied or replaced by unregistered or conflicting definitions.
 
-Runtime plan validation fails closed for malformed generated or JavaScript-supplied metadata. It validates parameter-source discriminants, source-specific indexes and values, runtime tokens, namespaced resolver IDs, boolean optionality, and callable middleware before execution. The invocation engine also rejects unknown sources exhaustively as defense in depth.
+Runtime plan validation fails closed for malformed generated or JavaScript-supplied metadata. It validates parameter-source discriminants, source-specific indexes and values, runtime tokens, namespaced resolver IDs, boolean optionality, and canonical middleware attachment records before execution. The invocation engine also rejects unknown sources exhaustively as defense in depth.
 
-The runtime validates that method and caller indexes are complete and unique, validates caller counts from the highest required caller index through the total caller-visible count, then executes the explicit plan. It does not inspect TypeScript types, decorator syntax, parameter names, or platform concepts. Plan-attached middleware wraps a Promise-normalized method result and may transform or short-circuit it.
+The runtime validates that method and caller indexes are complete and unique, validates caller counts from the highest required caller index through the total caller-visible count, then executes the explicit plan. It does not inspect TypeScript types, decorator syntax, parameter names, or platform concepts. Under the managed middleware architecture, adapters select applicable generated attachments and Core resolves their transient classes in the same invocation scope before reaching the plan as the terminal continuation. See [MIDDLEWARE.md](MIDDLEWARE.md).
 
 `Application.invokeManagedMethod(plan, incoming, options?)` connects this interpreter to the Application invocation scope and Provider boot boundary. Adapters and generated registries may feed plans into this generic API later; calling it does not make ordinary Service methods or undecorated methods dynamically invocable.
 
@@ -1120,7 +1120,7 @@ export const applicationRegistry = {
 
 The exact shape may be split into Core and adapter registries for tree-shaking and ownership clarity.
 
-Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, stable resolver IDs, and middleware. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle. Milestone 12 additionally exposes `virtual:bunwire/client`, generated from those same analyzed method plans and original method types.
+Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, and stable resolver IDs. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle. Milestone 12 additionally exposes `virtual:bunwire/client`, generated from those same analyzed method plans and original method types. Milestone 12's callable middleware array is historical and is replaced by canonical managed middleware attachments in the required 12A–12F redesign track.
 
 ---
 
@@ -1228,7 +1228,7 @@ A full adapter owns the normal host bootstrap. A manual adapter variant may inst
 
 Core's initial adapter API represents this contract with `Adapter<Context>`. Each concrete adapter class declares its own static compiler descriptor, created through `defineAdapterCompilerDescriptor()`, so class/method/injector definitions and other source-independent compiler metadata can be resolved from the adapter class rather than from arbitrary instance configuration. Every contributed decorator/injector definition names its stable public module export through `compilerSymbol: { moduleSpecifier, exportName }`; those exports must be resolvable from the consuming project. The adapter constructor contributes runtime Providers, parameter resolvers, validation hooks, and runtime registry consumers through the base class. `Application.withAdapter()` accepts one primary adapter instance in v1, attaches the same already-created Application, and registers all contributions through application-scoped canonical registries. Reusing an ID or compiler symbol with a conflicting descriptor is rejected; adapter contribution APIs cannot replace Core's authoritative class-kind capabilities.
 
-`defineRuntimeRegistry()` is the shared generated/prebuilt registry boundary. It carries managed class entries, indexed constructor dependencies, generated Providers, and complete managed-method plans; every exposed method must have own managed-method decorator metadata whose kind matches the plan's canonical registered method kind. Registry consumers connect validated metadata to host transports after Provider registration. Dispatch still enters through `Application.invokeManagedMethod()`, so Provider boot, invocation scopes, caller validation, resolvers, and middleware retain their established order. This is compiled runtime metadata, not runtime source discovery or parameter inference.
+`defineRuntimeRegistry()` is the shared generated/prebuilt registry boundary. It carries managed class entries, indexed constructor dependencies, generated Providers, complete managed-method plans, and—after the middleware redesign—canonical managed middleware definitions and attachments. Every exposed method must have own managed-method decorator metadata whose kind matches the plan's canonical registered method kind. Registry consumers connect validated metadata to host transports after Provider registration. Dispatch still enters through `Application.invokeManagedMethod()`, so Provider boot, one invocation scope, adapter-selected middleware, caller validation, and resolvers retain deterministic order. This is compiled runtime metadata, not runtime source discovery, parameter inference, alias expansion, group expansion, or runtime filesystem matching.
 
 Adapter preparation receives any explicit manual context but otherwise may create the real native host objects. The prepared context is stored under `APPLICATION_CONTEXT` before adapter/application Provider registration. Validation hooks then run, Providers register, registry consumers connect methods, and the adapter completes host start before the Application becomes running. Typed native-object callbacks receive the exact adapter-owned native object and do not introduce a Core wrapper.
 
@@ -1411,30 +1411,30 @@ Bunwire should not replace Electrobun's outgoing communication APIs. The adapter
 
 # 34. Middleware
 
-Middleware remains a Core capability around managed invocation.
+The release middleware direction is the managed, class-based, adapter-driven architecture defined in [MIDDLEWARE.md](MIDDLEWARE.md). Its dedicated implementation order and acceptance criteria are defined in [MIDDLEWARE_MILESTONES.md](MIDDLEWARE_MILESTONES.md).
 
-Potential levels include:
-
-```text
-Application middleware
-Managed-class middleware
-Managed-method middleware
-Adapter-specific middleware layers
-```
-
-Example:
+Conceptually:
 
 ```ts
-@Use(loggingMiddleware)
-@Route("get")
-getUser(id: string) {}
+@Middleware()
+export class AuthMiddleware
+  implements Middleware<ElectrobunMiddlewareContext>
+{
+  protected alias = "auth";
+
+  async handle(context, next) {
+    return next();
+  }
+}
+
+@Use("auth:admin")
+@Route("delete")
+deleteUser() {}
 ```
 
-Milestone 12 implements this managed-method attachment point. `Use` is a canonical Core compiler symbol, every middleware value must be callable and exported for generated import, and the generated runtime plan preserves source attachment order. Counterfeit `core.use` decorators are rejected.
+Core owns middleware identity, DI, canonical attachments, parameters, generic chain execution, and deterministic ordering. Vite compiles definitions, aliases, groups, controller mappings, and local attachments into the authoritative generated registry. Adapters own context, path/transport filtering, native integration, and the terminal continuation.
 
-Middleware may handle logging, validation, authorization, telemetry, timing, auditing, and errors.
-
-Adapters decide how their runtime events enter the generic invocation/middleware pipeline.
+Milestone 12's exported-function `ManagedMethodMiddleware` and `@Use(loggingMiddleware)` implementation is complete historical behavior but is superseded as the public API direction. Milestones 12A–12F replace it without a permanent compatibility layer. Milestone 13 cannot begin until that track is complete.
 
 ---
 

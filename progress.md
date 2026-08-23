@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 12 — Generated RPC Contracts and End-to-End Application (complete)
+Current milestone: Milestone 12 — Generated RPC Contracts and End-to-End Application (complete); Middleware Redesign Milestone 12A is next
 
 Overall status:
 
@@ -19,7 +19,8 @@ Overall status:
 - Milestone 10: Complete — [details](progress/milestone-10.md)
 - Milestone 11: Complete — [details](progress/milestone-11.md)
 - Milestone 12: Complete — [details](progress/milestone-12.md)
-- Milestone 13: Not started
+- Middleware Redesign 12A–12F: Planned — [architecture](docs/MIDDLEWARE.md) · [milestones](docs/MIDDLEWARE_MILESTONES.md)
+- Milestone 13: Blocked until Middleware Redesign 12A–12F is complete
 
 ## Implemented
 
@@ -45,11 +46,12 @@ Overall status:
 
 ## Next
 
-- Milestone 13 — Hardening and First Release.
+- Middleware Redesign Milestone 12A — Core Managed Middleware Foundation.
+- Complete Milestones 12A–12F in order before beginning Milestone 13 — Hardening and First Release.
 
 ## Blockers
 
-- None.
+- Milestone 13 is intentionally blocked by the required Middleware Redesign 12A–12F pre-release track.
 
 ## Milestone Progress Files
 

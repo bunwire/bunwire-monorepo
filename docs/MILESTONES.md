@@ -1213,11 +1213,23 @@ The same generated method plan drives both server invocation and frontend typing
 
 ---
 
+# Middleware Redesign Track — Milestones 12A–12F
+
+Milestone 12 completed the original exported-function middleware attachment. That record remains historically accurate, but the callback model is superseded by Bunwire's managed, class-based, adapter-driven middleware architecture.
+
+The authoritative design is [MIDDLEWARE.md](MIDDLEWARE.md). The complete deliverables, tests, exclusions, and exit criteria for Milestones 12A–12F are in [MIDDLEWARE_MILESTONES.md](MIDDLEWARE_MILESTONES.md).
+
+Milestones 12A–12F are a required pre-release track. They must complete in order before Milestone 13 begins. The track introduces managed middleware classes and DI, compiler metadata, canonical local and centralized attachments, static groups/controller mappings, adapter-owned filtering/context, Electrobun integration, removal of callback middleware, and a fake second-adapter proof.
+
+---
+
 # Milestone 13 — Hardening and First Release
 
 ## Goal
 
 Turn the architecture into a dependable initial release without expanding scope prematurely.
+
+Prerequisite: every acceptance criterion and exit gate in Middleware Redesign Milestones 12A–12F is complete. Milestone 13 remains blocked until then.
 
 ## Deliverables
 

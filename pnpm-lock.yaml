@@ -29,6 +29,9 @@ importers:
       '@bunwire/electrobun':
         specifier: workspace:*
         version: link:../../packages/electrobun
+      '@bunwire/vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
 
   packages/core: {}
 

@@ -225,6 +225,61 @@ interface ElectrobunInvocationPayload {
   readonly args: readonly unknown[];
 }
 
+export interface ElectrobunClientTransport {
+  readonly request: (...args: any[]) => Promise<any>;
+  readonly send: (...args: any[]) => void;
+}
+
+export interface ElectrobunPositionalClient {
+  readonly request: (method: string, ...args: readonly unknown[]) => Promise<unknown>;
+  readonly message: (method: string, ...args: readonly unknown[]) => void;
+}
+
+type CallerMethodContract<Contract> = {
+  [Method in keyof Contract]: (...args: any[]) => any;
+};
+
+export type ElectrobunClientSchema<
+  Requests extends CallerMethodContract<Requests>,
+  Messages extends CallerMethodContract<Messages>,
+> = {
+  bun: {
+    requests: {
+      [Method in keyof Requests]: {
+        params: ElectrobunInvocationPayload;
+        response: Awaited<ReturnType<Requests[Method]>>;
+      };
+    };
+    messages: { [Method in keyof Messages]: ElectrobunInvocationPayload };
+  };
+  webview: {
+    requests: Record<never, never>;
+    messages: Record<never, never>;
+  };
+};
+
+function invocationPayload(args: readonly unknown[]): ElectrobunInvocationPayload {
+  return Object.freeze({ args: Object.freeze([...args]) });
+}
+
+export function createElectrobunClient(
+  transport: ElectrobunClientTransport,
+): ElectrobunPositionalClient {
+  if (!transport || typeof transport.request !== "function" || typeof transport.send !== "function") {
+    throw new ElectrobunAdapterError(
+      "createElectrobunClient() requires an Electrobun frontend RPC object with request() and send().",
+    );
+  }
+  return Object.freeze({
+    request: (method: string, ...args: readonly unknown[]) => (
+      transport.request(method, invocationPayload(args))
+    ),
+    message: (method: string, ...args: readonly unknown[]) => {
+      transport.send(method, invocationPayload(args));
+    },
+  });
+}
+
 export type ElectrobunRequestHandler = (
   method: string,
   payload: unknown,

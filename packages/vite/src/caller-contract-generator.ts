@@ -1,0 +1,255 @@
+import { createHash } from "node:crypto";
+import type { CompilerSymbolReference } from "@bunwire/core";
+import type {
+  AnalyzedManagedClass,
+  AnalyzedManagedMethod,
+  AnalyzedTransportParameter,
+  BunwireCompilerAnalysis,
+} from "./compiler-analysis.js";
+import { BunwireCompilerError } from "./diagnostics.js";
+import type { DiscoveredCompilerExtensions } from "./extensions.js";
+import { generatedImportSpecifier } from "./registry-generator.js";
+import { BUNWIRE_CLIENT_MODULE_ID } from "./virtual-modules.js";
+
+export interface GenerateCallerContractModuleOptions {
+  readonly analysis: BunwireCompilerAnalysis;
+  readonly extensions: DiscoveredCompilerExtensions;
+  readonly modulePath: string;
+  readonly importMode?: "relative" | "vite";
+}
+
+export interface GeneratedCallerContractModule {
+  readonly id: typeof BUNWIRE_CLIENT_MODULE_ID;
+  readonly code: string;
+  readonly hash: string;
+}
+
+interface CallerContractMethodConfiguration {
+  readonly kindId: string;
+  readonly mode: "request" | "message";
+}
+
+interface CallerContractHandlerData {
+  readonly type: "bunwire.caller-contract";
+  readonly factory: CompilerSymbolReference;
+  readonly schema: CompilerSymbolReference;
+  readonly methods: readonly CallerContractMethodConfiguration[];
+  readonly resolveEndpoint: (input: {
+    readonly ownerData: unknown;
+    readonly methodData: unknown;
+    readonly methodName: string;
+  }) => string;
+}
+
+interface ContractEntry {
+  readonly owner: AnalyzedManagedClass;
+  readonly method: AnalyzedManagedMethod;
+  readonly endpoint: string;
+  readonly mode: "request" | "message";
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function isObject(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readHandler(extensions: DiscoveredCompilerExtensions): CallerContractHandlerData {
+  const candidates = extensions.metadataHandlers.filter((handler) => (
+    isObject(handler.data) && handler.data.type === "bunwire.caller-contract"
+  ));
+  const handler = candidates[0];
+  if (candidates.length !== 1 || !handler || !isObject(handler.data)) {
+    throw new BunwireCompilerError(
+      "REGISTRY_GENERATION_INVALID",
+      candidates.length === 0
+        ? `Adapter "${extensions.adapter.id}" does not contribute a caller-contract compiler metadata handler.`
+        : `Adapter "${extensions.adapter.id}" contributes more than one caller-contract compiler metadata handler.`,
+    );
+  }
+  const data = handler.data as Partial<CallerContractHandlerData>;
+  if (!isObject(data.factory)
+    || typeof data.factory.moduleSpecifier !== "string"
+    || typeof data.factory.exportName !== "string"
+    || !isObject(data.schema)
+    || typeof data.schema.moduleSpecifier !== "string"
+    || typeof data.schema.exportName !== "string"
+    || !Array.isArray(data.methods)
+    || typeof data.resolveEndpoint !== "function") {
+    throw new BunwireCompilerError(
+      "REGISTRY_GENERATION_INVALID",
+      `Caller-contract compiler metadata handler "${handler.id}" is malformed.`,
+    );
+  }
+  const kindIds = new Set<string>();
+  for (const method of data.methods) {
+    if (!isObject(method)
+      || typeof method.kindId !== "string"
+      || (method.mode !== "request" && method.mode !== "message")) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `Caller-contract compiler metadata handler "${handler.id}" contains a malformed method-kind mapping.`,
+      );
+    }
+    if (kindIds.has(method.kindId)) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `Caller-contract compiler metadata handler "${handler.id}" maps method kind "${method.kindId}" more than once.`,
+      );
+    }
+    kindIds.add(method.kindId);
+  }
+  return data as CallerContractHandlerData;
+}
+
+function callableParameters(
+  methodTypeName: string,
+  parameters: readonly AnalyzedTransportParameter[],
+  minimumCallerArguments: number,
+): string {
+  return [...parameters]
+    .sort((left, right) => left.argumentIndex - right.argumentIndex)
+    .map((parameter) => {
+      const type = `Parameters<${methodTypeName}>[${parameter.methodIndex}]`;
+      if (parameter.rest) {
+        return `...argument${parameter.argumentIndex}: __bunwire_drop<Parameters<${methodTypeName}>, ${parameter.methodIndex}>`;
+      }
+      const optional = parameter.optional
+        && parameter.argumentIndex >= minimumCallerArguments;
+      return `argument${parameter.argumentIndex}${optional ? "?" : ""}: ${type}`;
+    })
+    .join(", ");
+}
+
+export function generateCallerContractModule(
+  options: GenerateCallerContractModuleOptions,
+): GeneratedCallerContractModule {
+  const mode = options.importMode ?? "relative";
+  const handler = readHandler(options.extensions);
+  const methodModes = new Map(handler.methods.map((entry) => [entry.kindId, entry.mode]));
+  const entries: ContractEntry[] = [];
+  const identities = new Set<string>();
+  for (const owner of options.analysis.classes) {
+    for (const method of owner.methods) {
+      const callMode = methodModes.get(method.kind.id);
+      if (!callMode) continue;
+      let endpoint: string;
+      try {
+        endpoint = handler.resolveEndpoint({
+          ownerData: owner.data,
+          methodData: method.data,
+          methodName: method.name,
+        });
+      } catch (cause) {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `Caller endpoint for managed method "${owner.name}.${method.name}" could not be generated: ${cause instanceof Error ? cause.message : String(cause)}`,
+          { location: method.location, cause },
+        );
+      }
+      if (typeof endpoint !== "string" || endpoint.length === 0) {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `Caller endpoint for managed method "${owner.name}.${method.name}" must be a non-empty string.`,
+          { location: method.location },
+        );
+      }
+      const identity = `${callMode}\0${endpoint}`;
+      if (identities.has(identity)) {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `Generated caller contract contains duplicate ${callMode} endpoint "${endpoint}".`,
+          { location: method.location },
+        );
+      }
+      identities.add(identity);
+      entries.push({ owner, method, endpoint, mode: callMode });
+    }
+  }
+  entries.sort((left, right) => compareText(
+    `${left.mode}\0${left.endpoint}`,
+    `${right.mode}\0${right.endpoint}`,
+  ));
+
+  const imports = new Map<string, { readonly specifier: string; readonly exportName: string; readonly localName: string }>();
+  const typeForOwner = (owner: AnalyzedManagedClass): string => {
+    const specifier = owner.target.moduleSpecifier
+      ?? generatedImportSpecifier(owner.target.declaration.filePath, options.modulePath, mode);
+    const key = `${specifier}\0${owner.target.exportName}`;
+    const existing = imports.get(key);
+    if (existing) return existing.localName;
+    const value = {
+      specifier,
+      exportName: owner.target.exportName,
+      localName: `__bunwire_owner_${imports.size}`,
+    };
+    imports.set(key, value);
+    return value.localName;
+  };
+
+  const methodTypes = entries.map((entry, index) => {
+    const ownerType = typeForOwner(entry.owner);
+    return `type __bunwire_method_${index} = InstanceType<typeof ${ownerType}>[${JSON.stringify(entry.method.name)}];`;
+  });
+  const contractLines = (callMode: "request" | "message"): string[] => entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.mode === callMode)
+    .map(({ entry, index }) => {
+      const methodType = `__bunwire_method_${index}`;
+      const caller = entry.method.parameters.filter(
+        (parameter): parameter is AnalyzedTransportParameter => parameter.source === "transport",
+      );
+      const parameters = callableParameters(
+        methodType,
+        caller,
+        entry.method.minimumCallerArguments,
+      );
+      const result = callMode === "request" ? `Awaited<ReturnType<${methodType}>>` : "void";
+      return `  ${JSON.stringify(entry.endpoint)}: (${parameters}) => ${result};`;
+    });
+  const importLines = [...imports.values()]
+    .sort((left, right) => compareText(
+      `${left.specifier}\0${left.exportName}`,
+      `${right.specifier}\0${right.exportName}`,
+    ))
+    .map(({ specifier, exportName, localName }) => (
+      `import type { ${exportName} as ${localName} } from ${JSON.stringify(specifier)};`
+    ));
+  const body = [
+    "// Generated by @bunwire/vite. Do not edit.",
+    `import { ${handler.factory.exportName} as __bunwire_create_client } from ${JSON.stringify(handler.factory.moduleSpecifier)};`,
+    `import type { ${handler.schema.exportName} as __bunwire_client_schema } from ${JSON.stringify(handler.schema.moduleSpecifier)};`,
+    ...importLines,
+    "",
+    ...methodTypes,
+    "",
+    "type __bunwire_drop<Values extends readonly unknown[], Count extends number, Seen extends readonly unknown[] = []> = Seen['length'] extends Count ? Values : Values extends readonly [unknown, ...infer Rest] ? __bunwire_drop<Rest, Count, [...Seen, unknown]> : [];",
+    "",
+    "export interface BunwireRequestContract {",
+    ...contractLines("request"),
+    "}",
+    "",
+    "export interface BunwireMessageContract {",
+    ...contractLines("message"),
+    "}",
+    "",
+    "export type BunwireClientSchema = __bunwire_client_schema<BunwireRequestContract, BunwireMessageContract>;",
+    "",
+    "export interface BunwireClient {",
+    "  request<Method extends keyof BunwireRequestContract>(method: Method, ...args: Parameters<BunwireRequestContract[Method]>): Promise<ReturnType<BunwireRequestContract[Method]>>;",
+    "  message<Method extends keyof BunwireMessageContract>(method: Method, ...args: Parameters<BunwireMessageContract[Method]>): void;",
+    "}",
+    "",
+    "export type BunwireClientTransport = Parameters<typeof __bunwire_create_client>[0];",
+    "",
+    "export function createBunwireClient(transport: BunwireClientTransport): BunwireClient {",
+    "  return __bunwire_create_client(transport) as BunwireClient;",
+    "}",
+    "",
+  ].join("\n");
+  const hash = createHash("sha256").update(body).digest("hex");
+  const code = `${body}export const BUNWIRE_CLIENT_HASH = ${JSON.stringify(hash)};\n`;
+  return Object.freeze({ id: BUNWIRE_CLIENT_MODULE_ID, code, hash });
+}

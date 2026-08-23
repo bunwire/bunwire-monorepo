@@ -1120,7 +1120,7 @@ export const applicationRegistry = {
 
 The exact shape may be split into Core and adapter registries for tree-shaking and ownership clarity.
 
-Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, stable resolver IDs, and middleware. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle.
+Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, stable resolver IDs, and middleware. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle. Milestone 12 additionally exposes `virtual:bunwire/client`, generated from those same analyzed method plans and original method types.
 
 ---
 
@@ -1430,6 +1430,8 @@ Example:
 getUser(id: string) {}
 ```
 
+Milestone 12 implements this managed-method attachment point. `Use` is a canonical Core compiler symbol, every middleware value must be callable and exported for generated import, and the generated runtime plan preserves source attachment order. Counterfeit `core.use` decorators are rejected.
+
 Middleware may handle logging, validation, authorization, telemetry, timing, auditing, and errors.
 
 Adapters decide how their runtime events enter the generic invocation/middleware pipeline.
@@ -1497,14 +1499,27 @@ The compiler derives the caller-visible argument list from the same parameter pl
 
 # 37. Frontend API
 
-The generated Bunwire API may remain transport-shaped while still accepting logical positional arguments:
+Milestone 12 generates a transport-shaped positional client through `virtual:bunwire/client`:
 
 ```ts
-request("users/get", id);
+import { Electroview } from "electrobun/view";
+import {
+  createBunwireClient,
+  type BunwireClientSchema,
+} from "virtual:bunwire/client";
+
+const rpc = Electroview.defineRPC<BunwireClientSchema>({
+  handlers: { requests: {}, messages: {} },
+});
+const { request, message } = createBunwireClient(rpc);
+
+const user = await request("users/get", id, includePosts);
 message("users/deleted", id);
 ```
 
-Generated clients translate those positional calls into Electrobun's single-payload native RPC API. The Electrobun adapter owns an unambiguous internal wire encoding for the logical argument tuple and decodes it before managed invocation. That encoding is not part of Bunwire's caller API and application code should not construct it directly.
+The generated request/message maps include only parameters classified as `transport`, ordered by `argumentIndex`; their types are selected from the original method parameters at each authoritative `methodIndex`. Required, defaulted-before-required, optional, final-rest, and array-valued arguments therefore retain their logical TypeScript behavior. Requests return typed Promises and messages return `void`.
+
+Generated clients translate positional calls into Electrobun's single-payload native RPC API through an adapter-owned factory. The Electrobun adapter owns the internal wire encoding and decodes it before managed invocation. That encoding is not exported or emitted in the generated caller module, and application code does not construct it.
 
 A higher-level generated API may provide:
 

@@ -2,6 +2,7 @@ import path from "node:path";
 import {
   Inject,
   INJECT_DECORATOR_ID,
+  Use,
   type CompilerSymbolReference,
   type ManagedClassKind,
   type ManagedMethodKind,
@@ -93,6 +94,7 @@ export interface AnalyzedManagedMethod {
   readonly parameters: readonly AnalyzedMethodParameter[];
   readonly minimumCallerArguments: number;
   readonly maximumCallerArguments: number | null;
+  readonly middleware: readonly CompilerRuntimeReference[];
 }
 
 export interface AnalyzedManagedClass {
@@ -543,6 +545,7 @@ function compilerSymbolRootNames(options: BunwireAnalysisOptions): readonly stri
     ...options.extensions.methodDecorators,
     ...options.extensions.parameterInjectors,
     Inject.definition,
+    Use.definition,
   ];
   const roots = new Set<string>();
   for (const definition of definitions) {
@@ -900,6 +903,7 @@ function analyzeManagedMethods(
   methodDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly kind: ManagedMethodKind; readonly createMetadata: (options: any) => unknown }>,
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
+  useDefinitions: ResolvedCompilerDefinitions<typeof Use.definition>,
 ): readonly AnalyzedManagedMethod[] {
   const methods: AnalyzedManagedMethod[] = [];
   for (const member of declaration.members) {
@@ -960,6 +964,36 @@ function analyzeManagedMethods(
       injectorDefinitions,
       injectDefinitions,
     );
+    const middleware: CompilerRuntimeReference[] = [];
+    for (const use of matchDecorators(member, checker, useDefinitions)) {
+      if (use.call.arguments.length === 0) {
+        fail(
+          "MANAGED_METHOD_INVALID",
+          `@Use() on managed method "${member.name.getText()}" requires at least one middleware function.`,
+          use.decorator,
+        );
+      }
+      for (const argument of use.call.arguments) {
+        const expression = unwrapExpression(argument);
+        const type = checker.getTypeAtLocation(expression);
+        if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).length === 0) {
+          fail(
+            "MANAGED_METHOD_INVALID",
+            `@Use() argument "${expression.getText()}" on managed method "${member.name.getText()}" must be callable.`,
+            expression,
+          );
+        }
+        const symbol = symbolAtExpression(checker, expression);
+        if (!symbol) {
+          fail(
+            "REGISTRY_GENERATION_INVALID",
+            `@Use() middleware "${expression.getText()}" has no resolvable runtime symbol.`,
+            expression,
+          );
+        }
+        middleware.push(runtimeReference(checker, expression, symbol));
+      }
+    }
     const caller = parameters.filter((parameter): parameter is AnalyzedTransportParameter => parameter.source === "transport");
     const highestRequired = caller.reduce(
       (highest, parameter) => parameter.optional ? highest : Math.max(highest, parameter.argumentIndex),
@@ -982,6 +1016,7 @@ function analyzeManagedMethods(
       parameters,
       minimumCallerArguments: highestRequired + 1,
       maximumCallerArguments: rest ? null : caller.length,
+      middleware: Object.freeze(middleware),
     }));
   }
   return Object.freeze(methods);
@@ -1059,6 +1094,13 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     "Core injection decorator",
     occupiedSymbols,
   );
+  const useDefinitions = resolveCompilerDefinitions(
+    context,
+    options.projectRoot,
+    [Use.definition],
+    "Core middleware decorator",
+    occupiedSymbols,
+  );
   const declarations = classDeclarations(context);
   const discovered = new Map<ts.ClassDeclaration, DecoratorMatch<any>>();
   const managedBySymbol = new Map<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>();
@@ -1123,6 +1165,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       methodDefinitions,
       injectorDefinitions,
       injectDefinitions,
+      useDefinitions,
     );
     if (!match || !declaration.name) {
       continue;

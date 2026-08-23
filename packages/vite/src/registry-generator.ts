@@ -63,7 +63,7 @@ function runtimeExtension(filePath: string): string {
   return ".js";
 }
 
-function importSpecifier(
+export function generatedImportSpecifier(
   declarationPath: string,
   modulePath: string,
   mode: "relative" | "vite",
@@ -131,7 +131,7 @@ export function generateRuntimeRegistryModule(
   };
   const runtimeReference = (reference: CompilerRuntimeReference): string => addImport(
     reference.moduleSpecifier
-      ?? importSpecifier(reference.declaration.filePath, options.modulePath, mode),
+      ?? generatedImportSpecifier(reference.declaration.filePath, options.modulePath, mode),
     reference.exportName,
   );
   const compilerReference = (reference: CompilerSymbolReference): string => addImport(
@@ -196,7 +196,8 @@ export function generateRuntimeRegistryModule(
           return `{ source: "resolver", methodIndex: ${parameter.methodIndex}, resolverId: createParameterResolverId(${JSON.stringify(parameter.resolverId)}), data: ${stableValue(parameter.data)} }`;
       }
     });
-    return `    defineManagedMethodPlan({ kind: ${methodDecoratorRuntime}.definition.kind, ownerKind: ${ownerDecoratorRuntime}.definition.kind, target: ${target}, method: ${JSON.stringify(method.name)}, data: ${stableValue(method.data)}, parameters: [${parameters.join(", ")}], middleware: [] })`;
+    const middleware = method.middleware.map((entry) => runtimeReference(entry));
+    return `    defineManagedMethodPlan({ kind: ${methodDecoratorRuntime}.definition.kind, ownerKind: ${ownerDecoratorRuntime}.definition.kind, target: ${target}, method: ${JSON.stringify(method.name)}, data: ${stableValue(method.data)}, parameters: [${parameters.join(", ")}], middleware: [${middleware.join(", ")}] })`;
   }));
 
   const importLines = [...imports.values()]

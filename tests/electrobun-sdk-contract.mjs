@@ -7,8 +7,12 @@ const contractPath = path.join(
   repositoryRoot,
   "tests/fixtures/milestone-11-electrobun/sdk-contract.ts",
 );
+const clientContractPath = path.join(
+  repositoryRoot,
+  "tests/fixtures/milestone-12-electrobun/sdk-client-contract.ts",
+);
 const program = ts.createProgram({
-  rootNames: [contractPath],
+  rootNames: [contractPath, clientContractPath],
   options: {
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
@@ -25,9 +29,12 @@ const program = ts.createProgram({
   },
 });
 
-const normalizedContractPath = path.normalize(contractPath);
+const normalizedContractPaths = new Set([
+  path.normalize(contractPath),
+  path.normalize(clientContractPath),
+]);
 const diagnostics = ts.getPreEmitDiagnostics(program).filter(
-  (diagnostic) => diagnostic.file && path.normalize(diagnostic.file.fileName) === normalizedContractPath,
+  (diagnostic) => diagnostic.file && normalizedContractPaths.has(path.normalize(diagnostic.file.fileName)),
 );
 
 if (diagnostics.length > 0) {

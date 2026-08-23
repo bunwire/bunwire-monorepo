@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 11 — Electrobun Adapter (complete)
+Current milestone: Milestone 12 — Generated RPC Contracts and End-to-End Application (complete)
 
 Overall status:
 
@@ -18,7 +18,8 @@ Overall status:
 - Milestone 9: Complete — [details](progress/milestone-09.md)
 - Milestone 10: Complete — [details](progress/milestone-10.md)
 - Milestone 11: Complete — [details](progress/milestone-11.md)
-- Milestone 12+: Not started
+- Milestone 12: Complete — [details](progress/milestone-12.md)
+- Milestone 13: Not started
 
 ## Implemented
 
@@ -35,15 +36,16 @@ Overall status:
 - Canonical compiler-symbol authorization, strict runtime-token validation, inherited-constructor safeguards, managed dependency-cycle detection, and concrete instance-method enforcement.
 - Deterministic generated registries and `virtual:bunwire/registry`, with exported runtime imports, class scopes, constructor plans, generated Providers, managed methods, resolver IDs, adapter metadata, middleware arrays, stable hashes, and direct Core runtime execution.
 - Full class-based Electrobun host integration with native RPC/window bootstrap, Route/Message dispatch, private wire-argument encoding, explicit manual request fallback, Window/Webview/Context injection, readiness gating, native bindings/callbacks/outgoing APIs, normalized endpoint paths, real-SDK compatibility verification, and a passing real native-process smoke gate.
+- Generated positional request/message contracts and real Electrobun frontend schemas derived from authoritative invocation-plan indexes, with injected parameters excluded, private wire encoding, typed results, message `void`, canonical `@Use()` middleware, full normal/manual E2E paths, and a complete generated example.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Milestone 11 and its correction pass are complete and verified.
+- None. Milestone 12 is complete and verified.
 
 ## Next
 
-- Milestone 12 — Generated RPC Contracts and End-to-End Application (not started).
+- Milestone 13 — Hardening and First Release.
 
 ## Blockers
 
@@ -63,3 +65,4 @@ Overall status:
 - [Milestone 9](progress/milestone-09.md)
 - [Milestone 10](progress/milestone-10.md)
 - [Milestone 11](progress/milestone-11.md)
+- [Milestone 12](progress/milestone-12.md)

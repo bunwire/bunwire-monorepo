@@ -45,8 +45,10 @@ export {
   type BunwireDiscoveryResult,
 } from "./discovery.js";
 export {
+  BUNWIRE_CLIENT_MODULE_ID,
   BUNWIRE_DISCOVERY_MODULE_ID,
   BUNWIRE_REGISTRY_MODULE_ID,
+  BUNWIRE_RESOLVED_CLIENT_MODULE_ID,
   BUNWIRE_RESOLVED_VIRTUAL_MODULE_PREFIX,
   BUNWIRE_RESOLVED_REGISTRY_MODULE_ID,
   BUNWIRE_VIRTUAL_MODULE_NAMESPACE,
@@ -54,6 +56,11 @@ export {
   isBunwireVirtualModuleId,
   resolveBunwireVirtualModuleId,
 } from "./virtual-modules.js";
+export {
+  generateCallerContractModule,
+  type GeneratedCallerContractModule,
+  type GenerateCallerContractModuleOptions,
+} from "./caller-contract-generator.js";
 export {
   generateRuntimeRegistryModule,
   type GeneratedRuntimeRegistryModule,

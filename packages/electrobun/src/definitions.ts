@@ -2,10 +2,12 @@ import {
   CONTROLLER_KIND,
   createParameterResolverId,
   defineAdapterCompilerDescriptor,
+  defineCompilerMetadataHandler,
   defineManagedMethodDecorator,
   defineMethodKind,
   defineParameterInjector,
 } from "@bunwire/core";
+import { normalizeElectrobunPath } from "./path.js";
 
 export interface ElectrobunMethodMetadata {
   readonly path: string | undefined;
@@ -69,9 +71,44 @@ export const Context = defineParameterInjector<void, undefined, "electrobun.cont
   createMetadata: () => undefined,
 });
 
+export const ELECTROBUN_CALLER_CONTRACT_HANDLER = defineCompilerMetadataHandler({
+  id: "electrobun.caller-contract",
+  data: Object.freeze({
+    type: "bunwire.caller-contract" as const,
+    factory: Object.freeze({
+      moduleSpecifier: "@bunwire/electrobun",
+      exportName: "createElectrobunClient",
+    }),
+    schema: Object.freeze({
+      moduleSpecifier: "@bunwire/electrobun",
+      exportName: "ElectrobunClientSchema",
+    }),
+    methods: Object.freeze([
+      Object.freeze({ kindId: ELECTROBUN_ROUTE_KIND.id, mode: "request" as const }),
+      Object.freeze({ kindId: ELECTROBUN_MESSAGE_KIND.id, mode: "message" as const }),
+    ]),
+    resolveEndpoint(input: {
+      readonly ownerData: unknown;
+      readonly methodData: unknown;
+      readonly methodName: string;
+    }): string {
+      const owner = input.ownerData as { readonly prefix?: unknown } | undefined;
+      const method = input.methodData as { readonly path?: unknown } | undefined;
+      if (owner?.prefix !== undefined && typeof owner.prefix !== "string") {
+        throw new TypeError("Electrobun Controller compiler metadata contains a non-string prefix.");
+      }
+      if (method?.path !== undefined && typeof method.path !== "string") {
+        throw new TypeError("Electrobun method compiler metadata contains a non-string path.");
+      }
+      return normalizeElectrobunPath(owner?.prefix, method?.path, input.methodName);
+    },
+  }),
+});
+
 export const ELECTROBUN_COMPILER_DESCRIPTOR = defineAdapterCompilerDescriptor({
   id: "electrobun.adapter",
   methodKinds: [ELECTROBUN_ROUTE_KIND, ELECTROBUN_MESSAGE_KIND],
   methodDecorators: [Route.definition, Message.definition],
   parameterInjectors: [Window.definition, Webview.definition, Context.definition],
+  metadataHandlers: [ELECTROBUN_CALLER_CONTRACT_HANDLER],
 });

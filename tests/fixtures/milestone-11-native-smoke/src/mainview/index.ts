@@ -1,33 +1,30 @@
-import { Electroview, type RPCSchema } from "electrobun/view";
+import { createElectrobunClient, type ElectrobunClientSchema } from "@bunwire/electrobun";
+import { Electroview } from "electrobun/view";
 
-type SmokeSchema = {
-  bun: RPCSchema<{
-    requests: {
-      "smoke/request": {
-        params: { args: readonly unknown[] };
-        response: string;
-      };
-    };
-    messages: {
-      "smoke/message": { args: readonly unknown[] };
-    };
-  }>;
-  webview: RPCSchema<{ requests: {}; messages: {} }>;
-};
+interface SmokeRequests {
+  "smoke/request": (values: string[]) => string;
+}
+
+interface SmokeMessages {
+  "smoke/message": (status: string) => void;
+}
+
+type SmokeSchema = ElectrobunClientSchema<SmokeRequests, SmokeMessages>;
 
 const rpc = Electroview.defineRPC<SmokeSchema>({
   maxRequestTime: 2_000,
   handlers: { requests: {}, messages: {} },
 });
 new Electroview({ rpc });
+const client = createElectrobunClient(rpc);
 
 async function run(): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
-      const result = await rpc.request["smoke/request"]({ args: [["native", "sdk"]] });
+      const result = await client.request("smoke/request", ["native", "sdk"]);
       if (result !== "native|sdk") throw new Error(`Unexpected Bunwire response: ${result}`);
-      rpc.send["smoke/message"]({ args: ["verified"] });
+      client.message("smoke/message", "verified");
       return;
     } catch (error) {
       lastError = error;

@@ -37,6 +37,8 @@ Plan array order has no positional meaning. `methodIndex` reconstructs the real 
 
 `InvocationEngine` consumes the prebuilt plan without inspecting source or reclassifying parameters. It requires both the owning class kind and method kind to use their registered canonical descriptors, validates caller counts, resolves the declared sources, wraps the call in plan middleware, and returns a Promise-normalized result. `Application.invokeManagedMethod()` executes that engine through `runInvocation()`, preserving invocation scope and Provider boot ordering. Unknown method kinds, resolver IDs, and malformed plans fail with dedicated actionable errors.
 
+`@Use(exportedMiddleware)` attaches callable managed-method middleware for compiler-generated plans. The compiler authorizes the exact Core `Use` export, requires every referenced middleware value to be callable and publicly importable, and emits those references into the same plan consumed by `InvocationEngine`. Same-ID counterfeit decorators fail closed.
+
 Every engine owns a `ManagedClassKindRegistry` seeded with Service, Controller, and Provider and a `ManagedMethodKindRegistry` for explicitly contributed method kinds. Applications register extensions through `withManagedClassKind()` and `withManagedMethodKind()` while still configuring; adapters register their declared contributions automatically. The same descriptor may be registered repeatedly, but a missing registration or different descriptor using the same ID is rejected before invocation. Runtime plan validation also checks all parameter discriminants and source-specific fields, boolean optionality, runtime tokens, resolver IDs, and middleware callability before execution.
 
 ## Adapters and extension descriptors

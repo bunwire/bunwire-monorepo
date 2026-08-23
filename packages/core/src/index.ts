@@ -1,4 +1,11 @@
 export {
+  USE_DECORATOR_ID,
+  Use,
+  getManagedMethodMiddlewareMetadata,
+  type UseDecorator,
+  type UseDecoratorDefinition,
+} from "./managed-methods/middleware-decorator.js";
+export {
   assertCompilerSymbolReference,
   type CompilerSymbolReference,
 } from "./compiler/compiler-symbol.js";

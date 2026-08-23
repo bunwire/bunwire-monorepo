@@ -1114,9 +1114,10 @@ export default defineApp()
 Host entrypoint:
 
 ```ts
+import registry from "virtual:bunwire/registry";
 import app from "./bootstrap";
 
-await app.start();
+await app.withRuntimeRegistry(registry).start();
 ```
 
 Generated caller contract:
@@ -1127,6 +1128,26 @@ Generated caller contract:
   includePosts?: boolean,
 ) => Promise<User>
 ```
+
+Frontend integration:
+
+```ts
+import { Electroview } from "electrobun/view";
+import {
+  createBunwireClient,
+  type BunwireClientSchema,
+} from "virtual:bunwire/client";
+
+const rpc = Electroview.defineRPC<BunwireClientSchema>({
+  handlers: { requests: {}, messages: {} },
+});
+const { request, message } = createBunwireClient(rpc);
+
+await request("users/get", id, includePosts);
+message("users/deleted", id);
+```
+
+The generated registry must be attached before startup because Core does not import build-tool virtual modules. The generated client factory owns no platform encoding; it delegates that private boundary to the selected adapter's compiler-contributed client factory.
 
 ## Implementation steps
 

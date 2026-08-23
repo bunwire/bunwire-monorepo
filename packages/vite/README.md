@@ -1,6 +1,6 @@
 # `@bunwire/vite`
 
-Milestones 7–10 establish Bunwire's bounded discovery, TypeScript analysis, deterministic registry generation, and Vite virtual-module layer.
+Milestones 7–12 establish Bunwire's bounded discovery, TypeScript analysis, deterministic registry/client generation, and Vite virtual-module layer.
 
 ## Configuration
 
@@ -41,6 +41,8 @@ Constructor parameters must use explicit `@Inject(TOKEN)` or resolve to a manage
 
 Managed methods classify registered parameter injectors first, explicit `@Inject()` second, injectable managed types third, and every remaining parameter as caller-visible transport input. Each method result preserves true `methodIndex` values independently from compact `argumentIndex` values, including optional and final-rest semantics plus minimum/maximum caller bounds. Managed methods must be concrete instance methods; static, abstract, and declaration-only methods are rejected before registry generation.
 
+The canonical `@Use()` symbol is analyzed separately from the managed-method decorator. Each middleware argument must be an exported callable runtime reference and is emitted into the generated method plan without changing caller classification.
+
 Compiler runtime references retain the source expression, resolved exported symbol, use location, and declaration location. Managed classes and runtime tokens must be exported so generated modules can import them. Runtime packages do not scan source or infer signatures.
 
 ## Generated registry module
@@ -48,3 +50,9 @@ Compiler runtime references retain the source expression, resolved exported symb
 `generateRuntimeRegistryModule()` converts the completed analysis into deterministic TypeScript containing class metadata, constructor dependencies, Providers, managed-method plans, resolver IDs, adapter metadata, and middleware arrays. Imports and records are sorted independently of filesystem enumeration order, and `BUNWIRE_REGISTRY_HASH` identifies the byte-stable generated body.
 
 `bunwire()` exposes that same output through `virtual:bunwire/registry`. The Vite hooks resolve only the canonical registry ID, cache one analysis per build, and invalidate it at the next build start. The generated module exports `applicationRegistry` and a default registry value suitable for `Application.withRuntimeRegistry()`.
+
+## Generated caller module
+
+`generateCallerContractModule()` reads only caller-classified parameters from the same analysis used for registry plans. It preserves `argumentIndex` order, required/defaulted/optional/rest positions, array-valued argument types, and request return types by referencing the original exported Controller method type at its analyzed `methodIndex`. Adapter compiler metadata supplies endpoint naming, request/message mode, the client factory, and the native schema adapter; Vite contains no Electrobun IDs or transport encoding.
+
+`bunwire()` exposes this module as `virtual:bunwire/client`. It exports `createBunwireClient(transport)`, `BunwireClient`, request/message contract maps, and `BunwireClientSchema`. The returned client accepts logical positional arguments. Adapter-native payload encoding is absent from the generated source and remains owned by the adapter factory.

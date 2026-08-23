@@ -231,6 +231,29 @@ All tests below are in `tests/milestone-10/generated-registry.test.ts` with the 
 | Virtual module loads correctly | Canonical resolve/load/cache/rebuild hook test plus unknown-module rejection |
 | Generated identities fail closed | Duplicate generation and malformed runtime registry adversarial tests |
 
+## Milestone 12
+
+Caller-contract and full-application coverage lives in `tests/milestone-12`, backed by `tests/fixtures/milestone-12-electrobun` and the real native Electrobun smoke fixture.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Correct caller arguments compile | Generated module semantic typecheck with required and optional calls |
+| Managed Service, token value, and native Window cannot be supplied | `@ts-expect-error` caller-boundary assertions derived from the compact plan |
+| Missing and excessive arguments fail typechecking | Fixed generated request tuple assertions |
+| Optional/defaulted/rest/array arguments are preserved | Type-level and runtime `get`, `defaulted`, and `deleteUsers` calls |
+| Request result is inferred and message result is `void` | `Promise<UserResult>` and message no-response assertions |
+| Generated schema fits Electrobun 1.18.1 | Bundler-resolution semantic check using `Electroview.defineRPC<BunwireClientSchema>()` |
+| Private native encoding stays private | Generated-source/public-export scan plus positional native smoke calls |
+| Importing bootstrap does not start | Application state, callback, and native-instance assertions before `start()` |
+| Normal native context and callbacks work | Full adapter construction and exact callback-object identity assertions |
+| Generated DI reconstructs the method | Constructor Service, method Service, token, Window, Webview, and Context result assertions |
+| Runtime caller bounds remain authoritative | Untyped too-few/too-many transport attempts through the generated client bridge |
+| Provider lifecycle works | Register-once and unique boot-per-invocation assertions |
+| Middleware is compiler-generated | Runtime before/after events, canonical alias, counterfeit-ID, and non-callable tests |
+| Manual integration works | Existing `BrowserWindow` context through `withContext(existingContext).start()` |
+| No manual construction or handler table | Application-source architecture scan |
+| Actual native host accepts positional calls | Real pinned Electrobun process smoke request/message markers |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

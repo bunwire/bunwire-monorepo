@@ -23,7 +23,15 @@ export default defineApp().withAdapter(new ElectrobunAdapter({
 }));
 ```
 
-The host entrypoint imports that Application and calls `await app.start()`.
+The host entrypoint imports that Application and the generated registry, then starts once:
+
+```ts
+import registry from "virtual:bunwire/registry";
+import app from "./bootstrap";
+
+await app.withRuntimeRegistry(registry).start();
+```
+
 When neither `url` nor `html` is configured, the main view uses the conventional
 `views://mainview/index.html` Electrobun scaffold URL.
 
@@ -35,6 +43,7 @@ import {
   ManualElectrobunAdapter,
   defineElectrobunContext,
 } from "@bunwire/electrobun";
+import registry from "virtual:bunwire/registry";
 
 const context = defineElectrobunContext(existingWindow);
 
@@ -44,10 +53,29 @@ await defineApp()
     // Re-supply the existing handler to preserve non-Bunwire requests.
     fallbackRequestHandler: existingRequestHandler,
   }))
+  .withRuntimeRegistry(registry)
   .withContext(context)
   .start();
 ```
 
-`@Route()` handlers are Electrobun requests and return results. `@Message()` handlers are fire-and-forget messages. Application callers use Bunwire's positional caller API; Milestone 12 supplies the generated client for that API. The adapter privately encodes those logical arguments into Electrobun's single native payload and decodes them before Controller invocation. That wire encoding is an adapter implementation detail, not a caller-facing Bunwire contract.
+`@Route()` handlers are Electrobun requests and return results. `@Message()` handlers are fire-and-forget messages. Application callers use the generated positional API:
+
+```ts
+import { Electroview } from "electrobun/view";
+import {
+  createBunwireClient,
+  type BunwireClientSchema,
+} from "virtual:bunwire/client";
+
+const rpc = Electroview.defineRPC<BunwireClientSchema>({
+  handlers: { requests: {}, messages: {} },
+});
+const { request, message } = createBunwireClient(rpc);
+
+const user = await request("users/get", id, includePosts);
+message("users/deleted", id);
+```
+
+The adapter privately encodes those logical arguments into Electrobun's single native payload and decodes them before Controller invocation. `ElectrobunClientSchema` integrates the generated logical contracts with Electrobun without requiring callers to declare or construct that wire encoding.
 
 `@Window()`, `@Webview()`, and `@Context()` are framework-supplied parameters and are excluded from caller arguments. Bunwire endpoints take precedence over the manual fallback; unknown requests delegate their original method and payload unchanged. Native message listeners and outgoing `rpc.send()` and `rpc.request()` remain available on the unchanged RPC object.

@@ -1,6 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist", "tsBuildInfoFile": "dist/example.tsbuildinfo" },
-  "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/electrobun" }]
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/example.tsbuildinfo",
+    "experimentalDecorators": true
+  },
+  "include": ["src/**/*.ts", ".bunwire/**/*.ts"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/electrobun" },
+    { "path": "../../packages/vite" }
+  ]
 }

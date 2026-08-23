@@ -43,6 +43,12 @@ Managed methods classify registered parameter injectors first, explicit `@Inject
 
 The canonical `@Use()` symbol is analyzed separately from the managed-method decorator. Each middleware argument must be an exported callable runtime reference and is emitted into the generated method plan without changing caller classification.
 
+Canonical `@Middleware()` classes are discovered as the built-in `core.middleware` managed kind. The compiler accepts the canonical export through normal aliases/re-exports and rejects a different symbol claiming its ID. Middleware must be named, directly exported, concrete, and provide or inherit a concrete callable instance `handle(context, next)` method.
+
+Middleware may declare `alias`, `include`, `exclude`, `only`, and `except` as protected non-static instance fields. The compiler reads their syntax without constructing the class: `alias` requires a direct non-empty string literal, while filters require direct arrays of unique non-empty string literals. Dynamic expressions, calls, templates, spreads, computed names, getters/setters, constructor assignments, missing initializers, invalid visibility/types, and simultaneous `only`/`except` fail with source-located diagnostics. Duplicate aliases are rejected across the complete configured source universe.
+
+Middleware constructor injection and managed dependency-cycle validation reuse the same rules as Services and Controllers. Generated registry modules emit these classes through `defineMiddlewareDefinition()`, which installs immutable metadata, indexed dependencies, and mandatory transient scope through Core's canonical runtime validation boundary. Compiler analysis and generation never import middleware modules or execute field initializers, constructors, or `handle()`.
+
 Compiler runtime references retain the source expression, resolved exported symbol, use location, and declaration location. Managed classes and runtime tokens must be exported so generated modules can import them. Runtime packages do not scan source or infer signatures.
 
 ## Generated registry module

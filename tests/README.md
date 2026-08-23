@@ -273,6 +273,25 @@ All tests below are in `tests/milestone-12a/core-managed-middleware.test.ts`.
 | Provider boot, middleware, and Controller share one scope | Around-invocation Controller integration with invocation-local bindings |
 | Core remains platform-independent | Middleware source/import boundary scan |
 
+## Middleware Redesign Milestone 12B
+
+Compiler coverage lives in `tests/milestone-12b`, backed by `tests/fixtures/milestone-12b-middleware`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Canonical aliases/re-exports are recognized | Exact compiler-symbol and analyzed-kind assertions |
+| Same-ID counterfeit decorators fail | Adversarial decorator-symbol fixture |
+| Literal intrinsic metadata is compiled | Complete/partial alias and filter analysis assertions |
+| Dynamic or malformed metadata fails | Identifier, call, spread, computed, visibility, getter, constructor, template, missing, empty, type, and duplicate fixtures |
+| `only` and `except` are exclusive | Conflicting transport-filter fixture |
+| Aliases are globally unique and deterministic | Reversed source-input duplicate-alias assertions |
+| Middleware class shape is enforced | Anonymous, unexported, abstract, missing/static/declaration-only handle fixtures |
+| Inherited concrete `handle()` is valid | Re-exported decorator and concrete-base fixture |
+| Constructor DI matches managed classes | Managed Service, explicit token, plain/interface, inherited-constructor, and cycle fixtures |
+| Analysis executes no middleware code | Throwing static block/constructor/handle analysis-generation fixture |
+| Definitions are deterministic and type-correct | Reversed analysis, stable hash/source, and semantic TypeScript checks |
+| Generated definitions satisfy Core 12A | Runtime registry loading, immutable metadata, and transient-resolution assertions |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

@@ -108,6 +108,7 @@ describe.sequential("Milestone 7 compiler discovery", () => {
     expect(result.adapter.compilerDescriptor.id).toBe("fixture.host");
     expect(result.extensions.classKinds.map(({ id }) => id)).toEqual([
       "core.controller",
+      "core.middleware",
       "core.provider",
       "core.service",
       "fixture.consumer",

@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config ../../vitest.config.ts tests/milestone-07 tests/milestone-08 tests/milestone-09 tests/milestone-10"
+    "test": "vitest run --config ../../vitest.config.ts tests/milestone-07 tests/milestone-08 tests/milestone-09 tests/milestone-10 tests/milestone-12b"
   },
   "dependencies": {
     "@bunwire/core": "workspace:*",

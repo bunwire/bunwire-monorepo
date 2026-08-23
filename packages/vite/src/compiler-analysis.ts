@@ -2,10 +2,12 @@ import path from "node:path";
 import {
   Inject,
   INJECT_DECORATOR_ID,
+  MIDDLEWARE_KIND,
   Use,
   type CompilerSymbolReference,
   type ManagedClassKind,
   type ManagedMethodKind,
+  type MiddlewareClassMetadata,
   type ParameterResolverId,
 } from "@bunwire/core";
 import ts from "typescript";
@@ -145,6 +147,22 @@ interface ConstructorAnalysisResult {
   readonly plan: AnalyzedConstructorPlan;
   readonly edges: readonly ConstructorDependencyEdge[];
 }
+
+interface MiddlewareClassAnalysis {
+  readonly data: MiddlewareClassMetadata;
+  readonly aliasNode: ts.Node | undefined;
+}
+
+const MIDDLEWARE_METADATA_KEYS = Object.freeze([
+  "alias",
+  "include",
+  "exclude",
+  "only",
+  "except",
+] as const);
+
+type MiddlewareMetadataKey = typeof MIDDLEWARE_METADATA_KEYS[number];
+const MIDDLEWARE_METADATA_KEY_SET = new Set<string>(MIDDLEWARE_METADATA_KEYS);
 
 function stablePath(filePath: string): string {
   return path.resolve(filePath).replaceAll("\\", "/").toLowerCase();
@@ -755,6 +773,243 @@ function classDeclarations(context: BunwireProgramContext): readonly ts.ClassDec
   });
 }
 
+function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  return ts.canHaveModifiers(node)
+    && (ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false);
+}
+
+function middlewareMemberKey(member: ts.ClassElement): MiddlewareMetadataKey | undefined {
+  const name = member.name;
+  if (!name) {
+    return undefined;
+  }
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+    return MIDDLEWARE_METADATA_KEY_SET.has(name.text)
+      ? name.text as MiddlewareMetadataKey
+      : undefined;
+  }
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)
+    && MIDDLEWARE_METADATA_KEY_SET.has(name.expression.text)) {
+    return name.expression.text as MiddlewareMetadataKey;
+  }
+  return undefined;
+}
+
+function validateMiddlewareExport(
+  declaration: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+): void {
+  const name = declaration.name as ts.Identifier;
+  const symbol = checker.getSymbolAtLocation(name) as ts.Symbol;
+  const canonical = canonicalSymbol(checker, symbol);
+  const moduleSymbol = checker.getSymbolAtLocation(declaration.getSourceFile());
+  const exported = moduleSymbol
+    ? checker.getExportsOfModule(moduleSymbol).some((candidate) => (
+      canonicalSymbol(checker, candidate) === canonical
+    ))
+    : false;
+  if (!exported) {
+    fail(
+      "MIDDLEWARE_CLASS_INVALID",
+      `Middleware class "${name.text}" must be exported directly from "${declaration.getSourceFile().fileName}" so the generated registry can import it.`,
+      name,
+    );
+  }
+}
+
+function validateMiddlewareHandle(
+  declaration: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+): void {
+  const name = declaration.name as ts.Identifier;
+  const symbol = canonicalSymbol(checker, checker.getSymbolAtLocation(name) as ts.Symbol);
+  const instanceType = checker.getDeclaredTypeOfSymbol(symbol);
+  const handle = checker.getPropertyOfType(instanceType, "handle");
+  const concrete = handle?.declarations?.find((candidate): candidate is ts.MethodDeclaration => (
+    ts.isMethodDeclaration(candidate)
+    && !hasModifier(candidate, ts.SyntaxKind.StaticKeyword)
+    && !hasModifier(candidate, ts.SyntaxKind.AbstractKeyword)
+    && Boolean(candidate.body)
+  ));
+  const callable = handle && checker.getSignaturesOfType(
+    checker.getTypeOfSymbolAtLocation(handle, declaration),
+    ts.SignatureKind.Call,
+  ).length > 0;
+  if (!concrete || !callable) {
+    fail(
+      "MIDDLEWARE_CLASS_INVALID",
+      `Middleware class "${name.text}" must provide or inherit a concrete callable instance handle(context, next) method.`,
+      declaration,
+    );
+  }
+}
+
+function validateNoMiddlewareConstructorAssignments(
+  declaration: ts.ClassDeclaration,
+): void {
+  const constructors = declaration.members.filter(ts.isConstructorDeclaration);
+  for (const constructor of constructors) {
+    if (!constructor.body) continue;
+    const visit = (node: ts.Node): void => {
+      if (ts.isBinaryExpression(node)
+        && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+        && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+        const left = unwrapExpression(node.left);
+        let key: string | undefined;
+        if (ts.isPropertyAccessExpression(left)
+          && left.expression.kind === ts.SyntaxKind.ThisKeyword) {
+          key = left.name.text;
+        } else if (ts.isElementAccessExpression(left)
+          && left.expression.kind === ts.SyntaxKind.ThisKeyword
+          && left.argumentExpression
+          && ts.isStringLiteralLike(left.argumentExpression)) {
+          key = left.argumentExpression.text;
+        }
+        if (key && MIDDLEWARE_METADATA_KEY_SET.has(key)) {
+          fail(
+            "MIDDLEWARE_METADATA_INVALID",
+            `Middleware metadata field "${key}" must use a protected instance property with a deterministic literal initializer; constructor assignments are not supported.`,
+            node,
+          );
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(constructor.body);
+  }
+}
+
+function middlewareStringLiteral(
+  initializer: ts.Expression,
+  key: MiddlewareMetadataKey,
+): string {
+  if (!ts.isStringLiteral(initializer) || initializer.text.trim().length === 0) {
+    fail(
+      "MIDDLEWARE_METADATA_INVALID",
+      `Middleware metadata field "${key}" must be initialized with a non-empty direct string literal.`,
+      initializer,
+    );
+  }
+  return initializer.text;
+}
+
+function middlewareStringArray(
+  initializer: ts.Expression,
+  key: Exclude<MiddlewareMetadataKey, "alias">,
+): readonly string[] {
+  if (!ts.isArrayLiteralExpression(initializer)) {
+    fail(
+      "MIDDLEWARE_METADATA_INVALID",
+      `Middleware metadata field "${key}" must be initialized with a direct array literal of non-empty string literals.`,
+      initializer,
+    );
+  }
+  const values: string[] = [];
+  const seen = new Set<string>();
+  for (const element of initializer.elements) {
+    if (ts.isSpreadElement(element)) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" does not support spread elements.`,
+        element,
+      );
+    }
+    if (!ts.isStringLiteral(element) || element.text.trim().length === 0) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" must contain only non-empty direct string literals.`,
+        element,
+      );
+    }
+    if (seen.has(element.text)) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" contains duplicate value ${JSON.stringify(element.text)}.`,
+        element,
+      );
+    }
+    seen.add(element.text);
+    values.push(element.text);
+  }
+  return Object.freeze(values);
+}
+
+function analyzeMiddlewareClass(
+  declaration: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+): MiddlewareClassAnalysis {
+  const name = declaration.name as ts.Identifier;
+  if (hasModifier(declaration, ts.SyntaxKind.AbstractKeyword)) {
+    fail(
+      "MIDDLEWARE_CLASS_INVALID",
+      `Middleware class "${name.text}" must be concrete and cannot be abstract.`,
+      declaration,
+    );
+  }
+  validateMiddlewareExport(declaration, checker);
+  validateMiddlewareHandle(declaration, checker);
+  validateNoMiddlewareConstructorAssignments(declaration);
+
+  const data: {
+    scope: "transient";
+    alias?: string;
+    include?: readonly string[];
+    exclude?: readonly string[];
+    only?: readonly string[];
+    except?: readonly string[];
+  } = { scope: "transient" };
+  let aliasNode: ts.Node | undefined;
+  for (const member of declaration.members) {
+    const key = middlewareMemberKey(member);
+    if (!key) continue;
+    if (ts.isComputedPropertyName(member.name as ts.PropertyName)) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" must not use a computed property name.`,
+        member.name as ts.ComputedPropertyName,
+      );
+    }
+    if (!ts.isPropertyDeclaration(member)) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" must be a protected instance property with a deterministic literal initializer.`,
+        member,
+      );
+    }
+    if (!hasModifier(member, ts.SyntaxKind.ProtectedKeyword)
+      || hasModifier(member, ts.SyntaxKind.PublicKeyword)
+      || hasModifier(member, ts.SyntaxKind.PrivateKeyword)
+      || hasModifier(member, ts.SyntaxKind.StaticKeyword)) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" must be declared as a protected non-static instance property.`,
+        member,
+      );
+    }
+    if (!member.initializer) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" requires a deterministic literal initializer.`,
+        member,
+      );
+    }
+    if (key === "alias") {
+      data.alias = middlewareStringLiteral(member.initializer, key);
+      aliasNode = member;
+    } else {
+      data[key] = middlewareStringArray(member.initializer, key);
+    }
+  }
+  if (data.only !== undefined && data.except !== undefined) {
+    fail(
+      "MIDDLEWARE_METADATA_INVALID",
+      `Middleware class "${name.text}" cannot declare both "only" and "except" metadata.`,
+      declaration,
+    );
+  }
+  return Object.freeze({ data: Object.freeze(data), aliasNode });
+}
+
 function analyzeConstructor(
   declaration: ts.ClassDeclaration,
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>,
@@ -1134,6 +1389,34 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     managedBySymbol.set(canonical, { kind: match.definition.kind, declaration });
   }
 
+  const middlewareByDeclaration = new Map<ts.ClassDeclaration, MiddlewareClassAnalysis>();
+  const middlewareAliases = new Map<
+    string,
+    { readonly declaration: ts.ClassDeclaration; readonly node: ts.Node }
+  >();
+  for (const [declaration, match] of discovered) {
+    if (match.definition.kind !== MIDDLEWARE_KIND) {
+      continue;
+    }
+    const analysis = analyzeMiddlewareClass(declaration, checker);
+    middlewareByDeclaration.set(declaration, analysis);
+    if (analysis.data.alias === undefined || !analysis.aliasNode) {
+      continue;
+    }
+    const existing = middlewareAliases.get(analysis.data.alias);
+    if (existing) {
+      fail(
+        "MIDDLEWARE_METADATA_INVALID",
+        `Middleware alias ${JSON.stringify(analysis.data.alias)} is declared by both "${existing.declaration.name?.text}" and "${declaration.name?.text}". Middleware aliases must be unique across the configured source universe.`,
+        analysis.aliasNode,
+      );
+    }
+    middlewareAliases.set(analysis.data.alias, {
+      declaration,
+      node: analysis.aliasNode,
+    });
+  }
+
   const constructorsBySymbol = new Map<ts.Symbol, ConstructorAnalysisResult>();
   const constructorsByDeclaration = new Map<ts.ClassDeclaration, ConstructorAnalysisResult>();
   for (const [declaration, match] of discovered) {
@@ -1175,7 +1458,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       name: declaration.name.text,
       kind: match.definition.kind,
       decoratorId: match.id,
-      data: decoratorData(match),
+      data: middlewareByDeclaration.get(declaration)?.data ?? decoratorData(match),
       target: runtimeReference(checker, declaration.name, symbol),
       location: locationOf(declaration),
       constructor: constructorsByDeclaration.get(declaration)?.plan,

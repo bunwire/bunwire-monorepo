@@ -38,27 +38,28 @@ export interface BunwireElectrobunSchema {
 
 export interface ElectrobunRPC {
   readonly setTransport: (transport: object) => void;
-  readonly setRequestHandler: (
-    handler: (method: string, payload: unknown) => unknown | Promise<unknown>,
-  ) => void;
+  readonly setRequestHandler: (handler: ElectrobunRequestHandler) => void;
   readonly request: ((method: string, payload?: unknown) => Promise<unknown>)
     & Record<string, (payload?: unknown) => Promise<unknown>>;
   readonly requestProxy: Record<string, (payload?: unknown) => Promise<unknown>>;
   readonly send: ((method: string, payload?: unknown) => void)
     & Record<string, (payload?: unknown) => void>;
   readonly sendProxy: Record<string, (payload?: unknown) => void>;
-  readonly addMessageListener: (
-    message: string,
-    listener: (method: string, payload: unknown) => void,
-  ) => void;
-  readonly removeMessageListener: (message: string, listener: (...args: unknown[]) => void) => void;
+  readonly addMessageListener: {
+    (message: "*", listener: (method: string, payload: unknown) => void): void;
+    (message: string, listener: (payload: unknown) => void): void;
+  };
+  readonly removeMessageListener: {
+    (message: "*", listener: (method: string, payload: unknown) => void): void;
+    (message: string, listener: (payload: unknown) => void): void;
+  };
   readonly proxy: object;
 }
 
 export interface ElectrobunWebview {
   readonly id: number;
   readonly windowId: number;
-  readonly rpc: ElectrobunRPC | undefined;
+  readonly rpc?: ElectrobunRPC;
   url: string | null;
   html: string | null;
   preload: string | null;
@@ -77,7 +78,19 @@ export interface ElectrobunWebview {
   readonly toggleDevTools: () => unknown;
   readonly setPageZoom: (zoomLevel: number) => unknown;
   readonly getPageZoom: () => number;
-  readonly on: (name: string, handler: (event: unknown) => void) => unknown;
+  readonly on: (
+    name:
+      | "will-navigate"
+      | "did-navigate"
+      | "did-navigate-in-page"
+      | "did-commit-navigation"
+      | "dom-ready"
+      | "download-started"
+      | "download-progress"
+      | "download-completed"
+      | "download-failed",
+    handler: (event: unknown) => void,
+  ) => unknown;
   readonly remove: () => unknown;
 }
 
@@ -146,7 +159,7 @@ interface NativeModule {
     defineRPC<Schema extends BunwireElectrobunSchema>(config: {
       readonly maxRequestTime?: number;
       readonly handlers: {
-        readonly requests: object | ((method: string, payload: unknown) => unknown);
+        readonly requests: object | ElectrobunRequestHandler;
         readonly messages: object;
       };
     }): ElectrobunRPC;
@@ -208,10 +221,24 @@ export interface ElectrobunAdapterOptions {
   readonly rpc?: ElectrobunRpcOptions;
 }
 
+export interface ElectrobunInvocationPayload {
+  readonly args: readonly unknown[];
+}
+
+export type ElectrobunRequestHandler = (
+  method: string,
+  payload: unknown,
+) => unknown | Promise<unknown>;
+
+export interface ManualElectrobunAdapterOptions {
+  readonly fallbackRequestHandler?: ElectrobunRequestHandler;
+}
+
 interface RuntimeState {
   readonly requestPlans: Map<string, ManagedMethodPlan>;
   readonly messagePlans: Map<string, ManagedMethodPlan>;
   readonly onMessageError: ElectrobunRpcOptions["onMessageError"];
+  readonly fallbackRequestHandler: ElectrobunRequestHandler | undefined;
   ready: boolean;
   showOnStart: boolean;
   activateOnStart: boolean;
@@ -258,6 +285,7 @@ function createState(
     readonly onMessageError?: ElectrobunRpcOptions["onMessageError"];
     readonly showOnStart: boolean;
     readonly activateOnStart: boolean;
+    readonly fallbackRequestHandler?: ElectrobunRequestHandler;
   },
 ): RuntimeState {
   if (runtimeStates.has(context) || attachedRpcs.has(context.rpc)) {
@@ -267,6 +295,7 @@ function createState(
     requestPlans: new Map(),
     messagePlans: new Map(),
     onMessageError: options.onMessageError,
+    fallbackRequestHandler: options.fallbackRequestHandler,
     ready: false,
     showOnStart: options.showOnStart,
     activateOnStart: options.activateOnStart,
@@ -283,8 +312,12 @@ function stateFor(context: ElectrobunContext): RuntimeState {
 }
 
 function callerArguments(payload: unknown): readonly unknown[] {
-  if (payload === undefined) return [];
-  return Array.isArray(payload) ? payload : [payload];
+  if (!isObject(payload) || !Array.isArray(payload.args)) {
+    throw new ElectrobunAdapterError(
+      'Electrobun managed invocation payloads must use the tagged shape `{ args: readonly unknown[] }`.',
+    );
+  }
+  return [...payload.args];
 }
 
 function controllerPrefix(registry: RuntimeRegistry, plan: ManagedMethodPlan): string | undefined {
@@ -388,17 +421,19 @@ const registryConsumer = defineRuntimeRegistryConsumer({
       (plan.kind === ELECTROBUN_ROUTE_KIND ? state.requestPlans : state.messagePlans).set(endpoint, plan);
     }
 
-    context.applicationContext.rpc.setRequestHandler((method, payload) => {
+    context.applicationContext.rpc.setRequestHandler((method: string, payload: unknown) => {
       const endpoint = String(method);
-      if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
       const plan = state.requestPlans.get(endpoint);
-      if (!plan) {
-        throw new ElectrobunAdapterError(`No Bunwire Electrobun request endpoint is registered for "${endpoint}".`);
+      if (plan) {
+        if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
+        return context.invoke(plan, callerArguments(payload));
       }
-      return context.invoke(plan, callerArguments(payload));
+      if (state.fallbackRequestHandler) return state.fallbackRequestHandler(endpoint, payload);
+      if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
+      throw new ElectrobunAdapterError(`No Bunwire Electrobun request endpoint is registered for "${endpoint}".`);
     });
 
-    context.applicationContext.rpc.addMessageListener("*", (method, payload) => {
+    context.applicationContext.rpc.addMessageListener("*", (method: string, payload: unknown) => {
       const endpoint = String(method);
       if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
       const plan = state.messagePlans.get(endpoint);
@@ -464,7 +499,7 @@ export class ElectrobunAdapter extends ElectrobunAdapterBase {
         ? {}
         : { maxRequestTime: this.#options.rpc.maxRequestTime }),
       handlers: {
-        requests: (method) => {
+        requests: (method: string) => {
           throw new ElectrobunTrafficNotReadyError(String(method));
         },
         messages: {
@@ -515,9 +550,11 @@ export class ElectrobunAdapter extends ElectrobunAdapterBase {
 
 export class ManualElectrobunAdapter extends ElectrobunAdapterBase {
   static readonly compiler = ELECTROBUN_COMPILER_DESCRIPTOR;
+  readonly #options: ManualElectrobunAdapterOptions;
 
-  constructor() {
+  constructor(options: ManualElectrobunAdapterOptions = {}) {
     super();
+    this.#options = options;
   }
 
   protected override prepareHost(context: AdapterPreparationContext): ElectrobunContext {
@@ -527,11 +564,17 @@ export class ManualElectrobunAdapter extends ElectrobunAdapterBase {
       );
     }
     assertElectrobunContext(context.manualContext);
-    const state = createState(context.manualContext, { showOnStart: false, activateOnStart: false });
-    context.manualContext.rpc.setRequestHandler((method) => {
+    const state = createState(context.manualContext, {
+      showOnStart: false,
+      activateOnStart: false,
+      ...(this.#options.fallbackRequestHandler === undefined
+        ? {}
+        : { fallbackRequestHandler: this.#options.fallbackRequestHandler }),
+    });
+    context.manualContext.rpc.setRequestHandler((method: string) => {
       throw new ElectrobunTrafficNotReadyError(String(method));
     });
-    context.manualContext.rpc.addMessageListener("*", (method) => {
+    context.manualContext.rpc.addMessageListener("*", (method: string) => {
       if (!state.ready) throw new ElectrobunTrafficNotReadyError(String(method));
     });
     return context.manualContext;

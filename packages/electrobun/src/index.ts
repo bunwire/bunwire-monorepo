@@ -27,11 +27,14 @@ export {
   type BunwireElectrobunSchema,
   type ElectrobunAdapterOptions,
   type ElectrobunContext,
+  type ElectrobunInvocationPayload,
   type ElectrobunMainWindowOptions,
   type ElectrobunMessageErrorContext,
   type ElectrobunRPC,
+  type ElectrobunRequestHandler,
   type ElectrobunRpcOptions,
   type ElectrobunWebview,
   type ElectrobunWindow,
+  type ManualElectrobunAdapterOptions,
 } from "./runtime.js";
 export { ElectrobunPathError, normalizeElectrobunPath } from "./path.js";

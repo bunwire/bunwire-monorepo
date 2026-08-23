@@ -87,6 +87,18 @@ class RuntimeController {
   duplicateGet(): string { return "duplicate"; }
 
   ordinary(): string { return "private"; }
+
+  @Route("zero")
+  zero(): string { return "zero"; }
+
+  @Route("many")
+  many(required: string, optional?: string): string { return `${required}:${optional ?? "omitted"}`; }
+
+  @Route("rest")
+  rest(prefix: string, ...values: string[]): string { return `${prefix}:${values.join(",")}`; }
+
+  @Route("array")
+  array(values: string[]): string { return values.join("|"); }
 }
 
 const routePlan = defineManagedMethodPlan({
@@ -117,7 +129,50 @@ const messagePlan = defineManagedMethodPlan({
   ],
 });
 
-function runtimeRegistry(methods = [routePlan, messagePlan]) {
+const argumentPlans = [
+  defineManagedMethodPlan({
+    kind: ELECTROBUN_ROUTE_KIND,
+    ownerKind: CONTROLLER_KIND,
+    target: RuntimeController,
+    method: "zero",
+    data: { path: "zero" },
+    parameters: [],
+  }),
+  defineManagedMethodPlan({
+    kind: ELECTROBUN_ROUTE_KIND,
+    ownerKind: CONTROLLER_KIND,
+    target: RuntimeController,
+    method: "many",
+    data: { path: "many" },
+    parameters: [
+      { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
+      { source: "transport", methodIndex: 1, argumentIndex: 1, optional: true },
+    ],
+  }),
+  defineManagedMethodPlan({
+    kind: ELECTROBUN_ROUTE_KIND,
+    ownerKind: CONTROLLER_KIND,
+    target: RuntimeController,
+    method: "rest",
+    data: { path: "rest" },
+    parameters: [
+      { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
+      { source: "transport", methodIndex: 1, argumentIndex: 1, optional: false, rest: true },
+    ],
+  }),
+  defineManagedMethodPlan({
+    kind: ELECTROBUN_ROUTE_KIND,
+    ownerKind: CONTROLLER_KIND,
+    target: RuntimeController,
+    method: "array",
+    data: { path: "array" },
+    parameters: [
+      { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
+    ],
+  }),
+];
+
+function runtimeRegistry(methods = [routePlan, messagePlan, ...argumentPlans]) {
   return defineRuntimeRegistry({
     classes: [
       { kind: SERVICE_KIND, target: RuntimeUserService, data: { scope: "singleton" } },
@@ -131,8 +186,12 @@ function fakeRpc(rpc: ElectrobunRPC): FakeElectrobunRPC {
   return rpc as unknown as FakeElectrobunRPC;
 }
 
-function createManualNativeContext(): ElectrobunContext {
-  const rpc = BrowserView.defineRPC({ handlers: { requests: {}, messages: {} } });
+function createManualNativeContext(
+  requestHandler: ((method: string, payload: unknown) => unknown | Promise<unknown>) | undefined = undefined,
+): ElectrobunContext {
+  const rpc = BrowserView.defineRPC({
+    handlers: { requests: requestHandler ?? {}, messages: {} },
+  });
   const window = new BrowserWindow({ title: "Existing", rpc });
   return defineElectrobunContext(window as unknown as ElectrobunWindow);
 }
@@ -308,7 +367,7 @@ describe.sequential("Milestone 11 — Electrobun runtime", () => {
     const app = configuredApp(new ElectrobunAdapter({ mainWindow: { title: "Requests", hidden: true } }));
     await app.start();
     const context = app.rootContainer.get(ELECTROBUN_CONTEXT);
-    await expect(fakeRpc(context.rpc).receiveRequest("users/get", "42"))
+    await expect(fakeRpc(context.rpc).receiveRequest("users/get", { args: ["42"] }))
       .resolves.toBe(`service:42|cache:42|Requests|${context.webview.id}|true`);
   });
 
@@ -316,20 +375,41 @@ describe.sequential("Milestone 11 — Electrobun runtime", () => {
     const app = configuredApp(new ElectrobunAdapter({ mainWindow: { title: "Messages", hidden: true } }));
     await app.start();
     const context = app.rootContainer.get(ELECTROBUN_CONTEXT);
-    const result = fakeRpc(context.rpc).receiveMessage("users/selected", "7");
+    const result = fakeRpc(context.rpc).receiveMessage("users/selected", { args: ["7"] });
     expect(result).toBeUndefined();
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(app.rootContainer.get(RuntimeController).messages).toEqual(["7:Messages"]);
-    expect(() => fakeRpc(context.rpc).receiveRequest("users/ordinary", undefined))
+    expect(() => fakeRpc(context.rpc).receiveRequest("users/ordinary", { args: [] }))
       .toThrow(/no Bunwire Electrobun request endpoint/i);
   });
 
   it("uses an existing native context in manual mode and preserves native outgoing communication", async () => {
-    const context = createManualNativeContext();
-    const app = configuredApp(new ManualElectrobunAdapter()).withContext(context);
+    const fallbackCalls: Array<{ method: string; payload: unknown }> = [];
+    const fallbackRequestHandler = (method: string, payload: unknown): string => {
+      fallbackCalls.push({ method, payload });
+      return `native:${method}`;
+    };
+    const context = createManualNativeContext(fallbackRequestHandler);
+    const nativeMessages: Array<{ method: string; payload: unknown }> = [];
+    context.rpc.addMessageListener("*", (method, payload) => {
+      nativeMessages.push({ method, payload });
+    });
+    const app = configuredApp(new ManualElectrobunAdapter({
+      fallbackRequestHandler,
+    })).withContext(context);
     await app.start();
-    await expect(fakeRpc(context.rpc).receiveRequest("users/get", ["manual"]))
+    await expect(fakeRpc(context.rpc).receiveRequest("users/get", { args: ["manual"] }))
       .resolves.toContain("service:manual|cache:manual|Existing");
+    expect(fakeRpc(context.rpc).receiveRequest("native/existing", { untouched: true }))
+      .toBe("native:native/existing");
+    expect(fallbackCalls).toEqual([
+      { method: "native/existing", payload: { untouched: true } },
+    ]);
+    nativeMessages.length = 0;
+    fakeRpc(context.rpc).receiveMessage("native/event", { untouched: true });
+    expect(nativeMessages).toEqual([
+      { method: "native/event", payload: { untouched: true } },
+    ]);
     context.rpc.send("webview/notice", { ready: true });
     await context.rpc.request("webview/query", { id: 1 });
     expect(fakeRpc(context.rpc).outgoingMessages).toEqual([
@@ -338,6 +418,42 @@ describe.sequential("Milestone 11 — Electrobun runtime", () => {
     expect(fakeRpc(context.rpc).outgoingRequests).toEqual([
       { method: "webview/query", payload: { id: 1 } },
     ]);
+  });
+
+  it("uses an unambiguous tagged argument envelope for zero, optional, rest, and array parameters", async () => {
+    const app = configuredApp(new ElectrobunAdapter({ mainWindow: { hidden: true } }));
+    await app.start();
+    const rpc = fakeRpc(app.rootContainer.get(ELECTROBUN_CONTEXT).rpc);
+
+    await expect(rpc.receiveRequest("users/zero", { args: [] })).resolves.toBe("zero");
+    await expect(rpc.receiveRequest("users/many", { args: ["required"] })).resolves.toBe("required:omitted");
+    await expect(rpc.receiveRequest("users/many", { args: ["required", "optional"] }))
+      .resolves.toBe("required:optional");
+    await expect(rpc.receiveRequest("users/rest", { args: ["prefix", "a", "b"] }))
+      .resolves.toBe("prefix:a,b");
+    await expect(rpc.receiveRequest("users/array", { args: [["a", "b"]] }))
+      .resolves.toBe("a|b");
+  });
+
+  it("rejects malformed managed payloads before Controller invocation", async () => {
+    const app = configuredApp(new ElectrobunAdapter({ mainWindow: { hidden: true } }));
+    await app.start();
+    const rpc = fakeRpc(app.rootContainer.get(ELECTROBUN_CONTEXT).rpc);
+
+    for (const payload of [undefined, "legacy", ["legacy"], {}, { args: "not-an-array" }]) {
+      expect(() => rpc.receiveRequest("users/zero", payload)).toThrow(/tagged shape/i);
+    }
+    expect(() => rpc.receiveMessage("users/selected", { args: "not-an-array" }))
+      .toThrow(/tagged shape/i);
+    expect(app.rootContainer.get(RuntimeController).messages).toEqual([]);
+  });
+
+  it("rejects unknown manual requests when no fallback is configured", async () => {
+    const context = createManualNativeContext();
+    const app = configuredApp(new ManualElectrobunAdapter()).withContext(context);
+    await app.start();
+    expect(() => fakeRpc(context.rpc).receiveRequest("native/missing", { raw: true }))
+      .toThrow(/no Bunwire Electrobun request endpoint/i);
   });
 
   it("fails closed for wrong integration mode, malformed native context, and duplicate normalized endpoints", async () => {

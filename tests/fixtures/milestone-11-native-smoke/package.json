@@ -1,0 +1,10 @@
+{
+  "name": "@bunwire/milestone-11-native-smoke",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@bunwire/core": "0.0.0",
+    "@bunwire/electrobun": "0.0.0",
+    "electrobun": "1.18.1"
+  }
+}

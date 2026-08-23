@@ -1497,12 +1497,21 @@ The compiler derives the caller-visible argument list from the same parameter pl
 
 # 37. Frontend API
 
-The initial API may remain close to Electrobun:
+The generated API may remain close to Electrobun:
 
 ```ts
 rpc.request("users/get", id);
 rpc.message("users/deleted", id);
 ```
+
+At the native Electrobun transport boundary, generated clients encode those positional arguments with Bunwire's tagged payload envelope:
+
+```ts
+rpc.request["users/get"]({ args: [id] });
+rpc.send["users/deleted"]({ args: [id] });
+```
+
+The envelope is always required, including for zero arguments, and preserves array-valued arguments without scalar/tuple ambiguity.
 
 A future generated API may provide:
 

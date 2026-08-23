@@ -1,0 +1,4 @@
+artifacts/
+build/
+bun.lock
+node_modules/

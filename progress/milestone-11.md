@@ -29,6 +29,10 @@ Status: Complete
 - Made generic adapter Providers register before application Providers independently of fluent configuration order, preserving documented adapter-default/application-override precedence.
 - Added manual native-context identity validation and protection against attaching the same native RPC lifecycle more than once.
 - Documented normal and manual integration paths in `packages/electrobun/README.md`.
+- Reopened Milestone 11 and replaced ambiguous scalar/array inference with the required tagged `{ args: [...] }` request/message envelope.
+- Added explicit manual-host `fallbackRequestHandler` composition with Bunwire endpoint precedence and unchanged raw fallback payloads.
+- Added a real Electrobun 1.18.1 compiler-API compatibility contract and corrected local RPC/webview declarations found by it.
+- Added and passed a real Windows Electrobun process smoke application covering native host creation, RPC request results, array-valued arguments, message delivery, and clean shutdown.
 
 ## Remaining
 
@@ -47,12 +51,15 @@ Status: Complete
 - [x] Undecorated Controller methods remain unexposed.
 - [x] Adapter/application Provider ordering is deterministic regardless of fluent call order.
 - [x] Compiler, runtime, architecture, boundary, build, and clean-install checks pass.
+- [x] Manual native request fallback, tagged invocation envelopes, real-SDK compatibility, and a real native-process smoke run pass.
 
 ## Tests Added
 
 - `tests/milestone-11/electrobun-adapter.test.ts` — eleven tests covering bootstrap adapter discovery, generated registry entries, caller/container/token/resolver parameter classification, no-`Arg` behavior, normalization, native construction/configuration callbacks, fully attached RPC callbacks, context/Provider ordering, early request/message traffic gates, request results, all adapter injectors, message no-response semantics, undecorated-method security, manual context, outgoing RPC preservation, malformed context/mode rejection, duplicate endpoints, exact SDK pin/use, and Core/Vite platform independence.
 - `tests/fixtures/milestone-11-electrobun/src` — compiler fixture using the real public Core and Electrobun APIs.
 - `tests/fixtures/milestone-11-electrobun/fake-native.ts` — API-faithful native-host fixture used because Electrobun FFI objects require an actual Electrobun host process and cannot be constructed inside Node/Vitest.
+- `tests/electrobun-sdk-contract.mjs` and its fixture — checks Bunwire's compatibility surface against the real pinned SDK types while filtering unrelated upstream source diagnostics.
+- `tests/electrobun-native-smoke.mjs` and `tests/fixtures/milestone-11-native-smoke` — builds and launches the real Electrobun host and verifies request/message markers before clean exit.
 
 ## Tests Run
 
@@ -64,13 +71,16 @@ Status: Complete
 - `pnpm.cmd quality`
 - `pnpm.cmd test:clean-install`
 - `git -c safe.directory=D:/Projects/GitHub/bunwire/bunwire-monorepo diff --check`
+- `node tests/electrobun-sdk-contract.mjs`
+- `pnpm.cmd test:electrobun-native`
 
 ## Test Results
 
-- Passed: focused Milestone 11 suite, 1 file and 11 tests.
+- Passed: focused Milestone 11 suite, 1 file and 14 tests.
 - Passed: Application/adapter/Electrobun lifecycle regression suite, 3 files and 54 tests.
 - Passed: Milestones 6–11 compiler/adapter regression suite, 6 files and 93 tests.
-- Passed: final quality gate, 14 files and 182 tests, strict production/test typechecking, package-boundary validation, and all four workspace builds.
+- Passed: final quality gate, real-SDK compatibility contract, 14 files and 185 tests, strict production/test typechecking, package-boundary validation, and all four workspace builds.
+- Passed: real Electrobun 1.18.1 Windows native-process smoke with actual host creation, tagged request result `native|sdk`, message delivery marker, and clean exit.
 - Passed: final isolated frozen-lockfile clean install and workspace typecheck, including the pinned Electrobun SDK.
 - Passed: repository diff whitespace validation.
 - Expected environment-only failure: the first sandboxed clean-install attempt could not access npm (`EACCES`); the approved network-enabled run and final rerun both passed unchanged.
@@ -97,12 +107,15 @@ After this milestone, the full adapter will own the normal Electrobun window/RPC
 
 - Use Electrobun's real `BrowserWindow`, `BrowserView`, and RPC APIs through the `electrobun/bun` export.
 - Attach Bunwire request dispatch with Electrobun RPC's public `setRequestHandler()` and message dispatch with `addMessageListener()` so the native RPC object and its outgoing APIs remain intact.
+- Require `{ args: [...] }` at the native transport boundary; generated Milestone 12 clients will hide this envelope from their positional API.
+- Require manual hosts to re-supply their existing native request handler explicitly because Electrobun provides one setter and no supported getter.
 - Keep all platform logic inside `@bunwire/electrobun`; Core and Vite remain generic.
 
 ## Known Limitations
 
-- Native FFI window creation cannot execute inside the Node/Vitest process. Runtime E2E tests substitute an API-faithful Electrobun module at the native boundary while asserting that production dynamically imports `electrobun/bun`, calls `BrowserView.defineRPC()`, and constructs `BrowserWindow` directly. Actual native process launch remains an environment-level smoke test, not missing framework behavior.
+- Node/Vitest runtime tests retain an API-faithful native substitute for deterministic assertions, while the separate mandatory native smoke command launches the actual pinned Electrobun host process.
 - Electrobun 2.x requires an application-specific Hutch-generated devkit and therefore cannot currently serve as a normal reusable npm SDK dependency for this package.
+- Electrobun 1.18.1 publishes raw TypeScript with extensionless internal imports and strict-option diagnostics, so directly importing its types from Bunwire's NodeNext project makes upstream SDK implementation files fail Bunwire's quality gate. Bunwire retains its narrow public compatibility declarations and validates them against the real SDK in a dedicated Bundler-resolution compiler Program that reports contract-fixture diagnostics while ignoring unrelated upstream source diagnostics.
 
 ## Architectural Issues Encountered
 
@@ -114,4 +127,4 @@ After this milestone, the full adapter will own the normal Electrobun window/RPC
 
 ## Next Work Within This Milestone
 
-- None. Milestone 11 is complete; Milestone 12 remains intentionally unstarted.
+- None. Milestone 11 corrections are complete; Milestone 12 remains intentionally unstarted.

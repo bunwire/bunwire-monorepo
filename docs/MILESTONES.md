@@ -1019,11 +1019,13 @@ Runtime support:
 9. Implement `Window`, `Webview`, and `Context` as parameter injectors with resolver IDs.
 10. Map generated Controller method registry to Electrobun request/message structures.
 11. Map caller-visible positional arguments directly from generated argument indexes.
+    Electrobun requests and messages carry them in the tagged `{ args: [...] }` transport envelope.
 12. Ensure injected parameters never appear in caller signatures.
 13. Preserve request/message semantic difference.
 14. Complete native host startup only after Bunwire Providers/registries are ready.
 15. Keep all created objects as real Electrobun objects and preserve native outgoing APIs.
 16. Implement the manual Electrobun integration path using developer-supplied context.
+    Because Electrobun exposes one mutable request handler and no getter, preservation of non-Bunwire requests is explicit through the manual adapter's fallback handler; Bunwire endpoints take precedence.
 
 ## Tests
 
@@ -1133,7 +1135,7 @@ Generated caller contract:
 3. Exclude container/parameter-injector parameters from contracts.
 4. Generate request return types.
 5. Generate message no-response types.
-6. Integrate contracts with frontend Electrobun RPC API such as `request("users/get", ...)`.
+6. Integrate contracts with the frontend Electrobun RPC API while automatically wrapping positional arguments in `{ args: [...] }` at the native transport boundary.
 7. Create example application demonstrating:
    - `defineApp()` composition root;
    - class-based `ElectrobunAdapter`;

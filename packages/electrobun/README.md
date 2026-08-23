@@ -39,9 +39,15 @@ import {
 const context = defineElectrobunContext(existingWindow);
 
 await defineApp()
-  .withAdapter(new ManualElectrobunAdapter())
+  .withAdapter(new ManualElectrobunAdapter({
+    // Electrobun has one mutable request handler and no handler getter.
+    // Re-supply the existing handler to preserve non-Bunwire requests.
+    fallbackRequestHandler: existingRequestHandler,
+  }))
   .withContext(context)
   .start();
 ```
 
-`@Route()` handlers are Electrobun requests and return results. `@Message()` handlers are fire-and-forget messages. `@Window()`, `@Webview()`, and `@Context()` are framework-supplied parameters and are excluded from caller arguments. Native outgoing `rpc.send()` and `rpc.request()` remain available on the unchanged RPC object.
+`@Route()` handlers are Electrobun requests and return results. `@Message()` handlers are fire-and-forget messages. Bunwire-managed requests and messages use the unambiguous payload shape `{ args: [...] }`; for example, an array-valued first argument is sent as `{ args: [["a", "b"]] }`. Missing or malformed envelopes fail before Controller invocation. Milestone 12's generated client will create this envelope automatically.
+
+`@Window()`, `@Webview()`, and `@Context()` are framework-supplied parameters and are excluded from caller arguments. Bunwire endpoints take precedence over the manual fallback; unknown requests delegate their original method and payload unchanged. Native message listeners and outgoing `rpc.send()` and `rpc.request()` remain available on the unchanged RPC object.

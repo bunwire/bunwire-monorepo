@@ -81,7 +81,7 @@ export class UserController {
     id: string,
     methodUsers: UserService,
     @Inject(CACHE) cache: Cache,
-    @Window() window: ElectrobunWindow,
+    @Window window: ElectrobunWindow,
     includePosts?: boolean,
   ): Promise<User> {
     const user = methodUsers.find(this.users.find(id).id);

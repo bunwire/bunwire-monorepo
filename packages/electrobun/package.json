@@ -1,6 +1,6 @@
 {
   "name": "@bunwire/electrobun",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Electrobun host adapter, managed RPC decorators, middleware context, and generated-client runtime for Bunwire.",
   "license": "GPL-3.0-only",
   "repository": {
@@ -30,7 +30,7 @@
     "test": "vitest run --config ../../vitest.config.ts tests/milestone-11/electrobun-adapter.test.ts tests/milestone-12/generated-client-e2e.test.ts tests/milestone-12/middleware-compiler.test.ts tests/milestone-12e/electrobun-generated-host.test.ts tests/milestone-12e/electrobun-managed-middleware.test.ts"
   },
   "dependencies": {
-    "@bunwire/core": "0.1.0",
+    "@bunwire/core": "0.1.1",
     "electrobun": "1.18.1"
   }
 }

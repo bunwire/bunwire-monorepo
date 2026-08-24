@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Middleware Redesign Milestone 12E — Electrobun Adapter Integration (complete)
+Current milestone: Milestone 13 — Hardening and First Release (unblocked, not started)
 
 Overall status:
 
@@ -24,8 +24,8 @@ Overall status:
 - Middleware Redesign 12C: Complete — [details](progress/milestone-12c.md)
 - Middleware Redesign 12D: Complete — [details](progress/milestone-12d.md)
 - Middleware Redesign 12E: Complete — [details](progress/milestone-12e.md)
-- Middleware Redesign 12F: Planned — [architecture](docs/MIDDLEWARE.md) · [milestones](docs/MIDDLEWARE_MILESTONES.md)
-- Milestone 13: Blocked until Middleware Redesign 12A–12F is complete
+- Middleware Redesign 12F: Complete — [details](progress/milestone-12f.md)
+- Milestone 13: Unblocked, not started
 
 ## Implemented
 
@@ -45,23 +45,24 @@ Overall status:
 - Generated positional request/message contracts and real Electrobun frontend schemas derived from authoritative invocation-plan indexes, with injected parameters excluded, private wire encoding, typed results, message `void`, canonical `@Use()` middleware, full normal/manual E2E paths, and a complete generated example.
 - Core managed middleware foundation with canonical class identity, constructor DI, immutable definitions/attachments, transient invocation resolution, generic around-chain execution, strict runtime validation, and one shared Provider/Controller invocation scope.
 - Compiler-discovered canonical middleware classes with exact-symbol authorization, strict class/handler and literal-metadata diagnostics, constructor DI/cycle analysis, duplicate-alias validation, and deterministic transient runtime definitions.
-- Canonical Controller/method `@Use()` attachments with exact class/alias resolution, literal string-parameter parsing, deterministic Controller-first ordering, immutable generated records, and temporary callback coexistence.
+- Canonical Controller/method `@Use()` attachments with exact class/alias resolution, literal string-parameter parsing, deterministic Controller-first ordering, and immutable generated records.
 - Compiler-only application middleware policy with static global stacks, forward/nested groups, source-root-relative Controller mappings, four-scope normalization, exact canonical deduplication, and fully resolved generated method pipelines.
 - Electrobun managed-middleware execution with immutable native context, adapter-owned endpoint/transport filters, one invocation scope, request transformation/short circuit, message error routing, generated normal/manual parity, and real native-process coverage.
+- Final attachment-only middleware model with all callback APIs/representations removed, migrated examples and fixtures, compiler-generated fake queue second-adapter proof, and clean public/built export audits.
+- Post-review hardening rejects computed middleware-policy access fail-closed, validates caller bounds before invocation lifecycle side effects, and preserves `@Use()` runtime metadata across legacy and standard decorators.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- Middleware Redesign Milestone 12E is complete; no milestone is currently in progress.
+- None. Middleware Redesign Milestones 12A–12F are complete.
 
 ## Next
 
-- Middleware Redesign Milestone 12F — Migration, Second-Adapter Proof, and Verification.
-- Complete Milestones 12A–12F in order before beginning Milestone 13 — Hardening and First Release.
+- Milestone 13 — Hardening and First Release.
 
 ## Blockers
 
-- Milestone 13 is intentionally blocked by the required Middleware Redesign 12A–12F pre-release track.
+- None. Milestone 13 is unblocked.
 
 ## Milestone Progress Files
 
@@ -83,3 +84,4 @@ Overall status:
 - [Middleware Redesign Milestone 12C](progress/milestone-12c.md)
 - [Middleware Redesign Milestone 12D](progress/milestone-12d.md)
 - [Middleware Redesign Milestone 12E](progress/milestone-12e.md)
+- [Middleware Redesign Milestone 12F](progress/milestone-12f.md)

@@ -83,15 +83,20 @@ export function defineManagedClassDecorator<
         && typeof standardContext.metadata === "object"
         && standardContext.metadata !== null
       ) {
-        const methodMetadataKey = Symbol.for("@bunwire/core/managed-method-metadata");
-        const methodMetadata = (standardContext.metadata as Record<PropertyKey, unknown>)[methodMetadataKey];
-        if (methodMetadata instanceof Map) {
-          Object.defineProperty(managedTarget.prototype, methodMetadataKey, {
-            configurable: true,
-            enumerable: false,
-            value: new Map(methodMetadata),
-            writable: false,
-          });
+        const standardMetadata = standardContext.metadata as Record<PropertyKey, unknown>;
+        for (const metadataKey of [
+          Symbol.for("@bunwire/core/managed-method-metadata"),
+          Symbol.for("@bunwire/core/use-middleware-metadata"),
+        ]) {
+          const metadata = standardMetadata[metadataKey];
+          if (metadata instanceof Map) {
+            Object.defineProperty(managedTarget.prototype, metadataKey, {
+              configurable: true,
+              enumerable: false,
+              value: new Map(metadata),
+              writable: false,
+            });
+          }
         }
       }
     }) as ClassDecorator;

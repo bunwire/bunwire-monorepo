@@ -109,6 +109,10 @@ After this milestone, Core can resolve and execute a prebuilt ordered list of ca
 
 - None.
 
+## Milestone 12F Reconciliation
+
+Milestone 12F removed the callback compatibility scaffolding recorded above. Final runtime plans contain only canonical attachments; the full 330-test quality gate, clean frozen install, and native Electrobun smoke passed.
+
 ## Next Work Within This Milestone
 
 - None. Middleware Redesign Milestone 12B — Compiler Discovery and Metadata is next.

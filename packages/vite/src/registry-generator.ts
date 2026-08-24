@@ -216,9 +216,7 @@ export function generateRuntimeRegistryModule(
       }
     });
     const middleware = method.middleware.map((middlewareEntry) => (
-      middlewareEntry.source === "callback"
-        ? runtimeReference(middlewareEntry.target)
-        : `defineMiddlewareAttachment(${runtimeReference(middlewareEntry.target)}, ${stableValue(middlewareEntry.parameters)})`
+      `defineMiddlewareAttachment(${runtimeReference(middlewareEntry.target)}, ${stableValue(middlewareEntry.parameters)})`
     ));
     return `    defineManagedMethodPlan({ kind: ${methodDecoratorRuntime}.definition.kind, ownerKind: ${ownerDecoratorRuntime}.definition.kind, target: ${target}, method: ${JSON.stringify(method.name)}, data: ${stableValue(method.data)}, parameters: [${parameters.join(", ")}], middleware: [${middleware.join(", ")}] })`;
   }));

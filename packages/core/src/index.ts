@@ -1,12 +1,10 @@
 export {
   USE_DECORATOR_ID,
   Use,
-  getManagedMethodMiddlewareMetadata,
   getUseMiddlewareMetadata,
   type MiddlewareReference,
   type UseDecorator,
   type UseDecoratorDefinition,
-  type UseMiddlewareEntry,
 } from "./managed-methods/middleware-decorator.js";
 export {
   assertCompilerSymbolReference,
@@ -180,10 +178,6 @@ export {
   type ContainerParameterPlan,
   type ContextParameterPlan,
   type DefineManagedMethodPlanOptions,
-  type ManagedMethodInvocation,
-  type ManagedMethodMiddleware,
-  type ManagedMethodMiddlewareEntry,
-  type ManagedMethodNext,
   type ManagedMethodParameterPlan,
   type ManagedMethodPlan,
   type ParameterSourceKind,

@@ -2,13 +2,13 @@ import {
   APPLICATION_CONTEXT,
   Controller,
   Inject,
+  Middleware,
   Provider,
   Service,
   Use as AttachMiddleware,
   createToken,
   type Container,
   type InvocationContext,
-  type ManagedMethodMiddleware,
 } from "@bunwire/core";
 import {
   Context,
@@ -18,6 +18,7 @@ import {
   Webview,
   Window,
   type ElectrobunContext,
+  type ElectrobunMiddlewareContext,
   type ElectrobunWebview,
   type ElectrobunWindow,
 } from "@bunwire/electrobun";
@@ -63,15 +64,6 @@ export function resetLifecycle(): void {
   lifecycle.middlewareEvents.length = 0;
 }
 
-export const loggingMiddleware: ManagedMethodMiddleware = async (invocation, next) => {
-  lifecycle.middlewareEvents.push(`before:${String(invocation.plan.method)}`);
-  const result = await next();
-  lifecycle.middlewareEvents.push(`after:${String(invocation.plan.method)}`);
-  return typeof result === "object" && result !== null
-    ? { ...result, middlewareApplied: true }
-    : result;
-};
-
 @Service()
 export class DatabaseService {
   source(id: string): string {
@@ -85,6 +77,24 @@ export class UserService {
 
   describe(id: string): string {
     return `service:${id}`;
+  }
+}
+
+@Middleware()
+export class LoggingMiddleware implements Middleware<ElectrobunMiddlewareContext> {
+  protected alias = "logging";
+  protected only = ["request"];
+
+  constructor(private readonly users: UserService) {}
+
+  async handle(context: ElectrobunMiddlewareContext, next: () => Promise<unknown>): Promise<unknown> {
+    void this.users;
+    lifecycle.middlewareEvents.push(`before:${context.endpoint}`);
+    const result = await next();
+    lifecycle.middlewareEvents.push(`after:${context.endpoint}`);
+    return typeof result === "object" && result !== null
+      ? { ...result, middlewareApplied: true }
+      : result;
   }
 }
 
@@ -109,7 +119,7 @@ export class UserController {
   constructor(readonly users: UserService) {}
 
   @Route("get")
-  @AttachMiddleware(loggingMiddleware)
+  @AttachMiddleware(LoggingMiddleware)
   async get(
     id: string,
     methodUsers: UserService,

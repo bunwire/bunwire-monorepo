@@ -17,6 +17,7 @@ export default defineConfig({
       "@bunwire/electrobun": fileURLToPath(new URL("./packages/electrobun/src/index.ts", import.meta.url)),
       "electrobun/bun": fileURLToPath(new URL("./tests/fixtures/milestone-11-electrobun/fake-native.ts", import.meta.url)),
       "@bunwire/test-analysis-extensions": fileURLToPath(new URL("./tests/fixtures/milestone-8-analysis/extensions.ts", import.meta.url)),
+      "@bunwire/fake-queue": fileURLToPath(new URL("./tests/fixtures/milestone-12f-fake-queue/adapter.ts", import.meta.url)),
     },
   },
   test: {

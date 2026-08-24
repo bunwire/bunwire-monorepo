@@ -104,6 +104,16 @@ Electrobun selects applicable generated attachments per event and executes their
 
 - None.
 
+## Milestone 12F Reconciliation
+
+Milestone 12F removed Electrobun's last callable-entry branches. Electrobun now consumes attachment-only plans, and its package suite, SDK contract, normal/manual hosts, and real native smoke all pass.
+
 ## Next Work Within This Milestone
 
 - None. Middleware Redesign Milestone 12F is next.
+
+## Post-Review Corrections — 2026-08-24
+
+- Added a required-argument Electrobun route protected by short-circuit middleware and proved malformed payloads fail with `CallerArgumentError` before Provider boot, middleware construction/context creation, or Controller execution.
+- Valid short-circuit requests retain the existing result semantics and native request/message behavior.
+- The Electrobun package suite passed 5 files and 39 tests; the real native smoke passed all required middleware, Controller, short-circuit, message, completion, and clean-exit markers.

@@ -14,8 +14,6 @@ import type { ManagedMethodKind } from "./method-kind.js";
 import { ManagedMethodKindRegistry } from "./method-kind-registry.js";
 import {
   validateManagedMethodPlan,
-  type ManagedMethodInvocation,
-  type ManagedMethodMiddleware,
   type ManagedMethodParameterPlan,
   type ManagedMethodPlan,
 } from "./plan.js";
@@ -86,11 +84,10 @@ export class InvocationEngine {
     validateManagedMethodPlan(plan, this.#classKinds, this.#methodKinds);
   }
 
-  async invoke<Result = unknown>(
+  validateInvocation(
     plan: ManagedMethodPlan,
-    context: InvocationContext,
     callerArguments: readonly unknown[],
-  ): InvocationResult<Result> {
+  ): void {
     this.validate(plan);
     if (!plan.kind.invocable) {
       throw new ManagedMethodPlanError(
@@ -102,6 +99,14 @@ export class InvocationEngine {
     if (callerArguments.length < minimum || callerArguments.length > maximum) {
       throw new CallerArgumentError(plan.method, minimum, maximum, callerArguments.length);
     }
+  }
+
+  async invoke<Result = unknown>(
+    plan: ManagedMethodPlan,
+    context: InvocationContext,
+    callerArguments: readonly unknown[],
+  ): InvocationResult<Result> {
+    this.validateInvocation(plan, callerArguments);
 
     const argumentsList = Array.from<unknown>({ length: plan.parameters.length });
     const orderedParameters = [...plan.parameters]
@@ -147,30 +152,6 @@ export class InvocationEngine {
       );
     }
 
-    const invocation = Object.freeze({
-      plan,
-      context,
-      target,
-      arguments: Object.freeze(argumentsList),
-      callerArguments: Object.freeze([...callerArguments]),
-    }) satisfies ManagedMethodInvocation;
-
-    const callableMiddleware = plan.middleware.filter(
-      (entry): entry is ManagedMethodMiddleware => typeof entry === "function",
-    );
-    let activeMiddlewareIndex = -1;
-    const dispatch = async (index: number): Promise<unknown> => {
-      if (index <= activeMiddlewareIndex) {
-        throw new Error("Managed method middleware next() may only be called once.");
-      }
-      activeMiddlewareIndex = index;
-      const middleware = callableMiddleware[index];
-      if (middleware) {
-        return middleware(invocation, () => dispatch(index + 1));
-      }
-      return Reflect.apply(method, target, argumentsList);
-    };
-
-    return await dispatch(0) as Awaited<Result>;
+    return await Reflect.apply(method, target, argumentsList) as Awaited<Result>;
   }
 }

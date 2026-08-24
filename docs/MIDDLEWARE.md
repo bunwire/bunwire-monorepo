@@ -1,8 +1,8 @@
 # Bunwire Managed Middleware Architecture
 
-Status: Target architecture for the pre-release Middleware Redesign track (Milestones 12A–12F).
+Status: Implemented architecture for the Middleware Redesign track (Milestones 12A–12F).
 
-The callback middleware completed in Milestone 12 remains the current implementation until the redesign track is complete. It is superseded as the public API direction and will be removed without a compatibility layer in Milestone 12F.
+Managed middleware classes are the sole supported middleware model. Function callbacks are not accepted by `@Use()`, runtime plans, or generated registries.
 
 See [MIDDLEWARE_MILESTONES.md](MIDDLEWARE_MILESTONES.md) for the implementation order and acceptance criteria.
 
@@ -71,7 +71,7 @@ export interface Middleware<Context = unknown, Result = unknown> {
   handle(
     context: Context,
     next: () => Promise<Result>,
-  ): Promise<Result>;
+  ): Result | Promise<Result>;
 }
 ```
 
@@ -486,21 +486,9 @@ Runtime validation remains authoritative for generated-looking JavaScript input.
 
 ---
 
-## 13. Transition from Callback Middleware
+## 13. Migrating Function Middleware
 
-Milestone 12 introduced:
-
-```ts
-export const loggingMiddleware: ManagedMethodMiddleware = async (invocation, next) => {
-  return next();
-};
-
-@Use(loggingMiddleware)
-@Route("get")
-get() {}
-```
-
-That implementation is historical scaffolding and not the release API. The replacement is:
+Replace each middleware function with a transient managed class. Move captured dependencies into constructor injection, type the context with the adapter's middleware context, and attach the class or its compiled alias:
 
 ```ts
 @Middleware()
@@ -519,15 +507,7 @@ export class LoggingMiddleware
 get() {}
 ```
 
-Milestones 12A–12E may temporarily retain internal callback support to keep the repository green while vertical behavior is built. Milestone 12F removes:
-
-- `ManagedMethodMiddleware`;
-- callable `ManagedMethodPlan.middleware` entries;
-- callback-oriented `@Use(exportedFunction)`;
-- compiler imports of middleware callback functions;
-- callback middleware examples and tests.
-
-No permanent deprecation bridge or parallel callback API remains before Milestone 13.
+Generated `ManagedMethodPlan.middleware` arrays contain only immutable `{ target, parameters }` attachments. There is no compatibility overload, runtime conversion, or parallel function API.
 
 ---
 

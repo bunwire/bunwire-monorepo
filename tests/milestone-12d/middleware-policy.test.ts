@@ -10,7 +10,7 @@ import {
   analyzeBunwireProgram,
   generateRuntimeRegistryModule,
 } from "@bunwire/vite";
-import { AdminController, legacyPolicyCallback } from "../fixtures/milestone-12d-policy/valid/controllers/admin.js";
+import { AdminController } from "../fixtures/milestone-12d-policy/valid/controllers/admin.js";
 import { PublicController } from "../fixtures/milestone-12d-policy/valid/controllers/public.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -47,9 +47,7 @@ function analyze() {
 function pipeline(analysis: ReturnType<typeof analyze>, controllerName: string) {
   const controller = analysis.classes.find(({ name }) => name === controllerName);
   return controller?.methods[0]?.middleware.map((entry) => (
-    entry.source === "callback"
-      ? ["callback", entry.target.symbolName]
-      : [entry.target.symbolName, [...entry.parameters]]
+    [entry.target.symbolName, [...entry.parameters]]
   ));
 }
 
@@ -77,7 +75,7 @@ describe("Middleware Redesign 12D — policy normalization", () => {
       ["AuthMiddleware", ["local"]],
       ["AuditMiddleware", ["local-group"]],
       ["AuthMiddleware", ["method"]],
-      ["callback", "legacyPolicyCallback"],
+      ["MethodAuditMiddleware", []],
     ]);
     expect(pipeline(analyze(), "PublicController")).toEqual([
       ["AuthMiddleware", []],
@@ -86,13 +84,13 @@ describe("Middleware Redesign 12D — policy normalization", () => {
     ]);
   });
 
-  it("deduplicates exact managed attachments while retaining distinct parameters and callbacks", () => {
+  it("deduplicates exact managed attachments while retaining distinct parameters", () => {
     const entries = analyze().classes.find(({ name }) => name === "AdminController")?.methods[0]?.middleware ?? [];
     expect(entries.filter((entry) => entry.source === "attachment" && entry.target.symbolName === "TraceMiddleware"))
       .toHaveLength(1);
     expect(entries.filter((entry) => entry.source === "attachment" && entry.target.symbolName === "AuthMiddleware"))
       .toHaveLength(4);
-    expect(entries.at(-1)?.source).toBe("callback");
+    expect(entries.at(-1)?.target.symbolName).toBe("MethodAuditMiddleware");
   });
 
   it("matches POSIX-normalized relative Controller paths across multiple source roots", () => {
@@ -109,9 +107,9 @@ describe("Middleware Redesign 12D — policy normalization", () => {
     expect(generatedCode).not.toContain("local-stack");
     expect(generatedCode).not.toContain("controllers/**");
     const admin = registry.methods.find(({ target }) => target === AdminController);
-    const attachments = admin?.middleware.filter((entry): entry is MiddlewareAttachment => typeof entry !== "function") ?? [];
-    expect(attachments).toHaveLength(7);
-    expect(admin?.middleware.at(-1)).toBe(legacyPolicyCallback);
+    const attachments: readonly MiddlewareAttachment[] = admin?.middleware ?? [];
+    expect(attachments).toHaveLength(8);
+    expect(admin?.middleware.at(-1)?.target.name).toBe("MethodAuditMiddleware");
     expect(registry.methods.some(({ target }) => target === PublicController)).toBe(true);
     expect(attachments.every(({ parameters }) => Object.isFrozen(parameters))).toBe(true);
   });

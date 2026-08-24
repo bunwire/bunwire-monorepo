@@ -116,6 +116,10 @@ After this milestone, the compiler emits deterministic, type-correct transient m
 
 - None.
 
+## Milestone 12F Reconciliation
+
+Milestone 12F removed compiler callback analysis and generation. Middleware discovery/metadata now feeds attachment-only generated pipelines; the complete Vite suite and repository quality gate passed.
+
 ## Next Work Within This Milestone
 
 - None. Milestone 12C — Local Middleware Attachments is next.

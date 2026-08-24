@@ -109,6 +109,16 @@ After this milestone, Controllers and concrete managed methods may use `@Use()` 
 
 - None.
 
+## Milestone 12F Reconciliation
+
+Milestone 12F removed the temporary method-function overload and callable plan entries. `@Use()` and generated plans are now class/string-to-canonical-attachment only; migrated 12C tests pass in the full suite.
+
 ## Next Work Within This Milestone
 
 - None. Milestone 12D — Application Policy, Groups, and Normalization is next.
+
+## Post-Review Corrections — 2026-08-24
+
+- Preserved the exported `getUseMiddlewareMetadata()` contract under both legacy and standard decorators.
+- Standard method decorators now store ordered attachments in shared class metadata, and managed class decoration transfers that metadata to the runtime prototype boundary; standard class-level `@Use()` attaches directly to the constructor.
+- Added class/method, class/string, and top-to-bottom ordering parity coverage; the Core package suite passed 11 files and 127 tests.

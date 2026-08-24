@@ -1,4 +1,3 @@
-import type { InvocationContext } from "../application/invocation-context.js";
 import { isClassToken, isToken, type Constructable, type RuntimeToken } from "../container/tokens.js";
 import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
@@ -47,22 +46,6 @@ export type ManagedMethodParameterPlan =
 
 export type ParameterSourceKind = ManagedMethodParameterPlan["source"];
 
-export interface ManagedMethodInvocation {
-  readonly plan: ManagedMethodPlan;
-  readonly context: InvocationContext;
-  readonly target: object;
-  readonly arguments: readonly unknown[];
-  readonly callerArguments: readonly unknown[];
-}
-
-export type ManagedMethodNext = () => Promise<unknown>;
-export type ManagedMethodMiddleware = (
-  invocation: ManagedMethodInvocation,
-  next: ManagedMethodNext,
-) => unknown | Promise<unknown>;
-
-export type ManagedMethodMiddlewareEntry = ManagedMethodMiddleware | MiddlewareAttachment;
-
 export interface ManagedMethodPlan<
   Target extends Constructable<object> = Constructable<object>,
   Data = unknown,
@@ -73,7 +56,7 @@ export interface ManagedMethodPlan<
   readonly method: PropertyKey;
   readonly data: Data;
   readonly parameters: readonly ManagedMethodParameterPlan[];
-  readonly middleware: readonly ManagedMethodMiddlewareEntry[];
+  readonly middleware: readonly MiddlewareAttachment[];
 }
 
 export interface DefineManagedMethodPlanOptions<
@@ -86,7 +69,7 @@ export interface DefineManagedMethodPlanOptions<
   readonly method: keyof InstanceType<Target> & PropertyKey;
   readonly data: Data;
   readonly parameters: readonly ManagedMethodParameterPlan[];
-  readonly middleware?: readonly ManagedMethodMiddlewareEntry[];
+  readonly middleware?: readonly MiddlewareAttachment[];
 }
 
 function assertIndex(index: unknown, label: string): asserts index is number {
@@ -132,9 +115,7 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
     );
   }
   for (const middleware of plan.middleware) {
-    if (typeof middleware !== "function") {
-      validateMiddlewareAttachment(middleware);
-    }
+    validateMiddlewareAttachment(middleware);
   }
 
   const methodIndexes = new Set<number>();

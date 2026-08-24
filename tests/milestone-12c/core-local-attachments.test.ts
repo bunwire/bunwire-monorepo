@@ -4,14 +4,11 @@ import {
   Middleware,
   MiddlewareAttachmentError,
   Use,
-  defineApp,
   defineManagedMethodPlan,
   defineMethodKind,
   defineMiddlewareAttachment,
-  getManagedMethodMiddlewareMetadata,
   getUseMiddlewareMetadata,
   CONTROLLER_KIND,
-  type ManagedMethodMiddleware,
 } from "@bunwire/core";
 
 const LOCAL_METHOD_KIND = defineMethodKind({
@@ -27,23 +24,51 @@ class LocalMiddleware {
 
 describe("Middleware Redesign 12C — Core local attachment contracts", () => {
   it("records Controller and method managed references in top-to-bottom source order", () => {
-    const callback: ManagedMethodMiddleware = (_invocation, next) => next();
-
     @Use("auth")
     @Use(LocalMiddleware)
     @Controller()
     class Target {
       @Use(LocalMiddleware)
-      @Use(callback)
+      @Use("auth:method")
       run() {}
     }
 
     expect(getUseMiddlewareMetadata(Target)).toEqual(["auth", LocalMiddleware]);
     expect(getUseMiddlewareMetadata(Target.prototype, "run")).toEqual([
       LocalMiddleware,
-      callback,
+      "auth:method",
     ]);
-    expect(getManagedMethodMiddlewareMetadata(Target.prototype, "run")).toEqual([callback]);
+  });
+
+  it("preserves class and method metadata under standard decorators", () => {
+    const metadata = {};
+    class StandardTarget {
+      run(): void {}
+    }
+    const methodContext = { kind: "method", name: "run", metadata };
+    const classContext = { kind: "class", name: "StandardTarget", metadata };
+    const applyStandard = (
+      decorator: ClassDecorator | MethodDecorator,
+      value: object,
+      context: object,
+    ) => (decorator as unknown as (target: object, standardContext: object) => unknown)(
+      value,
+      context,
+    );
+
+    // Standard decorators apply bottom-to-top. The stored result must retain
+    // the same top-to-bottom source order as legacy TypeScript decorators.
+    applyStandard(Use("auth:method"), StandardTarget.prototype.run, methodContext);
+    applyStandard(Use(LocalMiddleware), StandardTarget.prototype.run, methodContext);
+    applyStandard(Controller(), StandardTarget, classContext);
+    applyStandard(Use(LocalMiddleware), StandardTarget, classContext);
+    applyStandard(Use("auth"), StandardTarget, classContext);
+
+    expect(getUseMiddlewareMetadata(StandardTarget)).toEqual(["auth", LocalMiddleware]);
+    expect(getUseMiddlewareMetadata(StandardTarget.prototype, "run")).toEqual([
+      LocalMiddleware,
+      "auth:method",
+    ]);
   });
 
   it("accepts immutable canonical attachments in plans and rejects malformed records", () => {
@@ -78,35 +103,7 @@ describe("Middleware Redesign 12C — Core local attachment contracts", () => {
     })).toThrow(MiddlewareAttachmentError);
   });
 
-  it("keeps legacy callbacks executable while managed attachments remain inert", async () => {
-    const events: string[] = [];
-    const callback: ManagedMethodMiddleware = async (_invocation, next) => {
-      events.push("callback:before");
-      const result = await next();
-      events.push("callback:after");
-      return `wrapped:${String(result)}`;
-    };
-
-    @Controller()
-    class Target {
-      run() { events.push("method"); return "ok"; }
-    }
-
-    const plan = defineManagedMethodPlan({
-      kind: LOCAL_METHOD_KIND,
-      ownerKind: CONTROLLER_KIND,
-      target: Target,
-      method: "run",
-      data: undefined,
-      parameters: [],
-      middleware: [defineMiddlewareAttachment(LocalMiddleware), callback],
-    });
-    const app = defineApp()
-      .withManagedMethodKind(LOCAL_METHOD_KIND)
-      .withConventionBindings((container) => { container.transient(Target); });
-    await app.start();
-
-    await expect(app.invokeManagedMethod(plan)).resolves.toBe("wrapped:ok");
-    expect(events).toEqual(["callback:before", "method", "callback:after"]);
+  it("rejects function callbacks at the decorator boundary", () => {
+    expect(() => Use((() => undefined) as never)).toThrow(/canonical.*middleware/i);
   });
 });

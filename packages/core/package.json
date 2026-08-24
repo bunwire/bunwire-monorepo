@@ -15,6 +15,6 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config ../../vitest.config.ts tests/milestone-01 tests/milestone-02 tests/milestone-03 tests/milestone-04 tests/milestone-05 tests/milestone-06 tests/milestone-12a tests/milestone-12c/core-local-attachments.test.ts tests/milestone-12d/core-middleware-policy.test.ts"
+    "test": "vitest run --config ../../vitest.config.ts tests/milestone-01 tests/milestone-02 tests/milestone-03 tests/milestone-04 tests/milestone-05 tests/milestone-06 tests/milestone-12a tests/milestone-12c/core-local-attachments.test.ts tests/milestone-12d/core-middleware-policy.test.ts tests/milestone-12f/managed-middleware-finalization.test.ts"
   }
 }

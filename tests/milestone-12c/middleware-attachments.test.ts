@@ -14,7 +14,7 @@ import {
   analyzeBunwireProgram,
   generateRuntimeRegistryModule,
 } from "@bunwire/vite";
-import { AttachmentController, legacyCallback } from "../fixtures/milestone-12c-attachments/valid/controller.js";
+import { AttachmentController } from "../fixtures/milestone-12c-attachments/valid/controller.js";
 import { AuditMiddleware, AuthMiddleware } from "../fixtures/milestone-12c-attachments/valid/middleware.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -60,7 +60,7 @@ afterAll(async () => { await fs.unlink(generatedPath).catch(() => undefined); })
 
 function attachments(method: PropertyKey): readonly MiddlewareAttachment[] {
   const plan = generatedRegistry.methods.find((candidate) => candidate.method === method);
-  return (plan?.middleware.filter((entry): entry is MiddlewareAttachment => typeof entry !== "function") ?? []);
+  return plan?.middleware ?? [];
 }
 
 describe("Middleware Redesign 12C — local attachment analysis", () => {
@@ -72,9 +72,7 @@ describe("Middleware Redesign 12C — local attachment analysis", () => {
       ["AuditMiddleware", []],
     ]);
     expect(controller?.methods.find(({ name }) => name === "ordered")?.middleware.map((entry) => (
-      entry.source === "callback"
-        ? [entry.source, entry.target.symbolName]
-        : [entry.target.symbolName, entry.parameters]
+      [entry.target.symbolName, entry.parameters]
     ))).toEqual([
       ["AuthMiddleware", []],
       ["AuditMiddleware", []],
@@ -83,7 +81,7 @@ describe("Middleware Redesign 12C — local attachment analysis", () => {
     ]);
   });
 
-  it("emits Controller-first canonical attachments, deduplicates exact records, and retains callbacks", () => {
+  it("emits Controller-first canonical attachments and deduplicates exact records", () => {
     expect(attachments("ordered").map(({ target, parameters }) => [target.name, parameters])).toEqual([
       ["AuthMiddleware", []],
       ["AuditMiddleware", []],
@@ -91,9 +89,8 @@ describe("Middleware Redesign 12C — local attachment analysis", () => {
       ["AuthMiddleware", ["method:scope"]],
     ]);
     expect(attachments("repeated").filter(({ target }) => target === AuthMiddleware)).toHaveLength(1);
-    const legacy = generatedRegistry.methods.find(({ method }) => method === "legacy");
-    expect(legacy?.middleware).toContain(legacyCallback);
-    expect(legacy?.middleware.slice(0, 2).every((entry) => typeof entry !== "function")).toBe(true);
+    const canonical = generatedRegistry.methods.find(({ method }) => method === "canonical");
+    expect(canonical?.middleware.every(({ target }) => target === AuthMiddleware || target === AuditMiddleware)).toBe(true);
   });
 
   it("generates byte-stable resolved records without alias strings", () => {

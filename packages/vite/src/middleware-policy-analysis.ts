@@ -101,12 +101,9 @@ export function analyzeMiddlewarePolicySyntax(
     collectImportBindings(sourceFile),
     sourceFile.fileName,
   );
-  const computedPolicyCall = calls.find((call) => {
-    const called = unwrapBootstrapExpression(call.expression);
-    return ts.isElementAccessExpression(called)
-      && ts.isStringLiteral(called.argumentExpression)
-      && called.argumentExpression.text === "withMiddlewares";
-  });
+  const computedPolicyCall = calls.find((call) => (
+    ts.isElementAccessExpression(unwrapBootstrapExpression(call.expression))
+  ));
   if (computedPolicyCall) {
     fail("withMiddlewares() must use direct non-computed property access.", computedPolicyCall.expression);
   }

@@ -3,8 +3,6 @@ import { Route } from "@bunwire/electrobun";
 import { Use as LocalUse } from "./reexports.js";
 import { AuditMiddleware, AuthMiddleware } from "./middleware.js";
 
-export const legacyCallback = (_invocation: unknown, next: () => Promise<unknown>) => next();
-
 @LocalUse(" auth ")
 @LocalUse(AuditMiddleware)
 @Controller("attachments")
@@ -18,7 +16,7 @@ export class AttachmentController {
   @Route("repeated")
   repeated() { return "repeated"; }
 
-  @LocalUse(legacyCallback)
-  @Route("legacy")
-  legacy() { return "legacy"; }
+  @LocalUse(AuditMiddleware)
+  @Route("canonical")
+  canonical() { return "canonical"; }
 }

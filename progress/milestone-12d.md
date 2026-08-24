@@ -113,6 +113,16 @@ After this milestone, every generated managed method carries its complete canoni
 
 - None.
 
+## Milestone 12F Reconciliation
+
+Milestone 12F removed the callback normalization exception. Final pipelines deduplicate and emit only canonical managed attachments; all policy and group regressions pass.
+
 ## Next Work Within This Milestone
 
 - None. Middleware Redesign Milestone 12E is next.
+
+## Post-Review Corrections — 2026-08-24
+
+- Closed the static-policy fail-open gap by rejecting every element-access call in the exported Application chain, including identifier and template-literal keys that resolve to `withMiddlewares`.
+- Added compiler regressions proving computed policy access fails with `MIDDLEWARE_POLICY_INVALID` instead of silently producing an empty policy.
+- The final Vite package suite passed 15 files and 161 tests.

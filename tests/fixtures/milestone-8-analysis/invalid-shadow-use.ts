@@ -1,9 +1,10 @@
-import { Controller, type ManagedMethodMiddleware } from "@bunwire/core";
+import { Controller } from "@bunwire/core";
 import { Route } from "@bunwire/electrobun";
 
-const middleware: ManagedMethodMiddleware = (_invocation, next) => next();
+type Callback = (_invocation: unknown, next: () => Promise<unknown>) => Promise<unknown>;
+const middleware: Callback = (_invocation, next) => next();
 const ShadowUse = Object.assign(
-  (..._middleware: readonly ManagedMethodMiddleware[]): MethodDecorator => () => undefined,
+  (..._middleware: readonly Callback[]): MethodDecorator => () => undefined,
   {
     definition: {
       id: "core.use" as const,

@@ -22,6 +22,13 @@ describe("Middleware Redesign 12D — invalid policy callback syntax", () => {
     expectFailure(analyzePolicy(
       "defineApp()?.withMiddlewares((registry) => { registry.use(AuthMiddleware); })",
     ), "MIDDLEWARE_POLICY_INVALID", "non-optional");
+    expectFailure(analyzePolicy(
+      "defineApp()[policyMethod]((registry) => { registry.use(AuthMiddleware); })",
+      'const policyMethod = "withMiddlewares" as const;',
+    ), "MIDDLEWARE_POLICY_INVALID", "non-computed");
+    expectFailure(analyzePolicy(
+      "defineApp()[`withMiddlewares`]((registry) => { registry.use(AuthMiddleware); })",
+    ), "MIDDLEWARE_POLICY_INVALID", "non-computed");
   });
 
   it.each([

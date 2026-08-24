@@ -12,7 +12,7 @@ import {
 export type MiddlewareNext<Result = unknown> = () => Promise<Result>;
 
 export interface Middleware<Context = unknown, Result = unknown> {
-  handle(context: Context, next: MiddlewareNext<Result>): Promise<Result>;
+  handle(context: Context, next: MiddlewareNext<Result>): Result | Promise<Result>;
 }
 
 export type MiddlewareConstructor<Context = unknown, Result = unknown> =

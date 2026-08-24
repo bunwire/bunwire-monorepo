@@ -20,7 +20,7 @@ import {
   defineMethodKind,
   defineParameterResolver,
   type InvocationContext,
-  type ManagedMethodMiddleware,
+  type MiddlewareAttachment,
   type ManagedMethodParameterPlan,
   type ParameterResolutionRequest,
 } from "@bunwire/core";
@@ -252,7 +252,7 @@ describe("Milestone 5 — managed method kinds and plans", () => {
       method: "execute",
       data: undefined,
       parameters: [{ source: "context", methodIndex: 0 }],
-      middleware: [42 as unknown as ManagedMethodMiddleware],
+      middleware: [42 as unknown as MiddlewareAttachment],
     })).toThrow(/middleware attachment must be an immutable object/i);
   });
 });
@@ -460,6 +460,67 @@ describe("Milestone 5 — caller validation and resolver diagnostics", () => {
     await expect(app.invokeManagedMethod(plan, [1, 2, 3])).rejects.toBeInstanceOf(CallerArgumentError);
   });
 
+  it("rejects invalid caller counts before invocation lifecycle side effects", async () => {
+    const events: string[] = [];
+
+    @Provider()
+    class ObservationProvider {
+      register(): void {}
+      boot(): void { events.push("boot"); }
+    }
+
+    @ManagedHandler()
+    class ValidatedTarget {
+      execute(value: string): string {
+        events.push(`target:${value}`);
+        return value;
+      }
+    }
+
+    const plan = defineManagedMethodPlan({
+      kind: COMMAND_KIND,
+      ownerKind: HANDLER_KIND,
+      target: ValidatedTarget,
+      method: "execute",
+      data: undefined,
+      parameters: [
+        { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
+      ],
+    });
+    const app = defineApp()
+      .withManagedClassKind(HANDLER_KIND)
+      .withManagedMethodKind(COMMAND_KIND)
+      .withProviders(ObservationProvider)
+      .withConventionBindings((container) => {
+        container.transient(ValidatedTarget);
+      });
+    await app.start();
+
+    const options = {
+      configure: () => { events.push("configure"); },
+      around: async (_context: InvocationContext, next: () => Promise<string>) => {
+        events.push("around:before");
+        const result = await next();
+        events.push("around:after");
+        return result;
+      },
+    };
+
+    await expect(app.invokeManagedMethod(plan, [], options)).rejects.toBeInstanceOf(CallerArgumentError);
+    await expect(app.invokeManagedMethod(plan, ["one", "two"], options))
+      .rejects.toBeInstanceOf(CallerArgumentError);
+    expect(events).toEqual([]);
+
+    await expect(app.invokeManagedMethod<string>(plan, ["valid"], options)).resolves.toBe("valid");
+    expect(events).toEqual([
+      "configure",
+      "boot",
+      "around:before",
+      "target:valid",
+      "around:after",
+    ]);
+  });
+
   it("uses the highest required caller index when an earlier caller position is optional", async () => {
     @ManagedHandler()
     class DefaultBeforeRequiredTarget {
@@ -569,60 +630,6 @@ describe("Milestone 5 — middleware and result semantics", () => {
 
     await expect(app.invokeManagedMethod<string>(synchronousPlan)).resolves.toBe("sync");
     await expect(app.invokeManagedMethod<string>(asynchronousPlan)).resolves.toBe("async");
-  });
-
-  it("wraps invocation middleware in attachment order and Promise-normalizes results", async () => {
-    const events: string[] = [];
-    const outer: ManagedMethodMiddleware = async (invocation, next) => {
-      events.push(`outer:before:${String(invocation.plan.data)}`);
-      const result = await next();
-      events.push("outer:after");
-      return `outer(${String(result)})`;
-    };
-    const inner: ManagedMethodMiddleware = async (invocation, next) => {
-      events.push(`inner:before:${String(invocation.arguments[0])}`);
-      const result = await next();
-      events.push("inner:after");
-      return `inner(${String(result)})`;
-    };
-
-    @ManagedHandler()
-    class MiddlewareTarget {
-      execute(value: unknown): string {
-        events.push("method");
-        return `method:${String(value)}`;
-      }
-    }
-
-    const plan = defineManagedMethodPlan({
-      kind: COMMAND_KIND,
-      ownerKind: HANDLER_KIND,
-      target: MiddlewareTarget,
-      method: "execute",
-      data: "metadata",
-      parameters: [
-        { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
-      ],
-      middleware: [outer, inner],
-    });
-    const app = defineApp()
-      .withManagedClassKind(HANDLER_KIND)
-      .withManagedMethodKind(COMMAND_KIND)
-      .withConventionBindings((container) => {
-        container.transient(MiddlewareTarget);
-      });
-    await app.start();
-
-    await expect(app.invokeManagedMethod<string>(plan, ["value"])).resolves.toBe(
-      "outer(inner(method:value))",
-    );
-    expect(events).toEqual([
-      "outer:before:metadata",
-      "inner:before:value",
-      "method",
-      "inner:after",
-      "outer:after",
-    ]);
   });
 
   it("propagates method failures through the async invocation result", async () => {

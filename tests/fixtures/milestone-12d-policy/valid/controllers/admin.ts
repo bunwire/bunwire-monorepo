@@ -1,8 +1,6 @@
 import { Controller, Use } from "@bunwire/core";
 import { Route } from "@bunwire/electrobun";
-import { AuditMiddleware, TraceMiddleware } from "../middleware.js";
-
-export const legacyPolicyCallback = (_invocation: unknown, next: () => Promise<unknown>) => next();
+import { AuditMiddleware, MethodAuditMiddleware, TraceMiddleware } from "../middleware.js";
 
 @Use("auth:local")
 @Use(AuditMiddleware)
@@ -11,7 +9,7 @@ export const legacyPolicyCallback = (_invocation: unknown, next: () => Promise<u
 export class AdminController {
   @Use(TraceMiddleware)
   @Use("auth:method")
-  @Use(legacyPolicyCallback)
+  @Use(MethodAuditMiddleware)
   @Route("run")
   run() { return "admin"; }
 }

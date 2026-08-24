@@ -158,7 +158,6 @@ export function createElectrobunMiddlewareDefinitions(
   }
   for (const plan of plans) {
     for (const entry of plan.middleware) {
-      if (typeof entry === "function") continue;
       if (!definitions.has(entry.target)) {
         throw new TypeError(
           `Electrobun managed method "${plan.target.name}.${String(plan.method)}" attaches middleware "${middlewareLabel(entry.target)}" without a runtime middleware definition.`,
@@ -196,7 +195,6 @@ export function selectElectrobunMiddleware(
   transport: ElectrobunMiddlewareTransport,
 ): readonly MiddlewareAttachment[] {
   return Object.freeze(plan.middleware.flatMap((entry) => {
-    if (typeof entry === "function") return [];
     const definition = definitions.get(entry.target);
     if (!definition) {
       throw new TypeError(`Electrobun middleware "${middlewareLabel(entry.target)}" has no validated runtime definition.`);

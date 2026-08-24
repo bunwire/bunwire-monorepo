@@ -793,7 +793,7 @@ the caller-visible signature is:
 (id: string, name: string, active?: boolean)
 ```
 
-At runtime, Bunwire should reject too few or too many transport arguments according to the generated plan.
+At runtime, Bunwire rejects too few or too many transport arguments according to the generated plan before creating an invocation scope or running Provider and middleware lifecycle code.
 
 Generated TypeScript contracts should catch most mistakes at development time; runtime validation protects the RPC boundary.
 
@@ -842,7 +842,7 @@ Each Application/InvocationEngine owns a managed-class-kind registry seeded with
 
 Runtime plan validation fails closed for malformed generated or JavaScript-supplied metadata. It validates parameter-source discriminants, source-specific indexes and values, runtime tokens, namespaced resolver IDs, boolean optionality, and canonical middleware attachment records before execution. The invocation engine also rejects unknown sources exhaustively as defense in depth.
 
-The runtime validates that method and caller indexes are complete and unique, validates caller counts from the highest required caller index through the total caller-visible count, then executes the explicit plan. It does not inspect TypeScript types, decorator syntax, parameter names, or platform concepts. Under the managed middleware architecture, adapters select applicable generated attachments and Core resolves their transient classes in the same invocation scope before reaching the plan as the terminal continuation. See [MIDDLEWARE.md](MIDDLEWARE.md).
+The runtime validates that method and caller indexes are complete and unique, validates caller counts from the highest required caller index through the total caller-visible count, and only then enters the invocation lifecycle and executes the explicit plan. Invalid caller counts do not create an invocation scope, run Provider `boot()`, or enter adapter middleware. It does not inspect TypeScript types, decorator syntax, parameter names, or platform concepts. Under the managed middleware architecture, adapters select applicable generated attachments and Core resolves their transient classes in the same invocation scope before reaching the plan as the terminal continuation. See [MIDDLEWARE.md](MIDDLEWARE.md).
 
 `Application.invokeManagedMethod(plan, incoming, options?)` connects this interpreter to the Application invocation scope and Provider boot boundary. Adapters and generated registries may feed plans into this generic API later; calling it does not make ordinary Service methods or undecorated methods dynamically invocable.
 
@@ -1120,7 +1120,7 @@ export const applicationRegistry = {
 
 The exact shape may be split into Core and adapter registries for tree-shaking and ownership clarity.
 
-Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, and stable resolver IDs. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle. Milestone 12 additionally exposes `virtual:bunwire/client`, generated from those same analyzed method plans and original method types. Milestone 12's callable middleware array is historical and is replaced by canonical managed middleware attachments in the required 12A–12F redesign track.
+Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, stable resolver IDs, and canonical managed middleware attachments. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle. Milestone 12 additionally exposes `virtual:bunwire/client`, generated from those same analyzed method plans and original method types.
 
 ---
 
@@ -1434,7 +1434,7 @@ deleteUser() {}
 
 Core owns middleware identity, DI, canonical attachments, parameters, generic chain execution, and deterministic ordering. Vite compiles definitions, aliases, groups, controller mappings, and local attachments into the authoritative generated registry. Adapters own context, path/transport filtering, native integration, and the terminal continuation.
 
-Milestone 12's exported-function `ManagedMethodMiddleware` and `@Use(loggingMiddleware)` implementation is complete historical behavior but is superseded as the public API direction. Milestones 12A–12F replace it without a permanent compatibility layer. Milestone 13 cannot begin until that track is complete.
+Middleware functions are not part of the release API. `@Use()` accepts canonical managed middleware classes or compiler-resolved alias strings, and generated plans contain only immutable attachments. Adapter runtimes select and execute those attachments without platform branches in Core or generic Vite analysis.
 
 ---
 
@@ -1447,17 +1447,17 @@ Adapter/runtime event
       ↓
 Generated managed-method metadata
       ↓
-Resolve target class
+Validate plan and caller argument count
+      ↓
+Create invocation scope
       ↓
 Provider.boot(context)
       ↓
-Validate caller argument count
+Adapter-selected middleware
       ↓
 Execute generated parameter plan
       ↓
-args[] in true method-index order
-      ↓
-Middleware
+Resolve target and args[] in true method-index order
       ↓
 method(...args)
       ↓

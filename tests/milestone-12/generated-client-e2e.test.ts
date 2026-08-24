@@ -219,7 +219,7 @@ describe.sequential("Milestone 12 — full Electrobun application", () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
     expect(lifecycle.messages).toEqual(["42:Milestone 12"]);
     expect(lifecycle.bootInvocationIds).toHaveLength(4);
-    expect(lifecycle.middlewareEvents).toEqual(["before:get", "after:get"]);
+    expect(lifecycle.middlewareEvents).toEqual(["before:users/get", "after:users/get"]);
     expect(new Set(lifecycle.bootInvocationIds).size).toBe(4);
 
     await expect((client.request as (...args: unknown[]) => Promise<unknown>)("users/get"))
@@ -227,7 +227,7 @@ describe.sequential("Milestone 12 — full Electrobun application", () => {
     await expect((client.request as (...args: unknown[]) => Promise<unknown>)(
       "users/get", "42", true, "extra",
     )).rejects.toThrow(/expects 1 to 2 caller argument.*received 3/i);
-    expect(lifecycle.bootInvocationIds).toHaveLength(6);
+    expect(lifecycle.bootInvocationIds).toHaveLength(4);
     await expect(app.start()).rejects.toThrow(/only be called once/i);
   });
 
@@ -253,7 +253,7 @@ describe.sequential("Milestone 12 — full Electrobun application", () => {
     });
     expect(lifecycle.registerCount).toBe(1);
     expect(lifecycle.bootInvocationIds).toHaveLength(1);
-    expect(lifecycle.middlewareEvents).toEqual(["before:get", "after:get"]);
+    expect(lifecycle.middlewareEvents).toEqual(["before:users/get", "after:users/get"]);
   });
 
   it("uses generated metadata without application-owned class construction or handler tables", async () => {

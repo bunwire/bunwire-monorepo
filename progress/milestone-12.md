@@ -45,7 +45,7 @@ Status: Complete
 - [x] Adapter context/bindings exist before application Provider registration.
 - [x] Correct caller arguments reconstruct constructor, method, token, Window, Webview, and Context values.
 - [x] Too few and too many runtime arguments fail through the authoritative server plan.
-- [x] Provider `register()` runs once and `boot()` runs for each attempted managed invocation.
+- [x] Provider `register()` runs once and `boot()` runs for each caller-validated managed invocation; malformed caller counts fail before lifecycle side effects.
 - [x] Adapter-owned bindings participate in the same Provider registration sequence.
 - [x] Compiler-generated middleware surrounds managed invocation.
 - [x] No application Service, Controller, or Provider is manually instantiated and no application-owned RPC handler table is required.
@@ -131,3 +131,10 @@ After this milestone:
 ## Next Work Within This Milestone
 
 - None. Milestone 13 is next.
+
+## Post-Review Corrections — 2026-08-24
+
+- Centralized plan/invocability/caller-bound validation in `InvocationEngine.validateInvocation()` and made `Application.invokeManagedMethod()` reject malformed caller counts before child-scope creation, invocation configuration, Provider boot, adapter middleware, parameter resolution, or Controller execution.
+- Preserved Promise-based failures and the pre-start Application-state error boundary.
+- Updated the normal-host E2E lifecycle assertion so rejected malformed calls no longer count as booted invocations.
+- Added Core and Electrobun short-circuit regressions; the focused correction suite passed 5 files and 55 tests, and final repository quality passed 32 files and 332 tests.

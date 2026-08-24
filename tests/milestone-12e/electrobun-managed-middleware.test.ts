@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  CallerArgumentError,
   CONTROLLER_KIND,
   Controller,
   Inject,
@@ -118,7 +119,7 @@ class MiddlewareController {
   }
 
   @Route("short")
-  short(): string {
+  short(_value: string): string {
     controllerRuns += 1;
     return "controller-short";
   }
@@ -184,7 +185,9 @@ const shortPlan = defineManagedMethodPlan({
   target: MiddlewareController,
   method: "short",
   data: { path: "short" },
-  parameters: [],
+  parameters: [
+    { source: "transport", methodIndex: 0, argumentIndex: 0, optional: false },
+  ],
   middleware: [defineMiddlewareAttachment(ShortCircuitMiddleware, ["policy"])],
 });
 const failurePlan = defineManagedMethodPlan({
@@ -331,7 +334,12 @@ describe.sequential("Middleware Redesign 12E — Electrobun managed middleware",
     await app.start();
     const rpc = fakeRpc(app.rootContainer.get(ELECTROBUN_CONTEXT).rpc);
 
-    await expect(rpc.receiveRequest("api/short", { args: [] })).resolves.toBe("short:policy");
+    await expect(rpc.receiveRequest("api/short", { args: [] }))
+      .rejects.toBeInstanceOf(CallerArgumentError);
+    expect(events).toEqual([]);
+    expect(controllerRuns).toBe(0);
+    await expect(rpc.receiveRequest("api/short", { args: ["accepted"] }))
+      .resolves.toBe("short:policy");
     expect(controllerRuns).toBe(0);
     await expect(rpc.receiveRequest("api/failure", { args: [] }))
       .rejects.toThrow("middleware-failure:request");

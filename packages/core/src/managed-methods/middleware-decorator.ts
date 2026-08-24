@@ -3,7 +3,6 @@ import {
   assertMiddlewareTarget,
   type MiddlewareConstructor,
 } from "../middleware/managed-middleware.js";
-import type { ManagedMethodMiddleware } from "./plan.js";
 
 export const USE_DECORATOR_ID = "core.use" as const;
 
@@ -14,24 +13,32 @@ export interface UseDecoratorDefinition {
 
 export interface UseDecorator {
   (...middleware: readonly MiddlewareReference[]): ClassDecorator & MethodDecorator;
-  /** @deprecated Callback middleware is temporary migration scaffolding. */
-  (...middleware: readonly ManagedMethodMiddleware[]): MethodDecorator;
   readonly definition: UseDecoratorDefinition;
 }
 
 export type MiddlewareReference = MiddlewareConstructor | string;
-export type UseMiddlewareEntry = MiddlewareReference | ManagedMethodMiddleware;
 
 const CLASS_MIDDLEWARE = Symbol("bunwire.use.class");
+const STANDARD_USE_MIDDLEWARE_METADATA = Symbol.for("@bunwire/core/use-middleware-metadata");
 const middlewareMetadata = new WeakMap<
   object,
-  Map<PropertyKey | typeof CLASS_MIDDLEWARE, readonly UseMiddlewareEntry[]>
+  Map<PropertyKey | typeof CLASS_MIDDLEWARE, readonly MiddlewareReference[]>
 >();
+
+interface StandardUseDecoratorContext {
+  readonly kind?: unknown;
+  readonly name?: unknown;
+  readonly metadata?: unknown;
+}
+
+type StandardUseMetadataCarrier = {
+  readonly [STANDARD_USE_MIDDLEWARE_METADATA]?: ReadonlyMap<PropertyKey, readonly MiddlewareReference[]>;
+};
 
 function attachMiddleware(
   target: object,
   propertyKey: PropertyKey | typeof CLASS_MIDDLEWARE,
-  middleware: readonly UseMiddlewareEntry[],
+  middleware: readonly MiddlewareReference[],
 ): void {
   let methods = middlewareMetadata.get(target);
   if (!methods) {
@@ -42,6 +49,26 @@ function attachMiddleware(
   methods.set(propertyKey, Object.freeze([...middleware, ...existing]));
 }
 
+function attachStandardMethodMiddleware(
+  metadata: object,
+  propertyKey: PropertyKey,
+  middleware: readonly MiddlewareReference[],
+): void {
+  const carrier = metadata as StandardUseMetadataCarrier;
+  const existing = carrier[STANDARD_USE_MIDDLEWARE_METADATA];
+  const methods = new Map(existing ?? []);
+  methods.set(propertyKey, Object.freeze([
+    ...middleware,
+    ...(methods.get(propertyKey) ?? []),
+  ]));
+  Object.defineProperty(metadata, STANDARD_USE_MIDDLEWARE_METADATA, {
+    configurable: true,
+    enumerable: false,
+    value: methods,
+    writable: false,
+  });
+}
+
 const definition = Object.freeze({
   id: USE_DECORATOR_ID,
   compilerSymbol: Object.freeze({
@@ -50,48 +77,44 @@ const definition = Object.freeze({
   }),
 });
 
-const useDecorator = (...middleware: readonly UseMiddlewareEntry[]): ClassDecorator & MethodDecorator => {
+const useDecorator = (...middleware: readonly MiddlewareReference[]): ClassDecorator & MethodDecorator => {
   if (middleware.length === 0 || middleware.some((entry) => (
     typeof entry !== "function"
     && (typeof entry !== "string" || entry.trim().length === 0)
   ))) {
     throw new TypeError("@Use() requires at least one middleware class or non-empty string reference.");
   }
-  return ((target: object, propertyKey?: PropertyKey): void => {
-    const key = propertyKey ?? CLASS_MIDDLEWARE;
-    if (key === CLASS_MIDDLEWARE) {
-      for (const entry of middleware) {
-        if (typeof entry === "function") {
-          assertMiddlewareTarget(entry);
-        }
+  for (const entry of middleware) {
+    if (typeof entry === "function") assertMiddlewareTarget(entry);
+  }
+  return ((target: object, propertyKey?: PropertyKey | StandardUseDecoratorContext): void => {
+    if (propertyKey && typeof propertyKey === "object") {
+      if (propertyKey.kind === "class") {
+        attachMiddleware(target, CLASS_MIDDLEWARE, middleware);
+        return;
       }
+      if (propertyKey.kind === "method"
+        && (typeof propertyKey.name === "string" || typeof propertyKey.name === "symbol")
+        && typeof propertyKey.metadata === "object"
+        && propertyKey.metadata !== null) {
+        attachStandardMethodMiddleware(propertyKey.metadata, propertyKey.name, middleware);
+        return;
+      }
+      throw new TypeError("@Use() received malformed standard decorator context.");
     }
-    attachMiddleware(target, key, middleware);
+    attachMiddleware(target, propertyKey ?? CLASS_MIDDLEWARE, middleware);
   }) as ClassDecorator & MethodDecorator;
 };
 
 export const Use = Object.assign(useDecorator, { definition }) as UseDecorator;
 
-export function getManagedMethodMiddlewareMetadata(
-  target: object,
-  propertyKey: PropertyKey,
-): readonly ManagedMethodMiddleware[] {
-  return Object.freeze((middlewareMetadata.get(target)?.get(propertyKey) ?? [])
-    .filter((entry): entry is ManagedMethodMiddleware => {
-      if (typeof entry !== "function") return false;
-      try {
-        assertMiddlewareTarget(entry);
-        return false;
-      } catch {
-        return true;
-      }
-    }));
-}
-
 export function getUseMiddlewareMetadata(
   target: object,
   propertyKey?: PropertyKey,
-): readonly UseMiddlewareEntry[] {
+): readonly MiddlewareReference[] {
   return middlewareMetadata.get(target)?.get(propertyKey ?? CLASS_MIDDLEWARE)
+    ?? (target as StandardUseMetadataCarrier)[STANDARD_USE_MIDDLEWARE_METADATA]?.get(
+      propertyKey ?? CLASS_MIDDLEWARE,
+    )
     ?? Object.freeze([]);
 }

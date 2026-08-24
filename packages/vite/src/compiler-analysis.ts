@@ -103,7 +103,7 @@ export interface AnalyzedManagedMethod {
   readonly parameters: readonly AnalyzedMethodParameter[];
   readonly minimumCallerArguments: number;
   readonly maximumCallerArguments: number | null;
-  readonly middleware: readonly AnalyzedMiddlewareEntry[];
+  readonly middleware: readonly AnalyzedMiddlewareAttachment[];
 }
 
 export interface AnalyzedMiddlewareAttachment {
@@ -112,14 +112,6 @@ export interface AnalyzedMiddlewareAttachment {
   readonly parameters: readonly string[];
   readonly location: BunwireSourceLocation;
 }
-
-export interface AnalyzedLegacyMiddleware {
-  readonly source: "callback";
-  readonly target: CompilerRuntimeReference;
-  readonly location: BunwireSourceLocation;
-}
-
-export type AnalyzedMiddlewareEntry = AnalyzedMiddlewareAttachment | AnalyzedLegacyMiddleware;
 
 export interface AnalyzedManagedClass {
   readonly name: string;
@@ -1219,13 +1211,12 @@ function parseMiddlewareAliasReference(
 function analyzeUseEntries(
   uses: readonly DecoratorMatch<typeof Use.definition>[],
   ownerLabel: string,
-  allowLegacyCallbacks: boolean,
   checker: ts.TypeChecker,
   middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
   middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
   middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]> = new Map(),
-): readonly AnalyzedMiddlewareEntry[] {
-  const entries: AnalyzedMiddlewareEntry[] = [];
+): readonly AnalyzedMiddlewareAttachment[] {
+  const entries: AnalyzedMiddlewareAttachment[] = [];
   for (const use of uses) {
     if (use.call.arguments.length === 0) {
       fail(
@@ -1294,19 +1285,9 @@ function analyzeUseEntries(
         }));
         continue;
       }
-      if (allowLegacyCallbacks
-        && symbol
-        && checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0) {
-        entries.push(Object.freeze({
-          source: "callback" as const,
-          target: runtimeReference(checker, expression, symbol),
-          location: locationOf(expression),
-        }));
-        continue;
-      }
       fail(
         "MIDDLEWARE_ATTACHMENT_INVALID",
-        `@Use() argument "${expression.getText()}" on ${ownerLabel} is not a canonical managed middleware class${allowLegacyCallbacks ? " or exported legacy callback" : ""}.`,
+        `@Use() argument "${expression.getText()}" on ${ownerLabel} is not a canonical managed middleware class.`,
         expression,
       );
     }
@@ -1526,11 +1507,10 @@ function middlewareAttachmentKey(attachment: AnalyzedMiddlewareAttachment): stri
 }
 
 function deduplicateMiddleware(
-  entries: readonly AnalyzedMiddlewareEntry[],
-): readonly AnalyzedMiddlewareEntry[] {
+  entries: readonly AnalyzedMiddlewareAttachment[],
+): readonly AnalyzedMiddlewareAttachment[] {
   const seen = new Set<string>();
   return Object.freeze(entries.filter((entry) => {
-    if (entry.source === "callback") return true;
     const key = middlewareAttachmentKey(entry);
     if (seen.has(key)) return false;
     seen.add(key);
@@ -1646,7 +1626,6 @@ function analyzeManagedMethods(
     const middleware = analyzeUseEntries(
       uses,
       `managed method "${member.name.getText()}"`,
-      true,
       checker,
       middlewareBySymbol,
       middlewareAliases,
@@ -1872,12 +1851,11 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       : analyzeUseEntries(
         classUses,
         `Controller "${declaration.name?.text ?? "<anonymous>"}"`,
-        false,
         checker,
         middlewareTargetsBySymbol,
         middlewareTargetsByAlias,
         middlewarePolicy.groups,
-      ) as readonly AnalyzedMiddlewareAttachment[];
+      );
     const methods = analyzeManagedMethods(
       declaration,
       ownerKind,

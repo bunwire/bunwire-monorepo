@@ -2,12 +2,12 @@ import {
   APPLICATION_CONTEXT,
   Controller,
   Inject,
+  Middleware,
   Provider,
   Service,
   Use,
   createToken,
   type Container,
-  type ManagedMethodMiddleware,
 } from "@bunwire/core";
 import {
   Context,
@@ -15,6 +15,7 @@ import {
   Route,
   Window,
   type ElectrobunContext,
+  type ElectrobunMiddlewareContext,
   type ElectrobunWindow,
 } from "@bunwire/electrobun";
 
@@ -30,11 +31,6 @@ export interface User {
 
 export const CACHE = createToken<Cache>("example.cache");
 
-export const requestLoggingMiddleware: ManagedMethodMiddleware = async (invocation, next) => {
-  console.info(`Calling ${invocation.target.constructor.name}.${String(invocation.plan.method)}.`);
-  return next();
-};
-
 @Service()
 export class DatabaseService {
   findUser(id: string): { readonly id: string } {
@@ -48,6 +44,20 @@ export class UserService {
 
   find(id: string): { readonly id: string } {
     return this.database.findUser(id);
+  }
+}
+
+@Middleware()
+export class RequestLoggingMiddleware implements Middleware<ElectrobunMiddlewareContext> {
+  protected alias = "request-logger";
+  protected only = ["request"];
+
+  constructor(private readonly users: UserService) {}
+
+  async handle(context: ElectrobunMiddlewareContext, next: () => Promise<unknown>): Promise<unknown> {
+    void this.users;
+    console.info(`Calling Electrobun endpoint ${context.endpoint}.`);
+    return next();
   }
 }
 
@@ -66,7 +76,7 @@ export class UserController {
   constructor(private readonly users: UserService) {}
 
   @Route("get")
-  @Use(requestLoggingMiddleware)
+  @Use(RequestLoggingMiddleware)
   async get(
     id: string,
     methodUsers: UserService,

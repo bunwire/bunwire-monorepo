@@ -209,7 +209,7 @@ Additional adversarial coverage proves same-ID method/injector symbols cannot im
 | Plain DTO/class remains caller-visible | `PayloadDto` transport assertion |
 | Interface plus `@Inject(TOKEN)` is container-resolved | `MethodCache`/`METHOD_CACHE` assertion |
 | Parameter injector wins over type DI | Managed-type parameter with `@FrameworkValue()` fixture |
-| Too few/too many caller args fail at runtime | Generated strict-plan Application invocation test |
+| Too few/too many caller args fail before invocation lifecycle side effects | Generated strict-plan Application and Electrobun short-circuit tests |
 | Invalid method placement fails at compile time | `@Subscribe()` on `@Service()` fixture |
 | Incompatible parameter-source decorators fail | Combined framework-injector/`@Inject()` fixture |
 | Rest semantics are preserved | Unbounded compiled rest-plan runtime invocation test |
@@ -317,11 +317,11 @@ Core and compiler coverage lives in `tests/milestone-12d`, backed by `tests/fixt
 | Forward/nested groups and cycle paths | Valid expansion plus direct/indirect cycle diagnostics |
 | Controller path mappings | POSIX-normalized multi-root, overlapping, invalid, and unmatched pattern tests |
 | Four-scope canonical order | Global → mapped → Controller → method pipeline assertion |
-| Exact attachment deduplication | Same target/parameters removed; distinct parameters and callbacks retained |
+| Exact attachment deduplication | Same target/parameters removed while distinct parameterizations remain ordered |
 | No unresolved runtime policy | Generated source, semantic typecheck, immutable runtime registry assertions |
 | Analysis executes no application code | Throwing bootstrap, module initializer, middleware initializer, and method fixture |
 | Attachments are immutable and runtime-validated | Core plan validation and frozen parameter tests |
-| Legacy callbacks remain compatible | Metadata and invocation tests with managed attachments present |
+| Attachment-only pipelines remain canonical | Runtime and generated plans contain validated managed attachments only |
 | Analysis executes no application code | Throwing static block and method analysis-generation fixture |
 | Output is stable and type-correct | Reversed analysis, stable hash/source, semantic TypeScript, and runtime registry checks |
 
@@ -340,6 +340,20 @@ Adapter and generated-host coverage lives in `tests/milestone-12e`, with the rea
 | Normal/manual parity | One compiler-generated normalized registry executes in both host modes |
 | Native coexistence | Manual fallback, wildcard listeners, outgoing requests/messages, readiness, and object identity remain intact |
 | SDK and native process | Public context typecheck plus generated-registry native smoke with DI, filters, parameters, request/message dispatch, and short circuit |
+
+## Middleware Redesign Milestone 12F
+
+Finalization coverage lives in `tests/milestone-12f`, backed by the compiler-generated `tests/fixtures/milestone-12f-fake-queue` adapter.
+
+| Requirement | Test evidence |
+| --- | --- |
+| Callback API removal | Runtime rejection, attachment-only plan validation, type/public-export scans |
+| Canonical generated source | Every method entry uses `defineMiddlewareAttachment()` and semantic TypeScript checking passes |
+| Second-adapter independence | Fake queue adapter contributes its own Consumer class kind, command/event method kinds, exact-topic matching, and immutable context |
+| Adapter-owned selection | Nonmatching classes are never constructed; include/exclude and only/except remain outside Core/Vite |
+| Managed execution semantics | Ordering, transformations, short circuits, failures, parameters, and event-result suppression |
+| One invocation scope | Provider boot, transient constructor DI, resolver values, and Controller parameters share invocation identity |
+| Boundary proof | Core and generic Vite source contain no fake queue topics, transports, context, or matching branches |
 
 ## Commands
 

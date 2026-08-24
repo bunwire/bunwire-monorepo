@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import {
   Use,
-  getManagedMethodMiddlewareMetadata,
+  getUseMiddlewareMetadata,
 } from "@bunwire/core";
 import { ELECTROBUN_COMPILER_DESCRIPTOR } from "@bunwire/electrobun";
 import {
@@ -13,7 +13,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   UserController,
-  loggingMiddleware,
+  LoggingMiddleware,
 } from "../fixtures/milestone-12-electrobun/src/bun/application.js";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -41,10 +41,11 @@ function analyze(fileName: string) {
 }
 
 describe("Milestone 12 — generated middleware attachment", () => {
-  it("retains runtime metadata for the canonical aliased @Use decorator", () => {
-    expect(getManagedMethodMiddlewareMetadata(UserController.prototype, "get"))
-      .toEqual([loggingMiddleware]);
+  it("retains only canonical managed middleware metadata for @Use", () => {
+    expect(getUseMiddlewareMetadata(UserController.prototype, "get"))
+      .toEqual([LoggingMiddleware]);
     expect(() => Use()).toThrow(/at least one middleware class or non-empty string reference/i);
+    expect(() => Use((() => undefined) as never)).toThrow(/canonical.*middleware/i);
   });
 
   it("rejects a same-ID counterfeit @Use decorator", () => {

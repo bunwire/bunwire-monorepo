@@ -318,11 +318,7 @@ export class Application<ApplicationContext = unknown> {
     handler: (context: InvocationContext<ApplicationContext>) => Result | Promise<Result>,
     options: ManagedInvocationOptions<ApplicationContext, Result> = {},
   ): Promise<Result> {
-    if (this.#state !== "running") {
-      throw new ApplicationStateError(
-        `Managed invocations require a running Application; current state is "${this.#state}".`,
-      );
-    }
+    this.assertRunning();
 
     const rootContainer = this.#rootContainer as Container;
     const invocationContainer = rootContainer.createChild();
@@ -359,21 +355,31 @@ export class Application<ApplicationContext = unknown> {
     });
   }
 
-  invokeManagedMethod<Result = unknown>(
+  async invokeManagedMethod<Result = unknown>(
     plan: ManagedMethodPlan,
     callerArguments: readonly unknown[] = [],
     options: ManagedInvocationOptions<ApplicationContext, Result> = {},
   ): InvocationResult<Result> {
-    return this.runInvocation(
+    this.assertRunning();
+    this.#invocationEngine.validateInvocation(plan, callerArguments);
+    return await this.runInvocation(
       (context) => this.#invocationEngine.invoke<Result>(plan, context, callerArguments),
       options,
-    ) as InvocationResult<Result>;
+    ) as Awaited<Result>;
   }
 
   private assertConfiguring(operation: string): void {
     if (this.#state !== "configuring") {
       throw new ApplicationStateError(
         `${operation} cannot modify an Application in state "${this.#state}".`,
+      );
+    }
+  }
+
+  private assertRunning(): void {
+    if (this.#state !== "running") {
+      throw new ApplicationStateError(
+        `Managed invocations require a running Application; current state is "${this.#state}".`,
       );
     }
   }

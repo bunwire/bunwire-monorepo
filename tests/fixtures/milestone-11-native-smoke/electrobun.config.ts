@@ -7,9 +7,9 @@ export default {
     version: "0.0.1",
   },
   build: {
-    bun: { entrypoint: "src/bun/index.ts" },
+    bun: { entrypoint: "src/bun/index.ts", tsconfig: "tsconfig.json" },
     views: {
-      mainview: { entrypoint: "src/mainview/index.ts" },
+      mainview: { entrypoint: "src/mainview/index.ts", tsconfig: "tsconfig.json" },
     },
     copy: {
       "src/mainview/index.html": "views/mainview/index.html",

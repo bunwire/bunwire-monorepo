@@ -15,6 +15,7 @@ import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import type { ManagedMethodKind } from "../managed-methods/method-kind.js";
 import type { ParameterResolverDefinition } from "../managed-methods/resolvers.js";
 import { validateMiddlewareDefinition } from "../middleware/managed-middleware.js";
+import type { MiddlewarePolicyConfiguration } from "../middleware/policy.js";
 import { ApplicationStateError } from "./errors.js";
 import {
   APPLICATION_CONTEXT,
@@ -45,6 +46,7 @@ export class Application<ApplicationContext = unknown> {
   readonly #invocationEngine = new InvocationEngine();
   #adapter: Adapter<any> | undefined;
   #runtimeRegistry: RuntimeRegistry = defineRuntimeRegistry();
+  #hasMiddlewarePolicy = false;
 
   get state(): ApplicationState {
     return this.#state;
@@ -73,6 +75,20 @@ export class Application<ApplicationContext = unknown> {
   withProviderRegistry(registry: ProviderRegistry): this {
     this.assertConfiguring("withProviderRegistry()");
     this.#providerClasses.push(...registry.providers);
+    return this;
+  }
+
+  withMiddlewares(configuration: MiddlewarePolicyConfiguration): this {
+    this.assertConfiguring("withMiddlewares()");
+    if (typeof configuration !== "function") {
+      throw new TypeError("Application.withMiddlewares() requires a configuration callback.");
+    }
+    if (this.#hasMiddlewarePolicy) {
+      throw new ApplicationStateError(
+        "Application.withMiddlewares() may be configured at most once.",
+      );
+    }
+    this.#hasMiddlewarePolicy = true;
     return this;
   }
 

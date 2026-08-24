@@ -4,6 +4,10 @@ import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { isNamespacedIdentifier } from "../managed-classes/identifiers.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
+import {
+  validateMiddlewareAttachment,
+  type MiddlewareAttachment,
+} from "../middleware/managed-middleware.js";
 import { ManagedMethodPlanError } from "./errors.js";
 import type { ParameterResolverId } from "./identifiers.js";
 import type { ManagedMethodKind } from "./method-kind.js";
@@ -57,6 +61,8 @@ export type ManagedMethodMiddleware = (
   next: ManagedMethodNext,
 ) => unknown | Promise<unknown>;
 
+export type ManagedMethodMiddlewareEntry = ManagedMethodMiddleware | MiddlewareAttachment;
+
 export interface ManagedMethodPlan<
   Target extends Constructable<object> = Constructable<object>,
   Data = unknown,
@@ -67,7 +73,7 @@ export interface ManagedMethodPlan<
   readonly method: PropertyKey;
   readonly data: Data;
   readonly parameters: readonly ManagedMethodParameterPlan[];
-  readonly middleware: readonly ManagedMethodMiddleware[];
+  readonly middleware: readonly ManagedMethodMiddlewareEntry[];
 }
 
 export interface DefineManagedMethodPlanOptions<
@@ -80,7 +86,7 @@ export interface DefineManagedMethodPlanOptions<
   readonly method: keyof InstanceType<Target> & PropertyKey;
   readonly data: Data;
   readonly parameters: readonly ManagedMethodParameterPlan[];
-  readonly middleware?: readonly ManagedMethodMiddleware[];
+  readonly middleware?: readonly ManagedMethodMiddlewareEntry[];
 }
 
 function assertIndex(index: unknown, label: string): asserts index is number {
@@ -127,9 +133,7 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
   }
   for (const middleware of plan.middleware) {
     if (typeof middleware !== "function") {
-      throw new ManagedMethodPlanError(
-        `Managed method "${String(plan.method)}" middleware entries must be callable.`,
-      );
+      validateMiddlewareAttachment(middleware);
     }
   }
 

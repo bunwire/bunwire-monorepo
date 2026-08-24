@@ -41,7 +41,9 @@ Constructor parameters must use explicit `@Inject(TOKEN)` or resolve to a manage
 
 Managed methods classify registered parameter injectors first, explicit `@Inject()` second, injectable managed types third, and every remaining parameter as caller-visible transport input. Each method result preserves true `methodIndex` values independently from compact `argumentIndex` values, including optional and final-rest semantics plus minimum/maximum caller bounds. Managed methods must be concrete instance methods; static, abstract, and declaration-only methods are rejected before registry generation.
 
-The canonical `@Use()` symbol is analyzed separately from the managed-method decorator. Each middleware argument must be an exported callable runtime reference and is emitted into the generated method plan without changing caller classification.
+The canonical `@Use()` symbol is analyzed separately from managed-method decorators. It is valid on canonical Controllers and their concrete managed methods. Arguments may be discovered middleware classes or direct alias string literals; same-ID counterfeit symbols, unsupported placements, dynamic expressions, and invalid targets fail with source-located diagnostics. Exported method callbacks remain temporary migration inputs.
+
+Alias strings split at the first `:`, then split parameters on `,`. Names and parameters are trimmed, empty entries and attempted delimiter escaping are rejected, and values receive no coercion. Class references cannot carry inline parameters. Controller decorators retain top-to-bottom and argument left-to-right order, followed by method decorators in the same order; exact duplicates remain until centralized normalization in Milestone 12D.
 
 Canonical `@Middleware()` classes are discovered as the built-in `core.middleware` managed kind. The compiler accepts the canonical export through normal aliases/re-exports and rejects a different symbol claiming its ID. Middleware must be named, directly exported, concrete, and provide or inherit a concrete callable instance `handle(context, next)` method.
 
@@ -53,7 +55,13 @@ Compiler runtime references retain the source expression, resolved exported symb
 
 ## Generated registry module
 
-`generateRuntimeRegistryModule()` converts the completed analysis into deterministic TypeScript containing class metadata, constructor dependencies, Providers, managed-method plans, resolver IDs, adapter metadata, and middleware arrays. Imports and records are sorted independently of filesystem enumeration order, and `BUNWIRE_REGISTRY_HASH` identifies the byte-stable generated body.
+`generateRuntimeRegistryModule()` converts the completed analysis into deterministic TypeScript containing class metadata, constructor dependencies, Providers, managed-method plans, resolver IDs, adapter metadata, and middleware arrays. Local managed references are emitted with `defineMiddlewareAttachment()` and contain canonical class imports plus immutable parameters; aliases never reach runtime. Imports and records are sorted independently of filesystem enumeration order, and `BUNWIRE_REGISTRY_HASH` identifies the byte-stable generated body.
+
+The optional direct `Application.withMiddlewares((registry) => { ... })` block is parsed from the same exported `defineApp()` chain used for adapter discovery. It is a static compiler DSL: the callback must be synchronous, direct, and contain only literal `registry.use()`, `registry.group()`, and `registry.controllers()` calls. Analysis never imports the bootstrap or invokes the callback.
+
+Groups are collected before expansion, so forward and nested references are valid; duplicate names, alias collisions, parameterized groups, unknown references, and complete direct/indirect cycles fail with source-located diagnostics. Controller mappings use case-sensitive configured-source-root-relative POSIX paths with segment `*` and cross-segment `**`. Invalid, traversing, absolute, backslash, and unmatched patterns fail compilation.
+
+Each analyzed managed method carries its final pipeline in global → matching Controller mappings → Controller `@Use()` → method `@Use()` order. Canonical attachments are deduplicated by target identity plus exact ordered parameters while the earliest entry wins; distinct parameterizations and temporary callback entries remain ordered. Generation emits only canonical attachments and callbacks—never policy groups, aliases, patterns, or runtime matching data.
 
 `bunwire()` exposes that same output through `virtual:bunwire/registry`. The Vite hooks resolve only the canonical registry ID, cache one analysis per build, and invalidate it at the next build start. The generated module exports `applicationRegistry` and a default registry value suitable for `Application.withRuntimeRegistry()`.
 

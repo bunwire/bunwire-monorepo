@@ -15,6 +15,7 @@ import { ManagedMethodKindRegistry } from "./method-kind-registry.js";
 import {
   validateManagedMethodPlan,
   type ManagedMethodInvocation,
+  type ManagedMethodMiddleware,
   type ManagedMethodParameterPlan,
   type ManagedMethodPlan,
 } from "./plan.js";
@@ -154,13 +155,16 @@ export class InvocationEngine {
       callerArguments: Object.freeze([...callerArguments]),
     }) satisfies ManagedMethodInvocation;
 
+    const callableMiddleware = plan.middleware.filter(
+      (entry): entry is ManagedMethodMiddleware => typeof entry === "function",
+    );
     let activeMiddlewareIndex = -1;
     const dispatch = async (index: number): Promise<unknown> => {
       if (index <= activeMiddlewareIndex) {
         throw new Error("Managed method middleware next() may only be called once.");
       }
       activeMiddlewareIndex = index;
-      const middleware = plan.middleware[index];
+      const middleware = callableMiddleware[index];
       if (middleware) {
         return middleware(invocation, () => dispatch(index + 1));
       }

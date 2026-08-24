@@ -1,12 +1,15 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, symlinkSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const fixtureRoot = path.join(repositoryRoot, "tests/fixtures/milestone-11-native-smoke");
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-const build = spawnSync(pnpmCommand, ["--filter", "@bunwire/electrobun...", "build"], {
+const build = spawnSync(pnpmCommand, ["--filter", "@bunwire/electrobun...", "--filter", "@bunwire/vite...", "build"], {
   cwd: repositoryRoot,
   encoding: "utf8",
   shell: process.platform === "win32",
@@ -14,6 +17,39 @@ const build = spawnSync(pnpmCommand, ["--filter", "@bunwire/electrobun...", "bui
 process.stdout.write(build.stdout ?? "");
 process.stderr.write(build.stderr ?? "");
 if (build.status !== 0) process.exit(build.status ?? 1);
+
+const { ElectrobunAdapter } = await import(
+  pathToFileURL(path.join(repositoryRoot, "packages/electrobun/dist/index.js"))
+);
+const {
+  aggregateCompilerExtensions,
+  analyzeBunwireProgram,
+  generateRuntimeRegistryModule,
+} = await import(pathToFileURL(path.join(repositoryRoot, "packages/vite/dist/index.js")));
+const nativeSourceRoot = path.join(fixtureRoot, "src/bun");
+const generatedPath = path.join(nativeSourceRoot, "registry.generated.ts");
+const extensions = aggregateCompilerExtensions(ElectrobunAdapter.compiler);
+const analysis = analyzeBunwireProgram({
+  projectRoot: repositoryRoot,
+  sourceFiles: [path.join(nativeSourceRoot, "application.ts")],
+  sourceRoots: [nativeSourceRoot],
+  bootstrapPath: path.join(nativeSourceRoot, "bootstrap.ts"),
+  extensions,
+  compilerOptions: {
+    baseUrl: repositoryRoot,
+    paths: {
+      "@bunwire/core": ["packages/core/src/index.ts"],
+      "@bunwire/electrobun": ["packages/electrobun/src/index.ts"],
+    },
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    experimentalDecorators: true,
+  },
+});
+const generated = generateRuntimeRegistryModule({ analysis, extensions, modulePath: generatedPath });
+await writeFile(generatedPath, generated.code, "utf8");
+process.stdout.write("BUNWIRE_NATIVE_SMOKE_REGISTRY_GENERATED\n");
 
 const fixtureModules = path.join(fixtureRoot, "node_modules");
 const fixtureBunwireModules = path.join(fixtureModules, "@bunwire");
@@ -60,7 +96,10 @@ clearTimeout(timeout);
 
 const requiredMarkers = [
   "BUNWIRE_NATIVE_SMOKE_STARTED",
-  "BUNWIRE_NATIVE_SMOKE_REQUEST:native|sdk",
+  "BUNWIRE_NATIVE_SMOKE_MIDDLEWARE:request:smoke-param",
+  "BUNWIRE_NATIVE_SMOKE_CONTROLLER:native|sdk",
+  "BUNWIRE_NATIVE_SMOKE_SHORT:blocked",
+  "BUNWIRE_NATIVE_SMOKE_MIDDLEWARE:message:smoke-param",
   "BUNWIRE_NATIVE_SMOKE_COMPLETE:verified",
 ];
 const missingMarkers = requiredMarkers.filter((marker) => !output.includes(marker));

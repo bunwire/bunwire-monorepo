@@ -42,3 +42,7 @@ export {
   type ManualElectrobunAdapterOptions,
 } from "./runtime.js";
 export { ElectrobunPathError, normalizeElectrobunPath } from "./path.js";
+export type {
+  ElectrobunMiddlewareContext,
+  ElectrobunMiddlewareTransport,
+} from "./middleware.js";

@@ -44,7 +44,7 @@ describe("Milestone 12 — generated middleware attachment", () => {
   it("retains runtime metadata for the canonical aliased @Use decorator", () => {
     expect(getManagedMethodMiddlewareMetadata(UserController.prototype, "get"))
       .toEqual([loggingMiddleware]);
-    expect(() => Use()).toThrow(/at least one callable/i);
+    expect(() => Use()).toThrow(/at least one middleware class or non-empty string reference/i);
   });
 
   it("rejects a same-ID counterfeit @Use decorator", () => {
@@ -56,8 +56,8 @@ describe("Milestone 12 — generated middleware attachment", () => {
 
   it("rejects a non-callable generated middleware reference", () => {
     expect(() => analyze("invalid-use-value.ts")).toThrowError(expect.objectContaining({
-      code: "MANAGED_METHOD_INVALID",
-      message: expect.stringMatching(/must be callable/i),
+      code: "MIDDLEWARE_ATTACHMENT_INVALID",
+      message: expect.stringMatching(/direct middleware class reference or string literal/i),
     }));
   });
 });

@@ -55,6 +55,8 @@ export async function analyzeBunwireApplication(
   const analysis = analyzeBunwireProgram({
     projectRoot: discovered.config.root,
     sourceFiles: discovered.sourceFiles,
+    bootstrapPath: discovered.config.bootstrap,
+    sourceRoots: discovered.config.sourceRoots,
     extensions: discovered.extensions,
     ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
     ...(options.compilerOptions ? { compilerOptions: options.compilerOptions } : {}),

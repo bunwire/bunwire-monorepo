@@ -8,7 +8,7 @@ import {
 import ts from "typescript";
 import { BunwireCompilerError } from "./diagnostics.js";
 
-interface ImportBinding {
+export interface ImportBinding {
   readonly moduleSpecifier: string;
   readonly exportName: string | undefined;
   readonly namespace: boolean;
@@ -22,7 +22,7 @@ export interface DiscoveredAdapterReference {
   readonly compilerDescriptor: AdapterCompilerDescriptor;
 }
 
-function collectImportBindings(sourceFile: ts.SourceFile): Map<string, ImportBinding> {
+export function collectImportBindings(sourceFile: ts.SourceFile): Map<string, ImportBinding> {
   const bindings = new Map<string, ImportBinding>();
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)
@@ -58,7 +58,7 @@ function collectImportBindings(sourceFile: ts.SourceFile): Map<string, ImportBin
   return bindings;
 }
 
-function unwrapExpression(expression: ts.Expression): ts.Expression {
+export function unwrapBootstrapExpression(expression: ts.Expression): ts.Expression {
   let current = expression;
   while (ts.isParenthesizedExpression(current)
     || ts.isAsExpression(current)
@@ -74,7 +74,7 @@ function isImportedDefineApp(
   expression: ts.Expression,
   bindings: ReadonlyMap<string, ImportBinding>,
 ): boolean {
-  const called = unwrapExpression(expression);
+  const called = unwrapBootstrapExpression(expression);
   if (ts.isIdentifier(called)) {
     const binding = bindings.get(called.text);
     return binding?.moduleSpecifier === "@bunwire/core" && binding.exportName === "defineApp";
@@ -92,26 +92,26 @@ function isImportedDefineApp(
   return false;
 }
 
-function applicationCallChain(
+export function applicationCallChain(
   exportedExpression: ts.Expression,
   bindings: ReadonlyMap<string, ImportBinding>,
   bootstrap: string,
 ): readonly ts.CallExpression[] {
   const calls: ts.CallExpression[] = [];
-  let current = unwrapExpression(exportedExpression);
+  let current = unwrapBootstrapExpression(exportedExpression);
   while (ts.isCallExpression(current)) {
-    const called = unwrapExpression(current.expression);
+    const called = unwrapBootstrapExpression(current.expression);
     if (isImportedDefineApp(called, bindings)) {
       if (current.arguments.length !== 0) {
         break;
       }
       return calls;
     }
-    if (!ts.isPropertyAccessExpression(called)) {
+    if (!ts.isPropertyAccessExpression(called) && !ts.isElementAccessExpression(called)) {
       break;
     }
     calls.push(current);
-    current = unwrapExpression(called.expression);
+    current = unwrapBootstrapExpression(called.expression);
   }
   throw new BunwireCompilerError(
     "ADAPTER_EXPRESSION_UNRESOLVABLE",
@@ -363,8 +363,8 @@ export async function discoverBootstrapAdapter(
   const exportedApplication = defaultExports[0] as ts.ExportAssignment;
   const applicationCalls = applicationCallChain(exportedApplication.expression, bindings, bootstrap);
   const adapterCalls = applicationCalls.filter((call) => (
-    ts.isPropertyAccessExpression(unwrapExpression(call.expression))
-      && (unwrapExpression(call.expression) as ts.PropertyAccessExpression).name.text === "withAdapter"
+    ts.isPropertyAccessExpression(unwrapBootstrapExpression(call.expression))
+      && (unwrapBootstrapExpression(call.expression) as ts.PropertyAccessExpression).name.text === "withAdapter"
   ));
 
   if (adapterCalls.length !== 1) {

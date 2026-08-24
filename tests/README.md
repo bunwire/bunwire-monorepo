@@ -292,6 +292,55 @@ Compiler coverage lives in `tests/milestone-12b`, backed by `tests/fixtures/mile
 | Definitions are deterministic and type-correct | Reversed analysis, stable hash/source, and semantic TypeScript checks |
 | Generated definitions satisfy Core 12A | Runtime registry loading, immutable metadata, and transient-resolution assertions |
 
+## Middleware Redesign Milestone 12C
+
+Core and compiler coverage lives in `tests/milestone-12c`, backed by `tests/fixtures/milestone-12c-attachments`.
+
+| Milestone test | Automated evidence |
+|---|---|
+| Canonical class and alias references resolve | Aliased/re-exported decorators, canonical symbols, and alias-map assertions |
+| Parameters parse without coercion | Trimmed multi-parameter and second-colon preservation assertions |
+| Controller and method order is deterministic | Top-to-bottom, left-to-right, Controller-first generated-plan assertions |
+| Exact duplicates remain in the 12C analysis input | Repeated canonical attachment fixture (12D normalization now removes them from final plans) |
+| Invalid references fail closed | Unknown/empty aliases, empty parameters, escaping, identifiers, templates, calls, plain and counterfeit targets |
+| Placement is restricted | Service, unmanaged class, undecorated/property/static/abstract method fixtures |
+| Generated plans contain no local aliases | `defineMiddlewareAttachment()` source and runtime target assertions |
+
+## Middleware Redesign Milestone 12D
+
+Core and compiler coverage lives in `tests/milestone-12d`, backed by `tests/fixtures/milestone-12d-policy`.
+
+| Requirement | Test evidence |
+| --- | --- |
+| Runtime policy callbacks never execute | Core startup, repeated/late-call, and prebuilt-registry tests |
+| Strict compiler-only policy DSL | Direct callback and exhaustive forbidden statement/expression cases |
+| Forward/nested groups and cycle paths | Valid expansion plus direct/indirect cycle diagnostics |
+| Controller path mappings | POSIX-normalized multi-root, overlapping, invalid, and unmatched pattern tests |
+| Four-scope canonical order | Global → mapped → Controller → method pipeline assertion |
+| Exact attachment deduplication | Same target/parameters removed; distinct parameters and callbacks retained |
+| No unresolved runtime policy | Generated source, semantic typecheck, immutable runtime registry assertions |
+| Analysis executes no application code | Throwing bootstrap, module initializer, middleware initializer, and method fixture |
+| Attachments are immutable and runtime-validated | Core plan validation and frozen parameter tests |
+| Legacy callbacks remain compatible | Metadata and invocation tests with managed attachments present |
+| Analysis executes no application code | Throwing static block and method analysis-generation fixture |
+| Output is stable and type-correct | Reversed analysis, stable hash/source, semantic TypeScript, and runtime registry checks |
+
+## Middleware Redesign Milestone 12E
+
+Adapter and generated-host coverage lives in `tests/milestone-12e`, with the real process fixture in `tests/fixtures/milestone-11-native-smoke`.
+
+| Requirement | Test evidence |
+| --- | --- |
+| Typed immutable context | Exact native identity plus frozen context, logical args, and attachment parameters |
+| Electrobun filters | Normalized separators, segment `*`, full-segment `**`, include/exclude precedence, and request/message filters |
+| Startup validation | Invalid patterns/transports and missing middleware definitions fail before Providers |
+| One invocation scope | Provider boot, transient constructor DI, resolver context, and Controller observe one child scope |
+| Request semantics | Before/after nesting, transformations, short circuits, middleware failures, and Controller failures |
+| Message semantics | Result suppression, Controller failure callback, missing-callback logging, and callback-failure logging |
+| Normal/manual parity | One compiler-generated normalized registry executes in both host modes |
+| Native coexistence | Manual fallback, wildcard listeners, outgoing requests/messages, readiness, and object identity remain intact |
+| SDK and native process | Public context typecheck plus generated-registry native smoke with DI, filters, parameters, request/message dispatch, and short circuit |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

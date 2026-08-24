@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   Inject,
+  CONTROLLER_KIND,
   INJECT_DECORATOR_ID,
   MIDDLEWARE_KIND,
   Use,
@@ -16,10 +17,16 @@ import {
   BunwireCompilerError,
   type BunwireSourceLocation,
 } from "./diagnostics.js";
+import {
+  analyzeMiddlewarePolicySyntax,
+  type MiddlewarePolicySyntax,
+} from "./middleware-policy-analysis.js";
 
 export interface BunwireProgramOptions {
   readonly sourceFiles: readonly string[];
   readonly projectRoot: string;
+  readonly bootstrapPath?: string;
+  readonly sourceRoots?: readonly string[];
   readonly tsconfigPath?: string;
   readonly compilerOptions?: ts.CompilerOptions;
 }
@@ -96,8 +103,23 @@ export interface AnalyzedManagedMethod {
   readonly parameters: readonly AnalyzedMethodParameter[];
   readonly minimumCallerArguments: number;
   readonly maximumCallerArguments: number | null;
-  readonly middleware: readonly CompilerRuntimeReference[];
+  readonly middleware: readonly AnalyzedMiddlewareEntry[];
 }
+
+export interface AnalyzedMiddlewareAttachment {
+  readonly source: "attachment";
+  readonly target: CompilerRuntimeReference;
+  readonly parameters: readonly string[];
+  readonly location: BunwireSourceLocation;
+}
+
+export interface AnalyzedLegacyMiddleware {
+  readonly source: "callback";
+  readonly target: CompilerRuntimeReference;
+  readonly location: BunwireSourceLocation;
+}
+
+export type AnalyzedMiddlewareEntry = AnalyzedMiddlewareAttachment | AnalyzedLegacyMiddleware;
 
 export interface AnalyzedManagedClass {
   readonly name: string;
@@ -107,6 +129,7 @@ export interface AnalyzedManagedClass {
   readonly target: CompilerRuntimeReference;
   readonly location: BunwireSourceLocation;
   readonly constructor: AnalyzedConstructorPlan | undefined;
+  readonly middleware: readonly AnalyzedMiddlewareAttachment[];
   readonly methods: readonly AnalyzedManagedMethod[];
 }
 
@@ -504,7 +527,11 @@ function createBunwireProgramInternal(
   additionalRootNames: readonly string[] = [],
 ): BunwireProgramContext {
   const program = ts.createProgram({
-    rootNames: [...new Set([...options.sourceFiles, ...additionalRootNames])],
+    rootNames: [...new Set([
+      ...options.sourceFiles,
+      ...(options.bootstrapPath ? [options.bootstrapPath] : []),
+      ...additionalRootNames,
+    ])],
     options: readCompilerOptions(options),
   });
   const diagnostic = [
@@ -1150,6 +1177,367 @@ function analyzeMethodParameters(
   return Object.freeze(parameters);
 }
 
+function middlewareRuntimeReference(
+  declaration: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+): CompilerRuntimeReference {
+  const name = declaration.name as ts.Identifier;
+  const symbol = checker.getSymbolAtLocation(name) as ts.Symbol;
+  return runtimeReference(checker, name, symbol);
+}
+
+function parseMiddlewareAliasReference(
+  expression: ts.StringLiteral,
+  diagnosticCode: BunwireCompilerError["code"] = "MIDDLEWARE_ATTACHMENT_INVALID",
+): { readonly name: string; readonly parameters: readonly string[] } {
+  if (/\\[,:]/.test(expression.getText())) {
+    fail(
+      diagnosticCode,
+      "Middleware references do not support escaping ':' or ','.",
+      expression,
+    );
+  }
+  const boundary = expression.text.indexOf(":");
+  const name = (boundary < 0 ? expression.text : expression.text.slice(0, boundary)).trim();
+  if (name.length === 0) {
+    fail(diagnosticCode, "Middleware reference names must not be empty.", expression);
+  }
+  if (boundary < 0) {
+    return { name, parameters: Object.freeze([]) };
+  }
+  const parameters = expression.text.slice(boundary + 1).split(",").map((entry) => entry.trim());
+  if (parameters.some((entry) => entry.length === 0)) {
+    fail(
+      diagnosticCode,
+      `Middleware reference ${JSON.stringify(expression.text)} contains an empty parameter.`,
+      expression,
+    );
+  }
+  return { name, parameters: Object.freeze(parameters) };
+}
+
+function analyzeUseEntries(
+  uses: readonly DecoratorMatch<typeof Use.definition>[],
+  ownerLabel: string,
+  allowLegacyCallbacks: boolean,
+  checker: ts.TypeChecker,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
+  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]> = new Map(),
+): readonly AnalyzedMiddlewareEntry[] {
+  const entries: AnalyzedMiddlewareEntry[] = [];
+  for (const use of uses) {
+    if (use.call.arguments.length === 0) {
+      fail(
+        "MIDDLEWARE_ATTACHMENT_INVALID",
+        `@Use() on ${ownerLabel} requires at least one middleware reference.`,
+        use.decorator,
+      );
+    }
+    for (const argument of use.call.arguments) {
+      const expression = unwrapExpression(argument);
+      if (ts.isStringLiteral(expression)) {
+        const parsed = parseMiddlewareAliasReference(expression);
+        const target = middlewareAliases.get(parsed.name);
+        if (target) {
+          entries.push(Object.freeze({
+            source: "attachment" as const,
+            target: middlewareRuntimeReference(target, checker),
+            parameters: parsed.parameters,
+            location: locationOf(expression),
+          }));
+          continue;
+        }
+        const group = middlewareGroups.get(parsed.name);
+        if (group) {
+          if (parsed.parameters.length > 0) {
+            fail(
+              "MIDDLEWARE_ATTACHMENT_INVALID",
+              `@Use() group ${JSON.stringify(parsed.name)} cannot receive parameters.`,
+              expression,
+            );
+          }
+          entries.push(...group);
+          continue;
+        }
+        if (!target) {
+          fail(
+            "MIDDLEWARE_ATTACHMENT_INVALID",
+            `@Use() on ${ownerLabel} references unknown middleware alias ${JSON.stringify(parsed.name)}.`,
+            expression,
+          );
+        }
+      }
+      if (!ts.isIdentifier(expression) && !ts.isPropertyAccessExpression(expression)) {
+        fail(
+          "MIDDLEWARE_ATTACHMENT_INVALID",
+          `@Use() argument "${expression.getText()}" on ${ownerLabel} must be a direct middleware class reference or string literal.`,
+          expression,
+        );
+      }
+      const type = checker.getTypeAtLocation(expression);
+      if ((type.flags & ts.TypeFlags.StringLike) !== 0) {
+        fail(
+          "MIDDLEWARE_ATTACHMENT_INVALID",
+          `@Use() string reference "${expression.getText()}" on ${ownerLabel} must be a direct string literal.`,
+          expression,
+        );
+      }
+      const symbol = symbolAtExpression(checker, expression);
+      const middlewareTarget = symbol ? middlewareBySymbol.get(symbol) : undefined;
+      if (middlewareTarget) {
+        entries.push(Object.freeze({
+          source: "attachment" as const,
+          target: middlewareRuntimeReference(middlewareTarget, checker),
+          parameters: Object.freeze([]),
+          location: locationOf(expression),
+        }));
+        continue;
+      }
+      if (allowLegacyCallbacks
+        && symbol
+        && checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0) {
+        entries.push(Object.freeze({
+          source: "callback" as const,
+          target: runtimeReference(checker, expression, symbol),
+          location: locationOf(expression),
+        }));
+        continue;
+      }
+      fail(
+        "MIDDLEWARE_ATTACHMENT_INVALID",
+        `@Use() argument "${expression.getText()}" on ${ownerLabel} is not a canonical managed middleware class${allowLegacyCallbacks ? " or exported legacy callback" : ""}.`,
+        expression,
+      );
+    }
+  }
+  return Object.freeze(entries);
+}
+
+interface ResolvedMiddlewarePolicy {
+  readonly global: readonly AnalyzedMiddlewareAttachment[];
+  readonly groups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]>;
+  readonly controllers: readonly {
+    readonly pattern: string;
+    readonly attachments: readonly AnalyzedMiddlewareAttachment[];
+    readonly node: ts.StringLiteral;
+  }[];
+}
+
+type PolicyReference = AnalyzedMiddlewareAttachment | {
+  readonly source: "group";
+  readonly name: string;
+  readonly node: ts.Expression;
+};
+
+function policyReference(
+  expression: ts.Expression,
+  checker: ts.TypeChecker,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
+  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  groupNames: { readonly has: (name: string) => boolean },
+): PolicyReference {
+  const value = unwrapExpression(expression);
+  if (ts.isStringLiteral(value)) {
+    const parsed = parseMiddlewareAliasReference(value, "MIDDLEWARE_POLICY_INVALID");
+    const target = middlewareAliases.get(parsed.name);
+    if (target) {
+      return Object.freeze({
+        source: "attachment" as const,
+        target: middlewareRuntimeReference(target, checker),
+        parameters: parsed.parameters,
+        location: locationOf(value),
+      });
+    }
+    if (groupNames.has(parsed.name)) {
+      if (parsed.parameters.length > 0) {
+        fail(
+          "MIDDLEWARE_POLICY_INVALID",
+          `Middleware group ${JSON.stringify(parsed.name)} cannot receive parameters.`,
+          value,
+        );
+      }
+      return Object.freeze({ source: "group" as const, name: parsed.name, node: value });
+    }
+    fail(
+      "MIDDLEWARE_POLICY_INVALID",
+      `Middleware policy references unknown alias or group ${JSON.stringify(parsed.name)}.`,
+      value,
+    );
+  }
+  if (!ts.isIdentifier(value) && !ts.isPropertyAccessExpression(value)) {
+    fail(
+      "MIDDLEWARE_POLICY_INVALID",
+      `Middleware policy reference "${value.getText()}" must be a direct middleware class or string literal.`,
+      value,
+    );
+  }
+  const symbol = symbolAtExpression(checker, value);
+  const target = symbol ? middlewareBySymbol.get(symbol) : undefined;
+  if (!target) {
+    fail(
+      "MIDDLEWARE_POLICY_INVALID",
+      `Middleware policy reference "${value.getText()}" is not a canonical managed middleware class.`,
+      value,
+    );
+  }
+  return Object.freeze({
+    source: "attachment" as const,
+    target: middlewareRuntimeReference(target, checker),
+    parameters: Object.freeze([]),
+    location: locationOf(value),
+  });
+}
+
+function resolveMiddlewarePolicy(
+  syntax: MiddlewarePolicySyntax,
+  checker: ts.TypeChecker,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
+  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+): ResolvedMiddlewarePolicy {
+  const groupSyntax = new Map(syntax.groups.map((group) => [group.name, group]));
+  for (const group of syntax.groups) {
+    if (middlewareAliases.has(group.name)) {
+      fail(
+        "MIDDLEWARE_POLICY_INVALID",
+        `Middleware group ${JSON.stringify(group.name)} collides with a middleware alias.`,
+        group.node,
+      );
+    }
+  }
+  const groups = new Map<string, readonly AnalyzedMiddlewareAttachment[]>();
+  const stack: string[] = [];
+  const expandGroup = (name: string, referenceNode?: ts.Expression): readonly AnalyzedMiddlewareAttachment[] => {
+    const existing = groups.get(name);
+    if (existing) return existing;
+    const cycleIndex = stack.indexOf(name);
+    if (cycleIndex >= 0) {
+      const cycle = [...stack.slice(cycleIndex), name];
+      throw new BunwireCompilerError(
+        "MIDDLEWARE_GROUP_CYCLE",
+        `Middleware group cycle detected: ${cycle.join(" -> ")}.`,
+        { location: locationOf(referenceNode ?? groupSyntax.get(name)!.node) },
+      );
+    }
+    const declaration = groupSyntax.get(name);
+    if (!declaration) {
+      fail("MIDDLEWARE_POLICY_INVALID", `Unknown middleware group ${JSON.stringify(name)}.`, referenceNode!);
+    }
+    stack.push(name);
+    const attachments: AnalyzedMiddlewareAttachment[] = [];
+    for (const expression of declaration.references) {
+      const reference = policyReference(
+        expression,
+        checker,
+        middlewareBySymbol,
+        middlewareAliases,
+        groupSyntax,
+      );
+      if (reference.source === "group") {
+        attachments.push(...expandGroup(reference.name, reference.node));
+      } else {
+        attachments.push(reference);
+      }
+    }
+    stack.pop();
+    const frozen = Object.freeze(attachments);
+    groups.set(name, frozen);
+    return frozen;
+  };
+  for (const name of groupSyntax.keys()) expandGroup(name);
+
+  const expandReferences = (references: readonly ts.Expression[]): readonly AnalyzedMiddlewareAttachment[] => {
+    const attachments: AnalyzedMiddlewareAttachment[] = [];
+    for (const expression of references) {
+      const reference = policyReference(
+        expression,
+        checker,
+        middlewareBySymbol,
+        middlewareAliases,
+        groupSyntax,
+      );
+      attachments.push(...(reference.source === "group"
+        ? expandGroup(reference.name, reference.node)
+        : [reference]));
+    }
+    return Object.freeze(attachments);
+  };
+  return Object.freeze({
+    global: expandReferences(syntax.global),
+    groups,
+    controllers: Object.freeze(syntax.controllers.map((mapping) => Object.freeze({
+      pattern: mapping.pattern,
+      attachments: expandReferences(mapping.references),
+      node: mapping.node,
+    }))),
+  });
+}
+
+function middlewarePatternRegex(pattern: string, node: ts.StringLiteral): RegExp {
+  const segments = pattern.split("/");
+  if (pattern.trim().length === 0
+    || pattern !== pattern.trim()
+    || pattern.includes("\\")
+    || pattern.startsWith("/")
+    || /^[A-Za-z]:/.test(pattern)
+    || segments.some((segment) => (
+      segment === ""
+      || segment === "."
+      || segment === ".."
+      || (segment.includes("**") && segment !== "**")
+    ))) {
+    fail(
+      "MIDDLEWARE_CONTROLLER_PATTERN_INVALID",
+      `Controller pattern ${JSON.stringify(pattern)} must be a non-empty relative path using '/' without traversal.`,
+      node,
+    );
+  }
+  let source = "^";
+  for (let index = 0; index < pattern.length;) {
+    if (pattern.startsWith("**/", index)) {
+      source += "(?:.*/)?";
+      index += 3;
+    } else if (pattern.startsWith("**", index)) {
+      source += ".*";
+      index += 2;
+    } else if (pattern[index] === "*") {
+      source += "[^/]*";
+      index += 1;
+    } else {
+      source += pattern[index]!.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+      index += 1;
+    }
+  }
+  return new RegExp(`${source}$`);
+}
+
+function relativeControllerPaths(filePath: string, sourceRoots: readonly string[]): readonly string[] {
+  const candidates = sourceRoots.flatMap((root) => {
+    const relative = path.relative(root, filePath);
+    return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)
+      ? []
+      : [relative.replaceAll("\\", "/")];
+  });
+  return Object.freeze([...new Set(candidates)].sort());
+}
+
+function middlewareAttachmentKey(attachment: AnalyzedMiddlewareAttachment): string {
+  return `${stablePath(attachment.target.declaration.filePath)}\0${attachment.target.exportName}\0${JSON.stringify(attachment.parameters)}`;
+}
+
+function deduplicateMiddleware(
+  entries: readonly AnalyzedMiddlewareEntry[],
+): readonly AnalyzedMiddlewareEntry[] {
+  const seen = new Set<string>();
+  return Object.freeze(entries.filter((entry) => {
+    if (entry.source === "callback") return true;
+    const key = middlewareAttachmentKey(entry);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }));
+}
+
 function analyzeManagedMethods(
   declaration: ts.ClassDeclaration,
   ownerKind: ManagedClassKind | undefined,
@@ -1159,14 +1547,32 @@ function analyzeManagedMethods(
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
   useDefinitions: ResolvedCompilerDefinitions<typeof Use.definition>,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
+  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]>,
 ): readonly AnalyzedManagedMethod[] {
   const methods: AnalyzedManagedMethod[] = [];
   for (const member of declaration.members) {
+    const uses = matchDecorators(member, checker, useDefinitions);
     if (!ts.isMethodDeclaration(member)) {
+      if (uses.length > 0) {
+        fail(
+          "MIDDLEWARE_ATTACHMENT_INVALID",
+          "@Use() may only decorate a Controller class or one of its concrete managed methods.",
+          uses[0]!.decorator,
+        );
+      }
       continue;
     }
     const decorators = matchDecorators(member, checker, methodDefinitions);
     if (decorators.length === 0) {
+      if (uses.length > 0) {
+        fail(
+          "MIDDLEWARE_ATTACHMENT_INVALID",
+          `@Use() on method "${member.name.getText()}" requires a concrete managed Controller method decorator.`,
+          uses[0]!.decorator,
+        );
+      }
       continue;
     }
     if (decorators.length > 1) {
@@ -1174,6 +1580,24 @@ function analyzeManagedMethods(
         "MANAGED_METHOD_INVALID",
         `Method "${member.name.getText()}" declares more than one managed-method decorator.`,
         member,
+      );
+    }
+    if (uses.length > 0 && ownerKind?.id !== CONTROLLER_KIND.id) {
+      fail(
+        "MIDDLEWARE_ATTACHMENT_INVALID",
+        `@Use() on method "${member.name.getText()}" is supported only on canonical Controller managed methods.`,
+        uses[0]!.decorator,
+      );
+    }
+    if (uses.length > 0 && (
+      member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword)
+      || !member.body
+      || member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword)
+    )) {
+      fail(
+        "MIDDLEWARE_ATTACHMENT_INVALID",
+        `@Use() on method "${member.name.getText()}" requires a concrete instance managed method.`,
+        uses[0]!.decorator,
       );
     }
     const decorator = decorators[0] as DecoratorMatch<{ readonly id: string; readonly kind: ManagedMethodKind; readonly createMetadata: (options: any) => unknown }>;
@@ -1219,36 +1643,15 @@ function analyzeManagedMethods(
       injectorDefinitions,
       injectDefinitions,
     );
-    const middleware: CompilerRuntimeReference[] = [];
-    for (const use of matchDecorators(member, checker, useDefinitions)) {
-      if (use.call.arguments.length === 0) {
-        fail(
-          "MANAGED_METHOD_INVALID",
-          `@Use() on managed method "${member.name.getText()}" requires at least one middleware function.`,
-          use.decorator,
-        );
-      }
-      for (const argument of use.call.arguments) {
-        const expression = unwrapExpression(argument);
-        const type = checker.getTypeAtLocation(expression);
-        if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).length === 0) {
-          fail(
-            "MANAGED_METHOD_INVALID",
-            `@Use() argument "${expression.getText()}" on managed method "${member.name.getText()}" must be callable.`,
-            expression,
-          );
-        }
-        const symbol = symbolAtExpression(checker, expression);
-        if (!symbol) {
-          fail(
-            "REGISTRY_GENERATION_INVALID",
-            `@Use() middleware "${expression.getText()}" has no resolvable runtime symbol.`,
-            expression,
-          );
-        }
-        middleware.push(runtimeReference(checker, expression, symbol));
-      }
-    }
+    const middleware = analyzeUseEntries(
+      uses,
+      `managed method "${member.name.getText()}"`,
+      true,
+      checker,
+      middlewareBySymbol,
+      middlewareAliases,
+      middlewareGroups,
+    );
     const caller = parameters.filter((parameter): parameter is AnalyzedTransportParameter => parameter.source === "transport");
     const highestRequired = caller.reduce(
       (highest, parameter) => parameter.optional ? highest : Math.max(highest, parameter.argumentIndex),
@@ -1320,6 +1723,7 @@ function validateConstructorCycles(
 export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireCompilerAnalysis {
   const context = createBunwireProgramInternal(options, compilerSymbolRootNames(options));
   const checker = context.checker;
+  const policySyntax = analyzeMiddlewarePolicySyntax(context.program, options.bootstrapPath);
   const occupiedSymbols = new Map<ts.Symbol, CompilerDefinition>();
   const classDefinitions = resolveCompilerDefinitions(
     context,
@@ -1417,6 +1821,21 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     });
   }
 
+  const middlewareTargetsBySymbol = new Map<ts.Symbol, ts.ClassDeclaration>();
+  for (const declaration of middlewareByDeclaration.keys()) {
+    const symbol = checker.getSymbolAtLocation(declaration.name as ts.Identifier) as ts.Symbol;
+    middlewareTargetsBySymbol.set(canonicalSymbol(checker, symbol), declaration);
+  }
+  const middlewareTargetsByAlias = new Map<string, ts.ClassDeclaration>(
+    [...middlewareAliases].map(([alias, entry]) => [alias, entry.declaration]),
+  );
+  const middlewarePolicy = resolveMiddlewarePolicy(
+    policySyntax,
+    checker,
+    middlewareTargetsBySymbol,
+    middlewareTargetsByAlias,
+  );
+
   const constructorsBySymbol = new Map<ts.Symbol, ConstructorAnalysisResult>();
   const constructorsByDeclaration = new Map<ts.ClassDeclaration, ConstructorAnalysisResult>();
   for (const [declaration, match] of discovered) {
@@ -1440,6 +1859,25 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
   for (const declaration of declarations) {
     const match = discovered.get(declaration);
     const ownerKind = match?.definition.kind as ManagedClassKind | undefined;
+    const classUses = matchDecorators(declaration, checker, useDefinitions);
+    if (classUses.length > 0 && ownerKind?.id !== CONTROLLER_KIND.id) {
+      fail(
+        "MIDDLEWARE_ATTACHMENT_INVALID",
+        "Class-level @Use() is supported only on a canonical Controller class.",
+        classUses[0]!.decorator,
+      );
+    }
+    const middleware = classUses.length === 0
+      ? Object.freeze([])
+      : analyzeUseEntries(
+        classUses,
+        `Controller "${declaration.name?.text ?? "<anonymous>"}"`,
+        false,
+        checker,
+        middlewareTargetsBySymbol,
+        middlewareTargetsByAlias,
+        middlewarePolicy.groups,
+      ) as readonly AnalyzedMiddlewareAttachment[];
     const methods = analyzeManagedMethods(
       declaration,
       ownerKind,
@@ -1449,6 +1887,9 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       injectorDefinitions,
       injectDefinitions,
       useDefinitions,
+      middlewareTargetsBySymbol,
+      middlewareTargetsByAlias,
+      middlewarePolicy.groups,
     );
     if (!match || !declaration.name) {
       continue;
@@ -1462,8 +1903,43 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       target: runtimeReference(checker, declaration.name, symbol),
       location: locationOf(declaration),
       constructor: constructorsByDeclaration.get(declaration)?.plan,
+      middleware,
       methods,
     }));
   }
-  return Object.freeze({ context, classes: Object.freeze(classes) });
+  const controllerMappings = new Map<AnalyzedManagedClass, AnalyzedMiddlewareAttachment[]>();
+  const sourceRoots = (options.sourceRoots ?? [options.projectRoot]).map((root) => path.resolve(root));
+  const controllers = classes.filter((entry) => entry.kind.id === CONTROLLER_KIND.id);
+  for (const mapping of middlewarePolicy.controllers) {
+    const matcher = middlewarePatternRegex(mapping.pattern, mapping.node);
+    const matches = controllers.filter((entry) => (
+      relativeControllerPaths(entry.location.filePath, sourceRoots)
+        .some((candidate) => matcher.test(candidate))
+    ));
+    if (matches.length === 0) {
+      fail(
+        "MIDDLEWARE_CONTROLLER_PATTERN_INVALID",
+        `Controller pattern ${JSON.stringify(mapping.pattern)} matched no discovered Controller.`,
+        mapping.node,
+      );
+    }
+    for (const entry of matches) {
+      const attachments = controllerMappings.get(entry) ?? [];
+      attachments.push(...mapping.attachments);
+      controllerMappings.set(entry, attachments);
+    }
+  }
+  const normalizedClasses = classes.map((entry) => Object.freeze({
+    ...entry,
+    methods: Object.freeze(entry.methods.map((method) => Object.freeze({
+      ...method,
+      middleware: deduplicateMiddleware([
+        ...middlewarePolicy.global,
+        ...(controllerMappings.get(entry) ?? []),
+        ...entry.middleware,
+        ...method.middleware,
+      ]),
+    }))),
+  }));
+  return Object.freeze({ context, classes: Object.freeze(normalizedClasses) });
 }

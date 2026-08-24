@@ -3,6 +3,7 @@ import { Electroview } from "electrobun/view";
 
 interface SmokeRequests {
   "smoke/request": (values: string[]) => string;
+  "smoke/short": () => string;
 }
 
 interface SmokeMessages {
@@ -23,7 +24,9 @@ async function run(): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       const result = await client.request("smoke/request", ["native", "sdk"]);
-      if (result !== "native|sdk") throw new Error(`Unexpected Bunwire response: ${result}`);
+      if (result !== "managed(native|sdk)") throw new Error(`Unexpected Bunwire response: ${result}`);
+      const short = await client.request("smoke/short");
+      if (short !== "managed(short:blocked)") throw new Error(`Unexpected short-circuit response: ${short}`);
       client.message("smoke/message", "verified");
       return;
     } catch (error) {

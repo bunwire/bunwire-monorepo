@@ -107,8 +107,37 @@ export function defineManagedMethodDecorator<
   });
 
   const factory = ((decoratorOptions: Options) => {
-    return ((target: object, method: string | symbol, descriptor: PropertyDescriptor) => {
-      if (typeof descriptor.value !== "function") {
+    return ((target: object, method: string | symbol | {
+      readonly kind?: unknown;
+      readonly name?: unknown;
+      readonly metadata?: unknown;
+    }, descriptor?: PropertyDescriptor) => {
+      // Accept the standard decorator calling convention as well as legacy
+      // TypeScript decorators. Generated plans remain runtime-authoritative,
+      // while class decoration transfers this metadata to the prototype for
+      // the normal runtime registry validation boundary.
+      if (
+        descriptor === undefined
+        && typeof target === "function"
+        && typeof method === "object"
+        && method?.kind === "method"
+      ) {
+        if (
+          (typeof method.name !== "string" && typeof method.name !== "symbol")
+          || typeof method.metadata !== "object"
+          || method.metadata === null
+        ) {
+          throw new TypeError(`Managed method decorator "${definition.id}" received malformed standard decorator context.`);
+        }
+        attachManagedMethodMetadata(method.metadata, {
+          decoratorId: definition.id,
+          kind: definition.kind,
+          method: method.name,
+          data: definition.createMetadata(decoratorOptions),
+        });
+        return target;
+      }
+      if ((typeof method !== "string" && typeof method !== "symbol") || typeof descriptor?.value !== "function") {
         throw new TypeError(
           `Managed method decorator "${definition.id}" requires a callable method "${String(method)}".`,
         );

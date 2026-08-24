@@ -68,7 +68,7 @@ export function defineManagedClassDecorator<
   });
 
   const factory = ((decoratorOptions: Options) => {
-    return ((target: Function) => {
+    return ((target: Function, standardContext?: { readonly kind?: unknown; readonly metadata?: unknown }) => {
       const managedTarget = target as ManagedClassTarget;
       definition.validateTarget?.(managedTarget);
       const metadata: ManagedClassMetadata<Data> = {
@@ -78,6 +78,22 @@ export function defineManagedClassDecorator<
         data: definition.createMetadata(decoratorOptions),
       };
       attachManagedClassMetadata(managedTarget, metadata);
+      if (
+        standardContext?.kind === "class"
+        && typeof standardContext.metadata === "object"
+        && standardContext.metadata !== null
+      ) {
+        const methodMetadataKey = Symbol.for("@bunwire/core/managed-method-metadata");
+        const methodMetadata = (standardContext.metadata as Record<PropertyKey, unknown>)[methodMetadataKey];
+        if (methodMetadata instanceof Map) {
+          Object.defineProperty(managedTarget.prototype, methodMetadataKey, {
+            configurable: true,
+            enumerable: false,
+            value: new Map(methodMetadata),
+            writable: false,
+          });
+        }
+      }
     }) as ClassDecorator;
   }) as ManagedClassDecorator<Options, Data, Id>;
 

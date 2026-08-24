@@ -8,6 +8,7 @@ import type {
 import type {
   BunwireElectrobunSchema,
   ElectrobunMainWindowOptions,
+  ElectrobunMiddlewareContext,
   ElectrobunRPC,
   ElectrobunRpcOptions,
   ElectrobunWebview,
@@ -36,6 +37,15 @@ declare const nativeWindow: BrowserWindow<NativeRPC>;
 const bunwireRpc: ElectrobunRPC = nativeRpc;
 const bunwireWindow: ElectrobunWindow = nativeWindow;
 const bunwireWebview: ElectrobunWebview = nativeWindow.webview;
+const middlewareContext: ElectrobunMiddlewareContext = Object.freeze({
+  endpoint: "users/get",
+  transport: "request",
+  window: bunwireWindow,
+  webview: bunwireWebview,
+  rpc: bunwireRpc,
+  args: Object.freeze(["user-id"]),
+  parameters: Object.freeze(["admin"]),
+});
 declare const bunwireNativeWindowOptions: Omit<
   ElectrobunMainWindowOptions,
   "x" | "y" | "width" | "height" | "configure"
@@ -51,3 +61,4 @@ void bunwireRpc;
 void bunwireWindow;
 void bunwireWebview;
 void nativeWindowOptions;
+void middlewareContext;

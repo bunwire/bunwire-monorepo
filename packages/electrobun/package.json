@@ -13,7 +13,8 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run --config ../../vitest.config.ts tests/milestone-11/electrobun-adapter.test.ts tests/milestone-12/generated-client-e2e.test.ts tests/milestone-12/middleware-compiler.test.ts tests/milestone-12e/electrobun-generated-host.test.ts tests/milestone-12e/electrobun-managed-middleware.test.ts"
   },
   "dependencies": {
     "@bunwire/core": "workspace:*",

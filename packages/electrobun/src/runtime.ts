@@ -6,13 +6,16 @@ import {
   defineAdapterValidationHook,
   defineParameterResolver,
   defineRuntimeRegistryConsumer,
+  executeMiddlewareChain,
   type AdapterHostContext,
   type AdapterPreparationContext,
   type Container,
   type ControllerClassMetadata,
   type ManagedMethodPlan,
+  type MiddlewareConstructor,
   type NativeObjectConfigurationCallback,
   type RuntimeRegistry,
+  type RuntimeRegistryConsumerContext,
 } from "@bunwire/core";
 import {
   ELECTROBUN_COMPILER_DESCRIPTOR,
@@ -23,6 +26,13 @@ import {
   ELECTROBUN_WINDOW_RESOLVER_ID,
   type ElectrobunMethodMetadata,
 } from "./definitions.js";
+import {
+  createElectrobunMiddlewareContext,
+  createElectrobunMiddlewareDefinitions,
+  selectElectrobunMiddleware,
+  type ElectrobunMiddlewareRuntimeDefinition,
+  type ElectrobunMiddlewareTransport,
+} from "./middleware.js";
 import { normalizeElectrobunPath } from "./path.js";
 
 export interface BunwireElectrobunSchema {
@@ -294,6 +304,7 @@ interface RuntimeState {
   readonly messagePlans: Map<string, ManagedMethodPlan>;
   readonly onMessageError: ElectrobunRpcOptions["onMessageError"];
   readonly fallbackRequestHandler: ElectrobunRequestHandler | undefined;
+  middlewareDefinitions: ReadonlyMap<MiddlewareConstructor, ElectrobunMiddlewareRuntimeDefinition>;
   ready: boolean;
   showOnStart: boolean;
   activateOnStart: boolean;
@@ -351,6 +362,7 @@ function createState(
     messagePlans: new Map(),
     onMessageError: options.onMessageError,
     fallbackRequestHandler: options.fallbackRequestHandler,
+    middlewareDefinitions: new Map(),
     ready: false,
     showOnStart: options.showOnStart,
     activateOnStart: options.activateOnStart,
@@ -467,12 +479,44 @@ const validationHook = defineAdapterValidationHook({
   id: "electrobun.validate",
   validate: ({ applicationContext, registry }: AdapterHostContext<ElectrobunContext>) => {
     assertElectrobunContext(applicationContext);
-    stateFor(applicationContext);
+    const state = stateFor(applicationContext);
+    const plans = relevantPlans(registry);
     validateEndpoints(registry);
+    state.middlewareDefinitions = createElectrobunMiddlewareDefinitions(registry, plans);
   },
 });
 
-const registryConsumer = defineRuntimeRegistryConsumer({
+function invokeElectrobunPlan<Result>(
+  context: RuntimeRegistryConsumerContext<ElectrobunContext>,
+  state: RuntimeState,
+  plan: ManagedMethodPlan,
+  endpoint: string,
+  transport: ElectrobunMiddlewareTransport,
+  args: readonly unknown[],
+): Promise<Result> {
+  const attachments = selectElectrobunMiddleware(
+    plan,
+    state.middlewareDefinitions,
+    endpoint,
+    transport,
+  );
+  return context.invoke<Result>(plan, args, {
+    around: (invocation, next) => executeMiddlewareChain({
+      invocation,
+      attachments,
+      createContext: (attachment) => createElectrobunMiddlewareContext(
+        context.applicationContext,
+        endpoint,
+        transport,
+        args,
+        attachment,
+      ),
+      terminal: next,
+    }),
+  });
+}
+
+const registryConsumer = defineRuntimeRegistryConsumer<"electrobun.registry", ElectrobunContext>({
   id: "electrobun.registry",
   consume: (registry, context) => {
     assertElectrobunContext(context.applicationContext);
@@ -487,7 +531,7 @@ const registryConsumer = defineRuntimeRegistryConsumer({
       const plan = state.requestPlans.get(endpoint);
       if (plan) {
         if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
-        return context.invoke(plan, callerArguments(payload));
+        return invokeElectrobunPlan(context, state, plan, endpoint, "request", callerArguments(payload));
       }
       if (state.fallbackRequestHandler) return state.fallbackRequestHandler(endpoint, payload);
       if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
@@ -499,14 +543,18 @@ const registryConsumer = defineRuntimeRegistryConsumer({
       if (!state.ready) throw new ElectrobunTrafficNotReadyError(endpoint);
       const plan = state.messagePlans.get(endpoint);
       if (!plan) return;
-      void context.invoke(plan, callerArguments(payload)).catch((error) => {
+      void invokeElectrobunPlan(context, state, plan, endpoint, "message", callerArguments(payload)).catch((error) => {
         if (state.onMessageError) {
-          void Promise.resolve(state.onMessageError(error, { endpoint, payload })).catch(
-            (callbackError) => console.error(
+          void (async () => {
+            try {
+              await state.onMessageError?.(error, { endpoint, payload });
+            } catch (callbackError) {
+              console.error(
               `Bunwire Electrobun onMessageError callback failed for "${endpoint}".`,
               callbackError,
-            ),
-          );
+              );
+            }
+          })();
         } else {
           console.error(`Bunwire Electrobun message endpoint "${endpoint}" failed.`, error);
         }

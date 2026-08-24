@@ -2,8 +2,11 @@ export {
   USE_DECORATOR_ID,
   Use,
   getManagedMethodMiddlewareMetadata,
+  getUseMiddlewareMetadata,
+  type MiddlewareReference,
   type UseDecorator,
   type UseDecoratorDefinition,
+  type UseMiddlewareEntry,
 } from "./managed-methods/middleware-decorator.js";
 export {
   assertCompilerSymbolReference,
@@ -71,6 +74,10 @@ export {
   type MiddlewareContextFactory,
   type MiddlewareTerminal,
 } from "./middleware/chain.js";
+export {
+  type MiddlewarePolicyConfiguration,
+  type MiddlewarePolicyRegistry,
+} from "./middleware/policy.js";
 export {
   MiddlewareAttachmentError,
   MiddlewareDefinitionError,
@@ -175,6 +182,7 @@ export {
   type DefineManagedMethodPlanOptions,
   type ManagedMethodInvocation,
   type ManagedMethodMiddleware,
+  type ManagedMethodMiddlewareEntry,
   type ManagedMethodNext,
   type ManagedMethodParameterPlan,
   type ManagedMethodPlan,

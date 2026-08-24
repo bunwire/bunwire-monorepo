@@ -2,3 +2,4 @@ artifacts/
 build/
 bun.lock
 node_modules/
+src/bun/registry.generated.ts

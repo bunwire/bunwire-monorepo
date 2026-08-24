@@ -253,7 +253,7 @@ describe("Milestone 5 — managed method kinds and plans", () => {
       data: undefined,
       parameters: [{ source: "context", methodIndex: 0 }],
       middleware: [42 as unknown as ManagedMethodMiddleware],
-    })).toThrow(/middleware entries must be callable/i);
+    })).toThrow(/middleware attachment must be an immutable object/i);
   });
 });
 

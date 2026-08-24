@@ -138,3 +138,9 @@ After this milestone:
 - Preserved Promise-based failures and the pre-start Application-state error boundary.
 - Updated the normal-host E2E lifecycle assertion so rejected malformed calls no longer count as booted invocations.
 - Added Core and Electrobun short-circuit regressions; the focused correction suite passed 5 files and 55 tests, and final repository quality passed 32 files and 332 tests.
+
+## Prior-Milestone Regression Closure — 2026-08-24
+
+- Added the shared `generateBunwireArtifacts()` boundary for physical registry/client modules and exact ambient declarations for both documented virtual modules.
+- Added byte-stable write behavior and real Vite development-server regression coverage for virtual transforms and source/config invalidation.
+- Full details and final gate results are recorded in [the dedicated closure record](prior-milestone-regression-closure.md).

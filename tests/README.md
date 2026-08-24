@@ -355,6 +355,10 @@ Finalization coverage lives in `tests/milestone-12f`, backed by the compiler-gen
 | One invocation scope | Provider boot, transient constructor DI, resolver values, and Controller parameters share invocation identity |
 | Boundary proof | Core and generic Vite source contain no fake queue topics, transports, context, or matching branches |
 
+## Prior-Milestone Regression Closure
+
+Closure coverage is integrated into Milestones 2, 5, 10, and 12. `tests/milestone-12/virtual-modules-vite.test.ts` uses a real Vite middleware-mode server and a temporary copied application to verify exact ambient declarations, byte-stable artifact writes, virtual transforms, edit/add/delete/rename refreshes, source-root config changes, module-graph invalidation, and unrelated-file/generated-output exclusion. `tests/fixtures/prior-regression-imports` verifies public named, default, and namespace package export identities.
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { ResolvedBunwireConfig } from "./config.js";
 import { BunwireCompilerError } from "./diagnostics.js";
 
-const ignoredDirectoryNames = new Set([".git", "node_modules"]);
+const ignoredDirectoryNames = new Set([".bunwire", ".git", "node_modules"]);
 const sourceExtensionPattern = /\.(?:[cm]?[jt]sx?)$/i;
 const declarationFilePattern = /\.d\.(?:ts|mts|cts)$/i;
 
@@ -101,7 +101,11 @@ async function collectSourceFiles(
     } else if (entry.isFile()
       && sourceExtensionPattern.test(entry.name)
       && !declarationFilePattern.test(entry.name)) {
-      files.add(await realpath(entryPath));
+      try {
+        files.add(await realpath(entryPath));
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+      }
     }
   }
 }

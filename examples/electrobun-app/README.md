@@ -6,4 +6,4 @@ This package is the Milestone 12 end-to-end example. `src/bun/bootstrap.ts` defi
 
 `src/web/client.ts` exposes the typed client and Electrobun schema generated in `.bunwire/client.ts`. Callers pass logical positional arguments. The adapter's native single-payload encoding is not part of the example API.
 
-Run `pnpm generate` after changing managed source. `pnpm build` regenerates both `.bunwire/registry.ts` and `.bunwire/client.ts` before compiling the package.
+Run `pnpm generate` after changing managed source. `pnpm build` regenerates `.bunwire/registry.ts`, `.bunwire/client.ts`, and the exact virtual-module declarations in `.bunwire/virtual-modules.d.ts` before compiling the package. This standalone example uses the physical artifacts as the documented non-Vite host path; Vite applications import `virtual:bunwire/registry` and `virtual:bunwire/client` while using the generated declaration file for editor and `tsc` support.

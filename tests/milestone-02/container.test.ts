@@ -3,6 +3,8 @@ import {
   Container,
   ContainerResolutionError,
   createToken,
+  isClassToken,
+  isToken,
 } from "@bunwire/core";
 
 describe("runtime tokens", () => {
@@ -13,13 +15,43 @@ describe("runtime tokens", () => {
     expect(first).not.toBe(second);
     expect(first.id).not.toBe(second.id);
     expect(first.toString()).toBe("Token(cache)");
+    expect(isToken(first)).toBe(true);
+  });
+
+  it("rejects structurally forged custom tokens", () => {
+    const forged = Object.freeze({
+      kind: "bunwire.token",
+      id: Symbol("forged"),
+      description: "forged",
+      toString: () => "Token(forged)",
+    });
+
+    expect(isToken(forged)).toBe(false);
+    expect(() => new Container().value(forged as never, "value")).toThrow(
+      /valid runtime token/i,
+    );
   });
 
   it("uses class constructors as runtime tokens", () => {
     class Logger {}
+    class NamedLogger {
+      constructor(readonly name: string) {}
+    }
+    const BoundLogger = NamedLogger.bind(undefined, "bound");
     const container = new Container().transient(Logger);
 
     expect(container.get(Logger)).toBeInstanceOf(Logger);
+    expect(isClassToken(Logger)).toBe(true);
+    expect(isClassToken(BoundLogger)).toBe(true);
+  });
+
+  it("rejects non-constructable functions as class tokens", () => {
+    const arrow = () => "not a class";
+    function* generator(): Generator<never, void, unknown> {}
+
+    expect(isClassToken(arrow)).toBe(false);
+    expect(isClassToken(generator)).toBe(false);
+    expect(() => new Container().bind(arrow as never)).toThrow(/class implementation/i);
   });
 
   it("does not allow interface-only types to become runtime tokens", () => {

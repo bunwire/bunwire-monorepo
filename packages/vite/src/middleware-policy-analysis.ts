@@ -6,6 +6,7 @@ import {
   unwrapBootstrapExpression,
 } from "./bootstrap-discovery.js";
 import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.js";
+import { canonicalCompilerPath } from "./path-identity.js";
 
 export interface MiddlewarePolicyGroupSyntax {
   readonly name: string;
@@ -79,9 +80,9 @@ export function analyzeMiddlewarePolicySyntax(
   bootstrapPath: string | undefined,
 ): MiddlewarePolicySyntax {
   if (!bootstrapPath) return EMPTY_POLICY;
-  const normalized = path.resolve(bootstrapPath).replaceAll("\\", "/").toLowerCase();
+  const normalized = canonicalCompilerPath(bootstrapPath);
   const sourceFile = program.getSourceFiles().find((candidate) => (
-    path.resolve(candidate.fileName).replaceAll("\\", "/").toLowerCase() === normalized
+    canonicalCompilerPath(candidate.fileName) === normalized
   ));
   if (!sourceFile) {
     throw new BunwireCompilerError(

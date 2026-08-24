@@ -12,6 +12,7 @@ import {
 } from "./metadata.js";
 import {
   isClassToken,
+  isToken,
   type ClassToken,
   type Constructable,
   type RuntimeToken,
@@ -27,6 +28,12 @@ interface LocatedBinding {
 
 function eraseToken<Value>(token: RuntimeToken<Value>): UnknownRuntimeToken {
   return token as UnknownRuntimeToken;
+}
+
+function assertRuntimeToken(value: unknown, label: string): asserts value is UnknownRuntimeToken {
+  if (!isToken(value) && !isClassToken(value)) {
+    throw new TypeError(`${label} must be a valid runtime token created by createToken() or a constructable class.`);
+  }
 }
 
 function isNativeClass(value: Function): boolean {
@@ -54,6 +61,7 @@ export class Container {
   }
 
   has<Value>(token: RuntimeToken<Value>, includeParents = true): boolean {
+    assertRuntimeToken(token, "Container lookup token");
     const erasedToken = eraseToken(token);
     return this.#bindings.has(erasedToken) || (
       includeParents && this.parent?.has(erasedToken) === true
@@ -72,6 +80,10 @@ export class Container {
     );
     if (!resolvedImplementation) {
       throw new TypeError("A class implementation is required when binding a custom token.");
+    }
+    assertRuntimeToken(token, "Container binding token");
+    if (!isClassToken(resolvedImplementation)) {
+      throw new TypeError("Container class implementation must be constructable.");
     }
     return this.setBinding(token, {
       type: "class",
@@ -135,6 +147,7 @@ export class Container {
   }
 
   alias<Value>(alias: RuntimeToken<Value>, target: RuntimeToken<Value>): this {
+    assertRuntimeToken(target, "Container alias target");
     return this.setBinding(alias, { type: "alias", target });
   }
 
@@ -146,6 +159,7 @@ export class Container {
   }
 
   get<Value>(token: RuntimeToken<Value>): Value {
+    assertRuntimeToken(token, "Container lookup token");
     const isRootResolution = this.#activeResolutionChain === undefined;
     if (isRootResolution) {
       this.#activeResolutionChain = [];
@@ -161,6 +175,7 @@ export class Container {
   }
 
   private setBinding<Value>(token: RuntimeToken<Value>, binding: Binding<Value>): this {
+    assertRuntimeToken(token, "Container binding token");
     const erasedToken = eraseToken(token);
     this.#bindings.set(erasedToken, binding as UnknownBinding);
     this.#singletonInstances.delete(erasedToken);

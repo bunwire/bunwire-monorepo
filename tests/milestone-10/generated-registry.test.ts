@@ -39,6 +39,7 @@ const fixtureRoot = path.join(repositoryRoot, "tests/fixtures/milestone-10-regis
 const generatedPath = path.join(fixtureRoot, "registry.generated.ts");
 const appPath = path.join(fixtureRoot, "app.ts");
 const extensionPath = path.join(repositoryRoot, "tests/fixtures/milestone-8-analysis/extensions.ts");
+const publicImportFixtureRoot = path.join(repositoryRoot, "tests/fixtures/prior-regression-imports");
 
 const descriptor = defineAdapterCompilerDescriptor({
   id: "fixture.generated-host",
@@ -70,6 +71,22 @@ function generate(analysis = analyze()) {
     analysis,
     extensions,
     modulePath: generatedPath,
+  });
+}
+
+function analyzePublicImports() {
+  return analyzeBunwireProgram({
+    projectRoot: repositoryRoot,
+    sourceFiles: [path.join(publicImportFixtureRoot, "application.ts")],
+    extensions,
+    compilerOptions: {
+      baseUrl: repositoryRoot,
+      paths: {
+        "@bunwire/core": ["packages/core/src/index.ts"],
+        "@bunwire/test-analysis-extensions": ["tests/fixtures/milestone-8-analysis/extensions.ts"],
+        "@bunwire/prior-regression-public": ["tests/fixtures/prior-regression-imports/public.ts"],
+      },
+    },
   });
 }
 
@@ -195,6 +212,62 @@ describe("Milestone 10 — deterministic registry generation", () => {
     }));
   });
 
+  it("retains named, default, and namespace public package export identities", () => {
+    const analysis = analyzePublicImports();
+    const dependencies = analysis.classes[0]?.constructor?.dependencies ?? [];
+
+    expect(dependencies.map(({ token }) => ({
+      moduleSpecifier: token.moduleSpecifier,
+      exportName: token.exportName,
+    }))).toEqual([
+      { moduleSpecifier: "@bunwire/prior-regression-public", exportName: "PublicToken" },
+      { moduleSpecifier: "@bunwire/prior-regression-public", exportName: "default" },
+      { moduleSpecifier: "@bunwire/prior-regression-public", exportName: "PublicToken" },
+    ]);
+
+    const generated = generateRuntimeRegistryModule({
+      analysis,
+      extensions,
+      modulePath: path.join(publicImportFixtureRoot, "registry.generated.ts"),
+    });
+    expect(generated.code).toMatch(
+      /import \{ PublicToken as __bunwire_import_\d+ \} from "@bunwire\/prior-regression-public";/,
+    );
+    expect(generated.code).toMatch(
+      /import \{ default as __bunwire_import_\d+ \} from "@bunwire\/prior-regression-public";/,
+    );
+  });
+
+  it("uses host-aware case sensitivity for generated class identity", () => {
+    const analysis = analyze();
+    const original = analysis.classes[0] as typeof analysis.classes[number];
+    const withPath = (filePath: string): typeof original => Object.freeze({
+      ...original,
+      target: Object.freeze({
+        ...original.target,
+        declaration: Object.freeze({ ...original.target.declaration, filePath }),
+      }),
+    });
+    const caseAnalysis = Object.freeze({
+      ...analysis,
+      classes: Object.freeze([
+        withPath(path.join(fixtureRoot, "Case.ts")),
+        withPath(path.join(fixtureRoot, "case.ts")),
+      ]),
+    });
+    const generateCaseVariant = () => generateRuntimeRegistryModule({
+      analysis: caseAnalysis,
+      extensions,
+      modulePath: generatedPath,
+    });
+
+    if (ts.sys.useCaseSensitiveFileNames) {
+      expect(generateCaseVariant).not.toThrow();
+    } else {
+      expect(generateCaseVariant).toThrow(/duplicate managed class identity/i);
+    }
+  });
+
   it("resolves only the established registry virtual module and rejects malformed Bunwire loads", async () => {
     const plugin = bunwire({ root: repositoryRoot });
     expect(plugin.resolveId(BUNWIRE_REGISTRY_MODULE_ID)).toBe(BUNWIRE_RESOLVED_REGISTRY_MODULE_ID);
@@ -220,12 +293,9 @@ describe("Milestone 10 — deterministic registry generation", () => {
     });
     const first = await plugin.load(BUNWIRE_RESOLVED_REGISTRY_MODULE_ID);
     const cached = await plugin.load(BUNWIRE_RESOLVED_REGISTRY_MODULE_ID);
-    plugin.buildStart();
-    const rebuilt = await plugin.load(BUNWIRE_RESOLVED_REGISTRY_MODULE_ID);
 
     expect(first).toContain("defineRuntimeRegistry");
     expect(cached).toBe(first);
-    expect(rebuilt).toBe(first);
   });
 });
 

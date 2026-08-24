@@ -25,6 +25,7 @@ Overall status:
 - Middleware Redesign 12D: Complete — [details](progress/milestone-12d.md)
 - Middleware Redesign 12E: Complete — [details](progress/milestone-12e.md)
 - Middleware Redesign 12F: Complete — [details](progress/milestone-12f.md)
+- Prior-milestone regression closure: Complete — [details](progress/prior-milestone-regression-closure.md)
 - Milestone 13: Unblocked, not started
 
 ## Implemented
@@ -50,15 +51,16 @@ Overall status:
 - Electrobun managed-middleware execution with immutable native context, adapter-owned endpoint/transport filters, one invocation scope, request transformation/short circuit, message error routing, generated normal/manual parity, and real native-process coverage.
 - Final attachment-only middleware model with all callback APIs/representations removed, migrated examples and fixtures, compiler-generated fake queue second-adapter proof, and clean public/built export audits.
 - Post-review hardening rejects computed middleware-policy access fail-closed, validates caller bounds before invocation lifecycle side effects, and preserves `@Use()` runtime metadata across legacy and standard decorators.
+- Prior-milestone regression closure adds nominal runtime tokens, constructable class-token validation, public generated import identities, host-aware path identity, exact virtual-module declarations, byte-stable shared artifact generation, and real Vite source/config invalidation.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Middleware Redesign Milestones 12A–12F are complete.
+- None. The prior-milestone regression closure is complete.
 
 ## Next
 
-- Milestone 13 — Hardening and First Release.
+- Milestone 13 — Hardening and First Release remains next and unstarted.
 
 ## Blockers
 
@@ -85,3 +87,4 @@ Overall status:
 - [Middleware Redesign Milestone 12D](progress/milestone-12d.md)
 - [Middleware Redesign Milestone 12E](progress/milestone-12e.md)
 - [Middleware Redesign Milestone 12F](progress/milestone-12f.md)
+- [Prior-milestone regression closure](progress/prior-milestone-regression-closure.md)

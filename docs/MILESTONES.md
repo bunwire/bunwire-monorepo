@@ -1149,6 +1149,8 @@ message("users/deleted", id);
 
 The generated registry must be attached before startup because Core does not import build-tool virtual modules. The generated client factory owns no platform encoding; it delegates that private boundary to the selected adapter's compiler-contributed client factory.
 
+The Vite integration also maintains `.bunwire/virtual-modules.d.ts`, containing exact application-specific declarations for both virtual imports. The same public artifact generator writes physical registry/client modules for manual or non-Vite builds and avoids rewriting unchanged output.
+
 ## Implementation steps
 
 1. Read caller-visible parameters from generated method plans.

@@ -109,3 +109,9 @@ After this milestone, a platform-independent application will run from determini
 ## Next Work Within This Milestone
 
 - None. The complete Milestone 10 section was audited item by item and all required tests and exit criteria pass.
+
+## Prior-Milestone Regression Closure — 2026-08-24
+
+- Compiler runtime references retain public named aliases, default exports, and namespace members used through package imports.
+- Compiler and generator file identity now folds case only on case-insensitive hosts, preserving case-distinct source identities on case-sensitive systems.
+- Full details and verification are recorded in [the dedicated closure record](prior-milestone-regression-closure.md).

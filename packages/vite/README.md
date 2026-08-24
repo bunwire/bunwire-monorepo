@@ -51,7 +51,7 @@ Middleware may declare `alias`, `include`, `exclude`, `only`, and `except` as pr
 
 Middleware constructor injection and managed dependency-cycle validation reuse the same rules as Services and Controllers. Generated registry modules emit these classes through `defineMiddlewareDefinition()`, which installs immutable metadata, indexed dependencies, and mandatory transient scope through Core's canonical runtime validation boundary. Compiler analysis and generation never import middleware modules or execute field initializers, constructors, or `handle()`.
 
-Compiler runtime references retain the source expression, resolved exported symbol, use location, and declaration location. Managed classes and runtime tokens must be exported so generated modules can import them. Runtime packages do not scan source or infer signatures.
+Compiler runtime references retain the source expression, resolved exported symbol, use location, and declaration location. When application source uses a package import, generated code retains that package's public named alias, default export, or namespace member rather than combining the package specifier with an internal declaration name. Managed classes and runtime tokens must be exported so generated modules can import them. Runtime packages do not scan source or infer signatures. File identity follows the host filesystem: case is folded on case-insensitive hosts and preserved on case-sensitive hosts.
 
 ## Generated registry module
 
@@ -63,10 +63,18 @@ Groups are collected before expansion, so forward and nested references are vali
 
 Each analyzed managed method carries its final pipeline in global → matching Controller mappings → Controller `@Use()` → method `@Use()` order. Canonical attachments are deduplicated by target identity plus exact ordered parameters while the earliest entry wins; distinct parameterizations remain ordered. Generation emits only canonical attachments—never functions, policy groups, aliases, patterns, or runtime matching data.
 
-`bunwire()` exposes that same output through `virtual:bunwire/registry`. The Vite hooks resolve only the canonical registry ID, cache one analysis per build, and invalidate it at the next build start. The generated module exports `applicationRegistry` and a default registry value suitable for `Application.withRuntimeRegistry()`.
+`bunwire()` exposes that same output through `virtual:bunwire/registry`. The generated module exports `applicationRegistry` and a default registry value suitable for `Application.withRuntimeRegistry()`.
 
 ## Generated caller module
 
 `generateCallerContractModule()` reads only caller-classified parameters from the same analysis used for registry plans. It preserves `argumentIndex` order, required/defaulted/optional/rest positions, array-valued argument types, and request return types by referencing the original exported Controller method type at its analyzed `methodIndex`. Adapter compiler metadata supplies endpoint naming, request/message mode, the client factory, and the native schema adapter; Vite contains no Electrobun IDs or transport encoding.
 
 `bunwire()` exposes this module as `virtual:bunwire/client`. It exports `createBunwireClient(transport)`, `BunwireClient`, request/message contract maps, and `BunwireClientSchema`. The returned client accepts logical positional arguments. Adapter-native payload encoding is absent from the generated source and remains owned by the adapter factory.
+
+## Generated artifacts and development lifecycle
+
+`generateBunwireArtifacts()` is the shared manual/non-Vite generation boundary. By default it writes `.bunwire/registry.ts`, `.bunwire/client.ts`, and `.bunwire/virtual-modules.d.ts`; custom paths may be supplied with `generatedModulePath`, `generatedClientModulePath`, and `generatedDeclarationsPath`. It returns the registry/client hashes, resolved output paths, and only the paths whose bytes changed. Existing files are not rewritten when output is identical.
+
+The declaration artifact gives editors and `tsc` exact application-specific types for `virtual:bunwire/registry` and `virtual:bunwire/client`. Include `.bunwire/**/*.ts` in the application's TypeScript project. Physical registry/client files remain the supported manual or non-Vite escape hatch; Vite-facing application code should use the virtual imports.
+
+The Vite plugin generates these artifacts at build start, watches the Bunwire config, bootstrap, configured source roots, and discovered source files, and ignores its own outputs. Relevant edits, additions, removals, renames, and config changes invalidate cached analysis, recompute watched roots, regenerate changed artifacts, and invalidate both virtual modules in Vite's module graph. Invalid changed source surfaces the typed compiler diagnostic instead of serving stale metadata.

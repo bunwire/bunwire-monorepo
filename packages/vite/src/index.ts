@@ -67,6 +67,12 @@ export {
   type GenerateRuntimeRegistryModuleOptions,
 } from "./registry-generator.js";
 export {
+  generateBunwireArtifacts,
+  type BunwireGeneratedArtifactPaths,
+  type GenerateBunwireArtifactsOptions,
+  type GeneratedBunwireArtifacts,
+} from "./artifact-generator.js";
+export {
   bunwire,
   type BunwireVitePlugin,
   type BunwireVitePluginOptions,

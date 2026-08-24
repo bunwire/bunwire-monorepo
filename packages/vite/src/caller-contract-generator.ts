@@ -16,12 +16,14 @@ export interface GenerateCallerContractModuleOptions {
   readonly extensions: DiscoveredCompilerExtensions;
   readonly modulePath: string;
   readonly importMode?: "relative" | "vite";
+  readonly declarationModulePath?: string;
 }
 
 export interface GeneratedCallerContractModule {
   readonly id: typeof BUNWIRE_CLIENT_MODULE_ID;
   readonly code: string;
   readonly hash: string;
+  readonly declarationCode: string;
 }
 
 interface CallerContractMethodConfiguration {
@@ -251,5 +253,45 @@ export function generateCallerContractModule(
   ].join("\n");
   const hash = createHash("sha256").update(body).digest("hex");
   const code = `${body}export const BUNWIRE_CLIENT_HASH = ${JSON.stringify(hash)};\n`;
-  return Object.freeze({ id: BUNWIRE_CLIENT_MODULE_ID, code, hash });
+  const declarationModulePath = options.declarationModulePath ?? options.modulePath;
+  const declarationMethodTypes = entries.map((entry, index) => {
+    const specifier = entry.owner.target.moduleSpecifier
+      ?? generatedImportSpecifier(
+        entry.owner.target.declaration.filePath,
+        declarationModulePath,
+        "relative",
+      );
+    const ownerType = `typeof import(${JSON.stringify(specifier)}).${entry.owner.target.exportName}`;
+    return `  type __bunwire_method_${index} = InstanceType<${ownerType}>[${JSON.stringify(entry.method.name)}];`;
+  });
+  const factoryType = `typeof import(${JSON.stringify(handler.factory.moduleSpecifier)}).${handler.factory.exportName}`;
+  const schemaType = `import(${JSON.stringify(handler.schema.moduleSpecifier)}).${handler.schema.exportName}`;
+  const declarationCode = [
+    `declare module ${JSON.stringify(BUNWIRE_CLIENT_MODULE_ID)} {`,
+    ...declarationMethodTypes,
+    "",
+    "  type __bunwire_drop<Values extends readonly unknown[], Count extends number, Seen extends readonly unknown[] = []> = Seen['length'] extends Count ? Values : Values extends readonly [unknown, ...infer Rest] ? __bunwire_drop<Rest, Count, [...Seen, unknown]> : [];",
+    "",
+    "  export interface BunwireRequestContract {",
+    ...contractLines("request").map((line) => `  ${line}`),
+    "  }",
+    "",
+    "  export interface BunwireMessageContract {",
+    ...contractLines("message").map((line) => `  ${line}`),
+    "  }",
+    "",
+    `  export type BunwireClientSchema = ${schemaType}<BunwireRequestContract, BunwireMessageContract>;`,
+    "",
+    "  export interface BunwireClient {",
+    "    request<Method extends keyof BunwireRequestContract>(method: Method, ...args: Parameters<BunwireRequestContract[Method]>): Promise<ReturnType<BunwireRequestContract[Method]>>;",
+    "    message<Method extends keyof BunwireMessageContract>(method: Method, ...args: Parameters<BunwireMessageContract[Method]>): void;",
+    "  }",
+    "",
+    `  export type BunwireClientTransport = Parameters<${factoryType}>[0];`,
+    "  export function createBunwireClient(transport: BunwireClientTransport): BunwireClient;",
+    `  export const BUNWIRE_CLIENT_HASH: ${JSON.stringify(hash)};`,
+    "}",
+    "",
+  ].join("\n");
+  return Object.freeze({ id: BUNWIRE_CLIENT_MODULE_ID, code, hash, declarationCode });
 }

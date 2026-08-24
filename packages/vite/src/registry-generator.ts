@@ -11,6 +11,7 @@ import type {
   CompilerRuntimeReference,
 } from "./compiler-analysis.js";
 import { BunwireCompilerError } from "./diagnostics.js";
+import { canonicalCompilerPath } from "./path-identity.js";
 import type { DiscoveredCompilerExtensions } from "./extensions.js";
 import { BUNWIRE_REGISTRY_MODULE_ID } from "./virtual-modules.js";
 
@@ -25,6 +26,7 @@ export interface GeneratedRuntimeRegistryModule {
   readonly id: typeof BUNWIRE_REGISTRY_MODULE_ID;
   readonly code: string;
   readonly hash: string;
+  readonly declarationCode: string;
 }
 
 interface ImportBinding {
@@ -72,11 +74,11 @@ export function generatedImportSpecifier(
   modulePath: string,
   mode: "relative" | "vite",
 ): string {
+  if (mode === "vite") {
+    return `/@fs/${path.resolve(declarationPath).replaceAll("\\", "/")}`;
+  }
   const withoutExtension = declarationPath.replace(/\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/i, "");
   const runtimePath = `${withoutExtension}${runtimeExtension(declarationPath)}`.replaceAll("\\", "/");
-  if (mode === "vite") {
-    return `/@fs/${runtimePath}`;
-  }
   let relative = path.relative(path.dirname(modulePath), runtimePath).replaceAll("\\", "/");
   if (!relative.startsWith(".")) {
     relative = `./${relative}`;
@@ -85,7 +87,7 @@ export function generatedImportSpecifier(
 }
 
 function classSortKey(entry: AnalyzedManagedClass): string {
-  return `${entry.target.declaration.filePath.replaceAll("\\", "/").toLowerCase()}\0${entry.target.exportName}`;
+  return `${canonicalCompilerPath(entry.target.declaration.filePath)}\0${entry.target.exportName}`;
 }
 
 export function generateRuntimeRegistryModule(
@@ -262,5 +264,13 @@ export function generateRuntimeRegistryModule(
   ].join("\n");
   const hash = createHash("sha256").update(body).digest("hex");
   const code = `${body}export const BUNWIRE_REGISTRY_HASH = ${JSON.stringify(hash)};\nexport default applicationRegistry;\n`;
-  return Object.freeze({ id: BUNWIRE_REGISTRY_MODULE_ID, code, hash });
+  const declarationCode = [
+    `declare module ${JSON.stringify(BUNWIRE_REGISTRY_MODULE_ID)} {`,
+    "  export const applicationRegistry: import(\"@bunwire/core\").RuntimeRegistry;",
+    `  export const BUNWIRE_REGISTRY_HASH: ${JSON.stringify(hash)};`,
+    "  export default applicationRegistry;",
+    "}",
+    "",
+  ].join("\n");
+  return Object.freeze({ id: BUNWIRE_REGISTRY_MODULE_ID, code, hash, declarationCode });
 }

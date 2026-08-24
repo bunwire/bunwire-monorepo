@@ -1,6 +1,6 @@
 # Bunwire Managed Middleware Redesign Milestones
 
-Status: Planned pre-release track. Milestones 12A–12F must complete in order before Milestone 13 — Hardening and First Release begins.
+Status: Complete. Milestones 12A–12F were completed in order; the managed, class-based, adapter-driven middleware architecture is the active pre-release implementation.
 
 Architecture: [MIDDLEWARE.md](MIDDLEWARE.md)
 

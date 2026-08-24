@@ -241,6 +241,21 @@ describe("Milestone 5 — managed method kinds and plans", () => {
       /must declare a valid runtime token/i,
     );
     expect(() => defineWithParameter({
+      source: "container",
+      methodIndex: 0,
+      token: () => undefined,
+    })).toThrow(/must declare a valid runtime token/i);
+    expect(() => defineWithParameter({
+      source: "container",
+      methodIndex: 0,
+      token: {
+        kind: "bunwire.token",
+        id: Symbol("forged"),
+        description: "forged",
+        toString: () => "Token(forged)",
+      },
+    })).toThrow(/must declare a valid runtime token/i);
+    expect(() => defineWithParameter({
       source: "resolver",
       methodIndex: 0,
       resolverId: "invalid",

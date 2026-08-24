@@ -1057,6 +1057,8 @@ The compiler must not execute arbitrary adapter instance configuration merely to
 
 The Milestone 7 loader implements this boundary declaratively. It accepts literal project-root-relative `source`/`bootstrap` paths, contains real filesystem paths within that root, and deterministically scans only the configured source directories. Canonical source directories are visited once so contained filesystem aliases and cycles terminate, while invalid links produce typed diagnostics. It analyzes only the receiver-call chain of the default-exported Application to resolve one direct `new ImportedAdapter(...)` passed to `defineApp().withAdapter(...)`; unrelated or dormant adapter-like calls are ignored. Package adapters resolve through ESM-compatible `node`, `import`, and `default` export conditions in declaration order before legacy `module`/`main` fields, so compiler discovery selects the same entry as the ESM bootstrap rather than a conflicting `require` entry. The loader then reads the compiled adapter class's own static compiler data property. It does not import the bootstrap, construct the adapter, evaluate constructor arguments, invoke runtime callbacks, or start the Application. Loading the selected compiled adapter module still performs normal module initialization, so compiler descriptors are expected to be declarative and side-effect-free.
 
+Compiler file identity respects the host filesystem. Absolute paths and separators are normalized everywhere; case is folded only on case-insensitive hosts, so distinct `A.ts` and `a.ts` source files remain distinct on case-sensitive systems.
+
 Adapter extension aggregation reuses Core's canonical registries. A different descriptor cannot replace a built-in or already registered class/method identity, decorators must reference the canonical contributed kind, and method owners must exist and permit managed methods. Compiler-visible decorator and parameter-injector definitions declare a stable public `compilerSymbol` module/export reference. Vite resolves that export through the TypeScript Program and authorizes only the exact canonical symbol after alias/re-export resolution; copying a registered ID never grants compiler authority. The `virtual:bunwire/*` namespace is reserved here; generated registry contents begin in later milestones.
 
 `bunwire.config.*` is build configuration. `bootstrap.ts` is runtime/application composition.
@@ -1121,6 +1123,10 @@ export const applicationRegistry = {
 The exact shape may be split into Core and adapter registries for tree-shaking and ownership clarity.
 
 Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `providers`, and `methods` arrays. Class entries carry their canonical class-kind descriptor, runtime target, compiled decorator data, binding scope, and indexed constructor dependencies. Method entries are authoritative `ManagedMethodPlan` values with canonical owner/method kinds, extension data, explicit parameter sources, stable resolver IDs, and canonical managed middleware attachments. `virtual:bunwire/registry` exports this registry plus a deterministic content hash. Application startup validates the same contract used by prebuilt registries, installs constructor metadata and convention bindings, then runs the generated Provider list through the existing lifecycle. Milestone 12 additionally exposes `virtual:bunwire/client`, generated from those same analyzed method plans and original method types.
+
+Generated runtime references preserve the public import identity used by application source. A package re-export such as `InternalToken as PublicToken` therefore generates an import of `PublicToken` from that package, including equivalent default and namespace-member forms, rather than importing a non-public internal declaration name.
+
+`generateBunwireArtifacts()` writes the physical registry/client modules and `.bunwire/virtual-modules.d.ts` through one analysis. The declaration file describes both virtual modules with the exact application-specific client parameter and result types; applications include `.bunwire/**/*.ts` in their TypeScript project. The Vite plugin maintains these artifacts, watches config/bootstrap/source roots and files, and invalidates both virtual modules after relevant development changes. It does not rewrite byte-identical output or react to its own generated files. Physical modules remain the manual/non-Vite integration path.
 
 ---
 
@@ -1520,6 +1526,8 @@ message("users/deleted", id);
 The generated request/message maps include only parameters classified as `transport`, ordered by `argumentIndex`; their types are selected from the original method parameters at each authoritative `methodIndex`. Required, defaulted-before-required, optional, final-rest, and array-valued arguments therefore retain their logical TypeScript behavior. Requests return typed Promises and messages return `void`.
 
 Generated clients translate positional calls into Electrobun's single-payload native RPC API through an adapter-owned factory. The Electrobun adapter owns the internal wire encoding and decodes it before managed invocation. That encoding is not exported or emitted in the generated caller module, and application code does not construct it.
+
+`virtual:bunwire/client` and `virtual:bunwire/registry` receive their editor and `tsc` declarations from `.bunwire/virtual-modules.d.ts`. Vite projects import the virtual IDs; manual or non-Vite host builds may import the physical `.bunwire/client.ts` and `.bunwire/registry.ts` artifacts generated from the same analysis.
 
 A higher-level generated API may provide:
 

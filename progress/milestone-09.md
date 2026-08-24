@@ -104,3 +104,8 @@ After this milestone, runtime receives complete managed-method parameter plans a
 ## Next Work Within This Milestone
 
 - None. The full Milestone 9 section was audited independently and every required compiler/behavioral test and exit criterion passes.
+
+## Prior-Milestone Regression Closure — 2026-08-24
+
+- Runtime plan validation now accepts only nominal `createToken()` values or constructable class tokens; forged structural tokens and arrow/generator functions fail closed.
+- Full details and verification are recorded in [the dedicated closure record](prior-milestone-regression-closure.md).

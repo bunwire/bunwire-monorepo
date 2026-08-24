@@ -1,9 +1,11 @@
+const tokenBrand: unique symbol = Symbol("bunwire.token.brand");
 declare const tokenType: unique symbol;
 
 export type ClassToken<Value = unknown> = abstract new (...args: any[]) => Value;
 export type Constructable<Value = unknown> = new (...args: any[]) => Value;
 
 export interface Token<Value> {
+  readonly [tokenBrand]: true;
   readonly kind: "bunwire.token";
   readonly id: symbol;
   readonly description: string;
@@ -19,6 +21,7 @@ export function createToken<Value>(description: string): Token<Value> {
   }
 
   const token = {
+    [tokenBrand]: true as const,
     kind: "bunwire.token" as const,
     id: Symbol(description),
     description,
@@ -29,11 +32,24 @@ export function createToken<Value>(description: string): Token<Value> {
 }
 
 export function isToken(value: unknown): value is Token<unknown> {
-  return typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "bunwire.token";
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<Token<unknown>>;
+  return candidate[tokenBrand] === true
+    && candidate.kind === "bunwire.token"
+    && typeof candidate.id === "symbol"
+    && typeof candidate.description === "string"
+    && candidate.description.trim().length > 0
+    && typeof candidate.toString === "function";
 }
 
 export function isClassToken(value: unknown): value is ClassToken {
-  return typeof value === "function";
+  if (typeof value !== "function") return false;
+  try {
+    Reflect.construct(Object, [], value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function describeToken(token: RuntimeToken): string {

@@ -22,8 +22,9 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.test.ts"],
-    pool: "forks",
+    pool: "threads",
     maxWorkers: 1,
+    reporters: ["dot"],
     hookTimeout: 120_000,
     testTimeout: 120_000,
     coverage: {

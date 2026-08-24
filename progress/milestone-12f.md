@@ -118,3 +118,8 @@ Bunwire exposes one middleware model: compiler-discovered transient classes, can
 - Package suites: Core 127, Vite 161, and Electrobun 39 tests passed.
 - Final `pnpm quality`: boundaries, workspace typechecking, Electrobun 1.18.1 SDK contract, 32 files/332 tests, all workspace builds, and built-export audit passed.
 - The first sandboxed native smoke and clean-install attempts were blocked by package-junction/network access; unchanged approved reruns passed the real native process and frozen-lockfile isolated install/typecheck.
+
+## Prior-Milestone Regression Closure — 2026-08-24
+
+- Reconciled `docs/MIDDLEWARE_MILESTONES.md` with the completed 12A–12F implementation; no middleware runtime or compiler model was redesigned.
+- Full details and final gate results are recorded in [the dedicated closure record](prior-milestone-regression-closure.md).

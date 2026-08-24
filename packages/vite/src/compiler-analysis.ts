@@ -21,6 +21,7 @@ import {
   analyzeMiddlewarePolicySyntax,
   type MiddlewarePolicySyntax,
 } from "./middleware-policy-analysis.js";
+import { canonicalCompilerPath } from "./path-identity.js";
 
 export interface BunwireProgramOptions {
   readonly sourceFiles: readonly string[];
@@ -180,7 +181,7 @@ type MiddlewareMetadataKey = typeof MIDDLEWARE_METADATA_KEYS[number];
 const MIDDLEWARE_METADATA_KEY_SET = new Set<string>(MIDDLEWARE_METADATA_KEYS);
 
 function stablePath(filePath: string): string {
-  return path.resolve(filePath).replaceAll("\\", "/").toLowerCase();
+  return canonicalCompilerPath(filePath);
 }
 
 function locationOf(node: ts.Node): BunwireSourceLocation {
@@ -628,30 +629,90 @@ function runtimeReference(
     );
   }
   let moduleSpecifier: string | undefined;
-  for (const statement of expression.getSourceFile().statements) {
-    if (!ts.isImportDeclaration(statement)
-      || !ts.isStringLiteralLike(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text.startsWith(".")) {
-      continue;
+  let exportName = exported.name;
+
+  const importBinding = (() => {
+    const unwrapped = unwrapExpression(expression as ts.Expression);
+    const referenceNode = ts.isTypeReferenceNode(expression)
+      ? expression.typeName
+      : unwrapped;
+    const terminal = ts.isQualifiedName(referenceNode)
+      ? referenceNode.right
+      : ts.isPropertyAccessExpression(referenceNode)
+        ? referenceNode.name
+        : referenceNode;
+    const referenceSymbol = checker.getSymbolAtLocation(terminal);
+    for (const candidateDeclaration of referenceSymbol?.declarations ?? []) {
+      if (ts.isImportSpecifier(candidateDeclaration)) {
+        const importDeclaration = candidateDeclaration.parent.parent.parent;
+        if (ts.isImportDeclaration(importDeclaration)
+          && ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
+          && !importDeclaration.moduleSpecifier.text.startsWith(".")) {
+          return {
+            moduleSpecifier: importDeclaration.moduleSpecifier.text,
+            exportName: candidateDeclaration.propertyName?.text ?? candidateDeclaration.name.text,
+          };
+        }
+      }
+      if (ts.isImportClause(candidateDeclaration) && candidateDeclaration.name) {
+        const importDeclaration = candidateDeclaration.parent;
+        if (ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
+          && !importDeclaration.moduleSpecifier.text.startsWith(".")) {
+          return { moduleSpecifier: importDeclaration.moduleSpecifier.text, exportName: "default" };
+        }
+      }
     }
-    const clause = statement.importClause;
-    const candidates: ts.Identifier[] = [];
-    if (clause?.name) candidates.push(clause.name);
-    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-      candidates.push(...clause.namedBindings.elements.map((element) => element.name));
+
+    const namespaceRoot = ts.isQualifiedName(referenceNode)
+      ? referenceNode.left
+      : ts.isPropertyAccessExpression(referenceNode)
+        ? referenceNode.expression
+        : undefined;
+    if (namespaceRoot && ts.isIdentifier(namespaceRoot) && ts.isIdentifier(terminal)) {
+      const namespaceSymbol = checker.getSymbolAtLocation(namespaceRoot);
+      const namespaceImport = namespaceSymbol?.declarations?.find(ts.isNamespaceImport);
+      const importDeclaration = namespaceImport?.parent.parent;
+      if (importDeclaration && ts.isImportDeclaration(importDeclaration)
+        && ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
+        && !importDeclaration.moduleSpecifier.text.startsWith(".")) {
+        return {
+          moduleSpecifier: importDeclaration.moduleSpecifier.text,
+          exportName: terminal.text,
+        };
+      }
     }
-    if (candidates.some((candidate) => {
-      const imported = checker.getSymbolAtLocation(candidate);
-      return imported ? canonicalSymbol(checker, imported) === canonical : false;
-    })) {
-      moduleSpecifier = statement.moduleSpecifier.text;
-      break;
+    return undefined;
+  })();
+
+  if (importBinding) {
+    const sourceImport = expression.getSourceFile().statements.find((statement): statement is ts.ImportDeclaration => (
+      ts.isImportDeclaration(statement)
+      && ts.isStringLiteralLike(statement.moduleSpecifier)
+      && statement.moduleSpecifier.text === importBinding.moduleSpecifier
+    ));
+    const importedModule = sourceImport
+      ? checker.getSymbolAtLocation(sourceImport.moduleSpecifier)
+      : undefined;
+    const publicExport = importedModule
+      ? checker.getExportsOfModule(importedModule).find((candidate) => (
+        candidate.name === importBinding.exportName
+        && canonicalSymbol(checker, candidate) === canonical
+      ))
+      : undefined;
+    if (!publicExport) {
+      fail(
+        "REGISTRY_GENERATION_INVALID",
+        `Runtime reference "${expression.getText()}" does not resolve to public export "${importBinding.exportName}" from "${importBinding.moduleSpecifier}".`,
+        expression,
+      );
     }
+    moduleSpecifier = importBinding.moduleSpecifier;
+    exportName = importBinding.exportName;
   }
   return Object.freeze({
     expression: expression.getText(),
     symbolName: checker.symbolToString(canonical),
-    exportName: exported.name,
+    exportName,
     moduleSpecifier,
     location: locationOf(expression),
     declaration: locationOf(declaration),

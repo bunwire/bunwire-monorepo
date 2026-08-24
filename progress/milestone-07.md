@@ -144,3 +144,9 @@ After this milestone:
 ## Next Work Within This Milestone
 
 - None. Milestone 7 is complete; Milestone 8 remains unstarted.
+
+## Prior-Milestone Regression Closure — 2026-08-24
+
+- Vite now watches config, bootstrap, source roots, and discovered files; edits, additions, removals, renames, and source-root changes invalidate cached analysis and both generated virtual modules.
+- Source discovery tolerates files disappearing between directory enumeration and canonicalization during real rename/delete watcher events.
+- Full details and verification are recorded in [the dedicated closure record](prior-milestone-regression-closure.md).

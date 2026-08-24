@@ -6,7 +6,23 @@ import {
   type AdapterCompilerDescriptor,
 } from "@bunwire/core";
 import ts from "typescript";
-import { BunwireCompilerError } from "./diagnostics.js";
+import {
+  BunwireCompilerError,
+  type BunwireSourceLocation,
+} from "./diagnostics.js";
+
+function locationOf(node: ts.Node): BunwireSourceLocation {
+  const sourceFile = node.getSourceFile();
+  const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
+  return Object.freeze({
+    filePath: path.resolve(sourceFile.fileName),
+    line: start.line + 1,
+    column: start.character + 1,
+    endLine: end.line + 1,
+    endColumn: end.character + 1,
+  });
+}
 
 export interface ImportBinding {
   readonly moduleSpecifier: string;
@@ -116,7 +132,7 @@ export function applicationCallChain(
   throw new BunwireCompilerError(
     "ADAPTER_EXPRESSION_UNRESOLVABLE",
     `Bootstrap "${bootstrap}" default export must be a direct Application chain rooted in the imported defineApp().`,
-    { filePath: bootstrap },
+    { location: locationOf(exportedExpression) },
   );
 }
 
@@ -143,13 +159,14 @@ function adapterImportFromExpression(
   throw new BunwireCompilerError(
     "ADAPTER_EXPRESSION_UNRESOLVABLE",
     `Adapter expression "${expression.getText()}" in "${bootstrap}" must reference a statically imported adapter class (named, default, or namespace import).`,
-    { filePath: bootstrap },
+    { location: locationOf(expression) },
   );
 }
 
 async function resolveExecutableModule(
   moduleSpecifier: string,
   bootstrap: string,
+  location: BunwireSourceLocation,
 ): Promise<string> {
   let resolved: string;
   try {
@@ -163,14 +180,14 @@ async function resolveExecutableModule(
     throw new BunwireCompilerError(
       "ADAPTER_MODULE_UNRESOLVABLE",
       `Unable to resolve adapter module "${moduleSpecifier}" from bootstrap "${bootstrap}". Export a runtime-loadable adapter class with an own static compiler descriptor.`,
-      { filePath: bootstrap, cause },
+      { location, cause },
     );
   }
   if (/\.[cm]?tsx?$/i.test(resolved)) {
     throw new BunwireCompilerError(
       "ADAPTER_MODULE_UNRESOLVABLE",
       `Adapter module "${resolved}" is TypeScript source and is not runtime-loadable by the compiler process. Reference the adapter package/module's compiled JavaScript export.`,
-      { filePath: bootstrap },
+      { location },
     );
   }
   return resolved;
@@ -281,6 +298,7 @@ async function loadAdapterDescriptor(
   resolvedModule: string,
   exportName: string,
   bootstrap: string,
+  location: BunwireSourceLocation,
 ): Promise<AdapterCompilerDescriptor> {
   let namespace: Record<string, unknown>;
   try {
@@ -289,7 +307,7 @@ async function loadAdapterDescriptor(
     throw new BunwireCompilerError(
       "ADAPTER_MODULE_UNRESOLVABLE",
       `Unable to load adapter compiler module "${moduleSpecifier}" resolved to "${resolvedModule}".`,
-      { filePath: bootstrap, cause },
+      { location, cause },
     );
   }
   const fallback = namespace.default;
@@ -302,7 +320,7 @@ async function loadAdapterDescriptor(
     throw new BunwireCompilerError(
       "ADAPTER_EXPORT_INVALID",
       `Adapter export "${exportName}" was not found as a class in module "${moduleSpecifier}".`,
-      { filePath: bootstrap },
+      { location },
     );
   }
   const compilerProperty = Object.getOwnPropertyDescriptor(exported, "compiler");
@@ -310,7 +328,7 @@ async function loadAdapterDescriptor(
     throw new BunwireCompilerError(
       "ADAPTER_DESCRIPTOR_INVALID",
       `Adapter class export "${exportName}" from "${moduleSpecifier}" must declare an own static compiler data property.`,
-      { filePath: bootstrap },
+      { location },
     );
   }
   try {
@@ -320,7 +338,7 @@ async function loadAdapterDescriptor(
     throw new BunwireCompilerError(
       "ADAPTER_DESCRIPTOR_INVALID",
       `Adapter class export "${exportName}" from "${moduleSpecifier}" has a malformed compiler descriptor: ${cause instanceof Error ? cause.message : String(cause)}`,
-      { filePath: bootstrap, cause },
+      { location, cause },
     );
   }
 }
@@ -341,10 +359,19 @@ export async function discoverBootstrapAdapter(
   ).parseDiagnostics ?? [];
   if (parseDiagnostics.length > 0) {
     const diagnostic = parseDiagnostics[0] as ts.Diagnostic;
+    const startPosition = diagnostic.start ?? 0;
+    const start = sourceFile.getLineAndCharacterOfPosition(startPosition);
+    const end = sourceFile.getLineAndCharacterOfPosition(startPosition + (diagnostic.length ?? 0));
     throw new BunwireCompilerError(
       "BOOTSTRAP_INVALID",
       `Unable to parse Bunwire bootstrap "${bootstrap}": ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`,
-      { filePath: bootstrap },
+      { location: Object.freeze({
+        filePath: path.resolve(bootstrap),
+        line: start.line + 1,
+        column: start.character + 1,
+        endLine: end.line + 1,
+        endColumn: end.character + 1,
+      }) },
     );
   }
   const bindings = collectImportBindings(sourceFile);
@@ -357,7 +384,7 @@ export async function discoverBootstrapAdapter(
     throw new BunwireCompilerError(
       "ADAPTER_EXPRESSION_UNRESOLVABLE",
       `Bootstrap "${bootstrap}" must contain exactly one default-exported Application composition root.`,
-      { filePath: bootstrap },
+      { location: locationOf(defaultExports[1] ?? sourceFile) },
     );
   }
   const exportedApplication = defaultExports[0] as ts.ExportAssignment;
@@ -373,7 +400,7 @@ export async function discoverBootstrapAdapter(
       adapterCalls.length === 0
         ? `Bootstrap "${bootstrap}" must configure one primary adapter through defineApp().withAdapter(new ImportedAdapter(...)).`
         : `Bootstrap "${bootstrap}" configures ${adapterCalls.length} adapters; v1 requires exactly one primary host adapter.`,
-      { filePath: bootstrap },
+      { location: locationOf(adapterCalls[1] ?? exportedApplication.expression) },
     );
   }
   const adapterCall = adapterCalls[0] as ts.CallExpression;
@@ -382,16 +409,22 @@ export async function discoverBootstrapAdapter(
     throw new BunwireCompilerError(
       "ADAPTER_EXPRESSION_UNRESOLVABLE",
       `withAdapter() in "${bootstrap}" must receive a direct "new ImportedAdapter(...)" expression so compiler integration can be resolved without executing runtime configuration.`,
-      { filePath: bootstrap },
+      { location: locationOf(adapterCall) },
     );
   }
   const imported = adapterImportFromExpression(argument.expression, bindings, bootstrap);
-  const resolvedModule = await resolveExecutableModule(imported.binding.moduleSpecifier, bootstrap);
+  const adapterLocation = locationOf(argument);
+  const resolvedModule = await resolveExecutableModule(
+    imported.binding.moduleSpecifier,
+    bootstrap,
+    adapterLocation,
+  );
   const compilerDescriptor = await loadAdapterDescriptor(
     imported.binding.moduleSpecifier,
     resolvedModule,
     imported.exportName,
     bootstrap,
+    adapterLocation,
   );
   return Object.freeze({
     moduleSpecifier: imported.binding.moduleSpecifier,

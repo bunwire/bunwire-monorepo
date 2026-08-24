@@ -343,7 +343,7 @@ Adapter and generated-host coverage lives in `tests/milestone-12e`, with the rea
 
 ## Middleware Redesign Milestone 12F
 
-Finalization coverage lives in `tests/milestone-12f`, backed by the compiler-generated `tests/fixtures/milestone-12f-fake-queue` adapter.
+Finalization coverage lives in `tests/milestone-12f`, backed by the compiler-generated private `examples/fake-queue-app` second-adapter example.
 
 | Requirement | Test evidence |
 | --- | --- |
@@ -358,6 +358,24 @@ Finalization coverage lives in `tests/milestone-12f`, backed by the compiler-gen
 ## Prior-Milestone Regression Closure
 
 Closure coverage is integrated into Milestones 2, 5, 10, and 12. `tests/milestone-12/virtual-modules-vite.test.ts` uses a real Vite middleware-mode server and a temporary copied application to verify exact ambient declarations, byte-stable artifact writes, virtual transforms, edit/add/delete/rename refreshes, source-root config changes, module-graph invalidation, and unrelated-file/generated-output exclusion. `tests/fixtures/prior-regression-imports` verifies public named, default, and namespace package export identities.
+
+## Milestone 13 — Hardening and first release
+
+Milestone 13 deliberately reuses the completed prior-milestone regression evidence instead of duplicating behavioral suites. Its release matrix is:
+
+| Requirement | Automated evidence |
+|---|---|
+| Core has no Vite/Electrobun imports | Milestone 0 architecture tests plus the expanded release boundary checker |
+| Vite has no Electrobun switch and runtime has no source scanning | `tests/milestone-13/release-architecture.test.ts` and the Milestone 7 runtime scan |
+| Generic second-adapter extension proof | promoted `examples/fake-queue-app` exercised by Milestone 12F |
+| Managed auto-DI, plain-class rejection, explicit plain-class injection, and interface tokens | Milestone 8 compiler fixtures and Milestones 2/10 runtime resolution tests |
+| Interleaved method/caller/injector indexes and no `@Arg(index)` | Milestones 5, 9, 10, and 12 generated-contract tests |
+| Provider register/boot and concurrent isolation | Milestone 4 application-kernel and Milestone 10 generated-registry tests |
+| Precise compiler diagnostics | existing compiler invalid fixtures plus `tests/milestone-13/diagnostics.test.ts` |
+| Intended public exports | `tests/built-export-audit.mjs` and `tests/fixtures/milestone-13-public-exports.json` |
+| Publishable tarballs and isolated consumption | `tests/release-package-audit.mjs` |
+| Compiler/startup/invocation sanity and generation stability | `tests/performance-sanity.mjs` |
+| Clean checkout install/typecheck/test/build | `.github/workflows/quality.yml`, `pnpm quality`, and `tests/clean-install.mjs` |
 
 ## Commands
 

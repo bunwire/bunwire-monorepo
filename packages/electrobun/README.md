@@ -1,4 +1,4 @@
-# `@bunwire/electrobun`
+# `@bunwire/electrobun` 0.1.0
 
 Bunwire's Electrobun adapter owns the normal native RPC and main-window bootstrap:
 

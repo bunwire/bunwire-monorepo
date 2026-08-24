@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/vite" },
     { "path": "./packages/electrobun" },
-    { "path": "./examples/electrobun-app" }
+    { "path": "./examples/electrobun-app" },
+    { "path": "./examples/fake-queue-app" }
   ]
 }

@@ -1,6 +1,6 @@
 # Bunwire Electrobun example
 
-This package is the Milestone 12 end-to-end example. `src/bun/bootstrap.ts` defines the unstarted Application and declarative `ElectrobunAdapter`; `src/bun/main.ts` attaches the compiler-generated registry and calls the single `start()` boundary.
+This private package is the release-facing `0.1.0` end-to-end example. `src/bun/bootstrap.ts` defines the unstarted Application and declarative `ElectrobunAdapter`; `src/bun/main.ts` attaches the compiler-generated registry and calls the single `start()` boundary.
 
 `src/bun/application.ts` demonstrates generated Providers, explicit token binding, Service and Controller constructor DI, managed-method auto-DI, `@Inject()`, `@Window()`, `@Context()`, and a transient `@Middleware()` class attached with `@Use()`. The middleware receives constructor DI and the immutable Electrobun adapter context. No decorated application class is manually instantiated.
 

@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "experimentalDecorators": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/example.tsbuildinfo",
+    "paths": {
+      "@bunwire/core": ["packages/core/src/index.ts"],
+      "@bunwire/fake-queue": ["examples/fake-queue-app/src/adapter.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../../packages/core" }]
+}

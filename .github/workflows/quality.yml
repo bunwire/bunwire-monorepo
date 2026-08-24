@@ -18,4 +18,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm quality
+      - run: pnpm performance:sanity
+      - run: pnpm test:release-pack
       - run: pnpm test:clean-install

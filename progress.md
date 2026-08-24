@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 13 — Hardening and First Release (unblocked, not started)
+Current milestone: Milestone 13 — Hardening and First Release (complete)
 
 Overall status:
 
@@ -26,7 +26,7 @@ Overall status:
 - Middleware Redesign 12E: Complete — [details](progress/milestone-12e.md)
 - Middleware Redesign 12F: Complete — [details](progress/milestone-12f.md)
 - Prior-milestone regression closure: Complete — [details](progress/prior-milestone-regression-closure.md)
-- Milestone 13: Unblocked, not started
+- Milestone 13: Complete — [details](progress/milestone-13.md)
 
 ## Implemented
 
@@ -52,15 +52,16 @@ Overall status:
 - Final attachment-only middleware model with all callback APIs/representations removed, migrated examples and fixtures, compiler-generated fake queue second-adapter proof, and clean public/built export audits.
 - Post-review hardening rejects computed middleware-policy access fail-closed, validates caller bounds before invocation lifecycle side effects, and preserves `@Use()` runtime metadata across legacy and standard decorators.
 - Prior-milestone regression closure adds nominal runtime tokens, constructable class-token validation, public generated import identities, host-aware path identity, exact virtual-module declarations, byte-stable shared artifact generation, and real Vite source/config invalidation.
+- Milestone 13 prepares audited public `0.1.0` packages, exact export/tarball contracts, precise bootstrap diagnostics, a buildable fake second-adapter example, release documentation, deterministic performance/churn checks, and CI release gates without publishing or tagging.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. The prior-milestone regression closure is complete.
+- None. Milestone 13 and the documented implementation sequence are complete.
 
 ## Next
 
-- Milestone 13 — Hardening and First Release remains next and unstarted.
+- Publish/tag Bunwire `0.1.0` only through a separate explicitly authorized release operation, or begin separately approved post-release work.
 
 ## Blockers
 
@@ -88,3 +89,4 @@ Overall status:
 - [Middleware Redesign Milestone 12E](progress/milestone-12e.md)
 - [Middleware Redesign Milestone 12F](progress/milestone-12f.md)
 - [Prior-milestone regression closure](progress/prior-milestone-regression-closure.md)
+- [Milestone 13](progress/milestone-13.md)

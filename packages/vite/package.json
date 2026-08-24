@@ -1,18 +1,31 @@
 {
   "name": "@bunwire/vite",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Bunwire compiler, generated registry/client artifacts, and Vite virtual-module integration.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bunwire/bunwire-monorepo.git",
+    "directory": "packages/vite"
+  },
+  "homepage": "https://github.com/bunwire/bunwire-monorepo#readme",
+  "bugs": "https://github.com/bunwire/bunwire-monorepo/issues",
+  "keywords": ["bunwire", "vite", "typescript", "code-generation"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "dist/**/*.map", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run --config ../../vitest.config.ts tests/milestone-07 tests/milestone-08 tests/milestone-09 tests/milestone-10 tests/milestone-12/virtual-modules-vite.test.ts tests/milestone-12b tests/milestone-12c/middleware-attachments.test.ts tests/milestone-12c/middleware-attachments-invalid.test.ts tests/milestone-12d/middleware-policy.test.ts tests/milestone-12d/middleware-policy-invalid.test.ts tests/milestone-12d/middleware-policy-reference-invalid.test.ts tests/milestone-12d/middleware-policy-group-invalid.test.ts tests/milestone-12d/middleware-policy-mapping-invalid.test.ts tests/milestone-12f/managed-middleware-finalization.test.ts"
   },
   "dependencies": {
-    "@bunwire/core": "workspace:*",
+    "@bunwire/core": "workspace:^",
     "typescript": "5.9.3"
   },
   "peerDependencies": {

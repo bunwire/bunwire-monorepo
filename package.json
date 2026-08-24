@@ -10,7 +10,9 @@
     "test:electrobun-sdk-contract": "node tests/electrobun-sdk-contract.mjs",
     "test:electrobun-native": "node tests/electrobun-native-smoke.mjs",
     "test:built-exports": "node tests/built-export-audit.mjs",
+    "test:release-pack": "node tests/release-package-audit.mjs",
     "test:clean-install": "node tests/clean-install.mjs",
+    "performance:sanity": "node tests/performance-sanity.mjs",
     "test:architecture": "vitest run tests/milestone-00/architecture.test.ts",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "quality": "pnpm check:boundaries && pnpm typecheck && pnpm test:electrobun-sdk-contract && pnpm test && pnpm build && pnpm test:built-exports"

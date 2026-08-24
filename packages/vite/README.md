@@ -1,6 +1,6 @@
-# `@bunwire/vite`
+# `@bunwire/vite` 0.1.0
 
-Milestones 7–12 establish Bunwire's bounded discovery, TypeScript analysis, deterministic registry/client generation, and Vite virtual-module layer.
+`@bunwire/vite` provides Bunwire's bounded discovery, TypeScript analysis, deterministic registry/client generation, and Vite virtual-module layer.
 
 ## Configuration
 
@@ -29,7 +29,7 @@ export default defineApp().withAdapter(new HostAdapter({ /* runtime options */ }
 
 Discovery follows only the receiver-call chain of that default export. Adapter-like calls in unused functions, dormant branches, callbacks, constructor arguments, or unrelated expressions do not participate. It resolves the imported adapter class and reads its own static `compiler` data property. Package exports use ESM-compatible `node`, `import`, and `default` conditions in declaration order; a `require` condition cannot silently select different compiler metadata. Discovery does not import the bootstrap, construct the adapter, evaluate constructor arguments, invoke configuration callbacks, or start the Application. Loading the selected adapter's compiled JavaScript module performs normal module initialization, so compiler descriptors must remain declarative and side-effect-free.
 
-Compiler-extension aggregation seeds Core's canonical built-in class kinds, validates adapter class/method/decorator ownership, and rejects conflicting IDs or compiler-symbol assignments. Each registered decorator/injector definition names its canonical public module export through `compilerSymbol`; analysis resolves that export inside the Program and compares exact TypeScript symbols after following aliases and re-exports. A different symbol cannot gain authority by copying a registered ID. The `virtual:bunwire/*` namespace is reserved for generated modules, but Milestones 7–9 emit none.
+Compiler-extension aggregation seeds Core's canonical built-in class kinds, validates adapter class/method/decorator ownership, and rejects conflicting IDs or compiler-symbol assignments. Each registered decorator/injector definition names its canonical public module export through `compilerSymbol`; analysis resolves that export inside the Program and compares exact TypeScript symbols after following aliases and re-exports. A different symbol cannot gain authority by copying a registered ID. The `virtual:bunwire/*` namespace is reserved for Bunwire's generated modules.
 
 ## Symbol and parameter analysis
 

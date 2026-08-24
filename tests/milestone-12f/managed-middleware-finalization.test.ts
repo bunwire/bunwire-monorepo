@@ -20,14 +20,14 @@ import {
   Consumer,
   FakeQueueAdapter,
   type FakeQueueHost,
-} from "../fixtures/milestone-12f-fake-queue/adapter.js";
+} from "../../examples/fake-queue-app/src/adapter.js";
 import {
   auditConstructions,
   excludedConstructions,
   queueEvents,
   resetQueueFixture,
   skippedConstructions,
-} from "../fixtures/milestone-12f-fake-queue/middleware.js";
+} from "../../examples/fake-queue-app/src/middleware.js";
 
 if (false) {
   // @ts-expect-error Function middleware was removed in Milestone 12F.
@@ -35,7 +35,7 @@ if (false) {
 }
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const fixtureRoot = path.join(repositoryRoot, "tests/fixtures/milestone-12f-fake-queue");
+const fixtureRoot = path.join(repositoryRoot, "examples/fake-queue-app/src");
 const generatedPath = path.join(fixtureRoot, "registry.generated.ts");
 const sourceFiles = ["middleware.ts", "application.ts"].map((file) => path.join(fixtureRoot, file));
 const compilerOptions: ts.CompilerOptions = {
@@ -49,7 +49,7 @@ const compilerOptions: ts.CompilerOptions = {
   baseUrl: repositoryRoot,
   paths: {
     "@bunwire/core": ["packages/core/src/index.ts"],
-    "@bunwire/fake-queue": ["tests/fixtures/milestone-12f-fake-queue/adapter.ts"],
+    "@bunwire/fake-queue": ["examples/fake-queue-app/src/adapter.ts"],
   },
 };
 

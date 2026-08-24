@@ -36,12 +36,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/vite
 
+  examples/fake-queue-app:
+    dependencies:
+      '@bunwire/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+
   packages/core: {}
 
   packages/electrobun:
     dependencies:
       '@bunwire/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       electrobun:
         specifier: 1.18.1
@@ -50,7 +56,7 @@ importers:
   packages/vite:
     dependencies:
       '@bunwire/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       typescript:
         specifier: 5.9.3

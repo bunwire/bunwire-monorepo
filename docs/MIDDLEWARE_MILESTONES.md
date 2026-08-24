@@ -362,7 +362,7 @@ Complete the breaking replacement, remove callback middleware, prove adapter ext
 6. Update the architecture, package READMEs, tests documentation, migration guidance, and public API examples.
 7. Audit exports and generated artifacts for legacy callback names or shapes.
 8. Run focused suites, all regression tests, typechecking, builds, clean install, SDK compatibility, and native Electrobun smoke.
-9. Update `progress.md` and dedicated `progress/milestone-12a.md` through `milestone-12f.md` records with exact results.
+9. Update `docs/progress.md` and dedicated `docs/progress/milestone-12a.md` through `milestone-12f.md` records with exact results.
 
 ## Acceptance Criteria
 

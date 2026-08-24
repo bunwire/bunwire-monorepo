@@ -591,26 +591,26 @@ When a change affects shared Core or compiler behavior, verify relevant dependen
 
 Maintain two levels of implementation progress tracking:
 
-1. a repository-root `progress.md` file containing the concise overall project status; and
+1. a `docs/progress.md` file containing the concise overall project status; and
 2. a dedicated progress file for every milestone that has been started or completed.
 
-Create a repository-root directory named:
+Store the detailed milestone records in:
 
-`progress/`
+`docs/progress/`
 
 Each milestone must have its own file using the milestone number, for example:
 
-- `progress/milestone-00.md`
-- `progress/milestone-01.md`
-- `progress/milestone-02.md`
+- `docs/progress/milestone-00.md`
+- `docs/progress/milestone-01.md`
+- `docs/progress/milestone-02.md`
 
 Use the milestone numbering from `docs/MILESTONES.md`.
 
 Do not combine detailed implementation histories for multiple milestones into one milestone progress file.
 
-### Main `progress.md`
+### Main `docs/progress.md`
 
-The repository-root `progress.md` is the project-level index.
+`docs/progress.md` is the project-level index.
 
 Keep it concise.
 
@@ -669,7 +669,7 @@ Overall status:
 - [Milestone 2](progress/milestone-02.md)
 ```
 
-`progress.md` should not duplicate the full implementation history, complete test logs, or detailed acceptance-criteria notes contained in the milestone files.
+`docs/progress.md` should not duplicate the full implementation history, complete test logs, or detailed acceptance-criteria notes contained in the milestone files.
 
 Its purpose is to answer quickly:
 
@@ -679,7 +679,7 @@ Its purpose is to answer quickly:
 - What comes next?
 - Where are the details?
 
-Update `progress.md` whenever a milestone starts, changes status, completes, or when the next planned work changes.
+Update `docs/progress.md` whenever a milestone starts, changes status, completes, or when the next planned work changes.
 
 ### Milestone Progress Files
 
@@ -689,7 +689,7 @@ The milestone file is the detailed implementation record for that milestone.
 
 For example, while implementing Milestone 2, maintain:
 
-`progress/milestone-02.md`
+`docs/progress/milestone-02.md`
 
 The file must make it possible for the repository owner or another agent to understand the complete state of that milestone without reconstructing previous work.
 
@@ -806,13 +806,13 @@ When a milestone becomes complete:
 3. record the final tests and regression checks that establish completion;
 4. record what the repository owner should now expect to work;
 5. record what is intentionally left for later milestones; and
-6. update `progress.md` to mark the milestone complete and point to the completed milestone file.
+6. update `docs/progress.md` to mark the milestone complete and point to the completed milestone file.
 
 Never delete a completed milestone progress file merely because work has moved to a later milestone.
 
 Completed milestone files are part of the project's implementation history.
 
-When beginning the next milestone, create its dedicated progress file and update `progress.md` so it becomes the current milestone.
+When beginning the next milestone, create its dedicated progress file and update `docs/progress.md` so it becomes the current milestone.
 
 ---
 
@@ -829,7 +829,7 @@ A milestone is complete only when:
 5. relevant regressions have been checked;
 6. affected workspace packages still build/test where applicable;
 7. the milestone's dedicated progress file records the completed work, acceptance criteria, tests, and expected behavior; and
-8. `progress.md` marks the milestone complete and links to that milestone progress file.
+8. `docs/progress.md` marks the milestone complete and links to that milestone progress file.
 
 If a milestone cannot be completed, leave it marked as incomplete and document exactly what remains.
 
@@ -856,7 +856,7 @@ Do not rewrite architectural decisions simply to fit an easier implementation.
 
 Prefer changing the implementation to match the architecture unless there is a concrete technical reason the documented design cannot work.
 
-Record significant architectural changes in the relevant milestone progress file, and summarize project-level consequences in `progress.md` when appropriate.
+Record significant architectural changes in the relevant milestone progress file, and summarize project-level consequences in `docs/progress.md` when appropriate.
 
 When changing public APIs, lifecycle behavior, adapter contracts, compiler behavior, package ownership, or generated output, verify whether `docs/README.md` or `docs/MILESTONES.md` must also be updated.
 
@@ -898,6 +898,6 @@ Continue implementation until the current milestone's acceptance criteria are sa
 
 When stopping work:
 
-- ensure the current milestone's dedicated `progress/milestone-XX.md` file accurately describes the detailed repository state for that milestone;
+- ensure the current milestone's dedicated `docs/progress/milestone-XX.md` file accurately describes the detailed repository state for that milestone;
 - record packages changed, tests run, test results, acceptance-criteria status, expected working behavior, expected missing behavior, blockers, and exact remaining milestone work there; and
-- ensure the repository-root `progress.md` accurately summarizes what has been implemented, which milestone is current, what is next, and links to every started or completed milestone progress file.
+- ensure `docs/progress.md` accurately summarizes what has been implemented, which milestone is current, what is next, and links to every started or completed milestone progress file.

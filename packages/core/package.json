@@ -1,6 +1,6 @@
 {
   "name": "@bunwire/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Platform-independent application kernel, dependency injection, managed methods, and adapter extension APIs for Bunwire.",
   "license": "GPL-3.0-only",
   "repository": {

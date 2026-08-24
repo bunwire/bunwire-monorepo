@@ -30,6 +30,7 @@ Overall status:
 
 ## Implemented
 
+- Optional/void managed class, method, and parameter decorators support equivalent bare and factory syntax (for example, `@Service` and `@Service()`) across runtime metadata and compiler discovery.
 - Monorepo and mechanically enforced package boundaries.
 - Generic managed-class metadata and decorator-definition APIs.
 - Runtime DI container with explicit bindings, tokens, indexed constructor metadata, and singleton/transient scopes.

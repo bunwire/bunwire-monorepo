@@ -3,7 +3,7 @@ import { Message, Route, Window, type ElectrobunWindow } from "@bunwire/electrob
 
 export const CACHE = createToken<{ get(key: string): string }>("fixture.electrobun-cache");
 
-@Service()
+@Service
 export class UserService {
   describe(id: string): string { return `user:${id}`; }
 }
@@ -15,7 +15,7 @@ export class UserController {
     id: string,
     users: UserService,
     @Inject(CACHE) cache: { get(key: string): string },
-    @Window() window: ElectrobunWindow,
+    @Window window: ElectrobunWindow,
   ): string {
     return `${users.describe(id)}:${cache.get(id)}:${window.title}`;
   }
@@ -23,7 +23,7 @@ export class UserController {
   @Message("selected/")
   selected(id: string): void { void id; }
 
-  @Route()
+  @Route
   inferredName(id: string): string { return id; }
 
   ordinary(id: string): string { return id; }

@@ -133,7 +133,7 @@ export interface BunwireCompilerAnalysis {
 
 interface DecoratorMatch<Definition> {
   readonly decorator: ts.Decorator;
-  readonly call: ts.CallExpression;
+  readonly call: ts.CallExpression | undefined;
   readonly symbol: ts.Symbol;
   readonly id: string;
   readonly definition: Definition;
@@ -330,17 +330,17 @@ function stringLiteralProperty(
 
 function decoratorIdentity(
   checker: ts.TypeChecker,
-  call: ts.CallExpression,
+  expression: ts.Expression,
   symbol: ts.Symbol,
 ): string | undefined {
   const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
-  const type = checker.getTypeOfSymbolAtLocation(symbol, declaration ?? call.expression);
+  const type = checker.getTypeOfSymbolAtLocation(symbol, declaration ?? expression);
   const definition = checker.getPropertyOfType(type, "definition");
   if (!definition) {
     return undefined;
   }
-  const definitionType = checker.getTypeOfSymbolAtLocation(definition, declaration ?? call.expression);
-  return stringLiteralProperty(checker, definitionType, "id", declaration ?? call.expression);
+  const definitionType = checker.getTypeOfSymbolAtLocation(definition, declaration ?? expression);
+  return stringLiteralProperty(checker, definitionType, "id", declaration ?? expression);
 }
 
 function decoratorsOf(node: ts.Node): readonly ts.Decorator[] {
@@ -355,19 +355,18 @@ function matchDecorators<Definition extends CompilerDefinition>(
   const matches: DecoratorMatch<Definition>[] = [];
   for (const decorator of decoratorsOf(node)) {
     const expression = unwrapExpression(decorator.expression);
-    if (!ts.isCallExpression(expression)) {
-      continue;
-    }
-    const symbol = symbolAtExpression(checker, expression.expression);
+    const call = ts.isCallExpression(expression) ? expression : undefined;
+    const decoratorReference = call?.expression ?? expression;
+    const symbol = symbolAtExpression(checker, decoratorReference);
     if (!symbol) {
       continue;
     }
     const definition = definitions.bySymbol.get(symbol);
     if (definition) {
-      matches.push({ decorator, call: expression, symbol, id: definition.id, definition });
+      matches.push({ decorator, call, symbol, id: definition.id, definition });
       continue;
     }
-    const claimedId = decoratorIdentity(checker, expression, symbol);
+    const claimedId = decoratorIdentity(checker, decoratorReference, symbol);
     if (claimedId && definitions.byId.has(claimedId)) {
       fail(
         "DECORATOR_IDENTITY_CONFLICT",
@@ -398,7 +397,7 @@ function explicitInjectDecorators(
       matches.push({ decorator, call: expression, symbol, id: INJECT_DECORATOR_ID });
       continue;
     }
-    const claimedId = decoratorIdentity(checker, expression, symbol);
+    const claimedId = decoratorIdentity(checker, expression.expression, symbol);
     if (claimedId === INJECT_DECORATOR_ID) {
       fail(
         "DECORATOR_IDENTITY_CONFLICT",
@@ -458,14 +457,15 @@ function evaluateDecoratorValue(expression: ts.Expression): unknown {
 function decoratorData(
   match: DecoratorMatch<{ readonly createMetadata: (options: any) => unknown }>,
 ): unknown {
-  if (match.call.arguments.length > 1) {
+  const arguments_ = match.call?.arguments ?? [];
+  if (arguments_.length > 1) {
     fail(
       "DECORATOR_ARGUMENT_INVALID",
       `Decorator "${match.id}" accepts one compiler metadata options value.`,
       match.decorator,
     );
   }
-  const argument = match.call.arguments[0];
+  const argument = arguments_[0];
   try {
     return match.definition.createMetadata(argument ? evaluateDecoratorValue(argument) : undefined);
   } catch (cause) {
@@ -814,8 +814,9 @@ function explicitToken(
   if (!injector) {
     return undefined;
   }
-  const argument = injector.call.arguments[0];
-  if (injector.call.arguments.length !== 1 || !argument) {
+  const injectArguments = injector.call?.arguments ?? [];
+  const argument = injectArguments[0];
+  if (injectArguments.length !== 1 || !argument) {
     fail(
       "CONSTRUCTOR_INJECTION_INVALID",
       `@Inject() on parameter "${parameter.name.getText()}" requires exactly one runtime token expression.`,
@@ -1279,14 +1280,15 @@ function analyzeUseEntries(
 ): readonly AnalyzedMiddlewareAttachment[] {
   const entries: AnalyzedMiddlewareAttachment[] = [];
   for (const use of uses) {
-    if (use.call.arguments.length === 0) {
+    const useArguments = use.call?.arguments ?? [];
+    if (useArguments.length === 0) {
       fail(
         "MIDDLEWARE_ATTACHMENT_INVALID",
         `@Use() on ${ownerLabel} requires at least one middleware reference.`,
         use.decorator,
       );
     }
-    for (const argument of use.call.arguments) {
+    for (const argument of useArguments) {
       const expression = unwrapExpression(argument);
       if (ts.isStringLiteral(expression)) {
         const parsed = parseMiddlewareAliasReference(expression);

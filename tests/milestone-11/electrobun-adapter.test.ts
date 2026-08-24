@@ -13,6 +13,8 @@ import {
   defineApp,
   defineManagedMethodPlan,
   defineRuntimeRegistry,
+  getManagedMethodMetadata,
+  getParameterInjectorMetadata,
   type Container,
 } from "@bunwire/core";
 import {
@@ -99,6 +101,14 @@ class RuntimeController {
 
   @Route("array")
   array(values: string[]): string { return values.join("|"); }
+}
+
+@Controller
+class BareDecoratorController {
+  @Route
+  status(@Window window: ElectrobunWindow): boolean {
+    return window.isMaximized();
+  }
 }
 
 const routePlan = defineManagedMethodPlan({
@@ -238,6 +248,17 @@ beforeEach(() => {
 });
 
 describe.sequential("Milestone 11 — Electrobun compiler integration", () => {
+  it("applies optional Electrobun method and parameter decorators in bare form at runtime", () => {
+    expect(getManagedMethodMetadata(BareDecoratorController.prototype, "status")).toMatchObject({
+      decoratorId: "electrobun.route.decorator",
+      data: { path: undefined },
+    });
+    expect(getParameterInjectorMetadata(BareDecoratorController.prototype, "status", 0)).toMatchObject({
+      injectorId: "electrobun.window.decorator",
+      resolverId: "electrobun.window",
+    });
+  });
+
   it("discovers ElectrobunAdapter from the bootstrap and its generic compiler descriptor", async () => {
     const result = await discoverBunwireApplication({ root: fixtureRoot });
     expect(result.adapter).toMatchObject({

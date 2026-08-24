@@ -37,8 +37,14 @@ type InjectorFactory<Options> = [Options] extends [void]
     ? (options?: Exclude<Options, undefined>) => ParameterDecorator
     : (options: Options) => ParameterDecorator;
 
+type BareInjector<Options> = [Options] extends [void]
+  ? ParameterDecorator
+  : undefined extends Options
+    ? ParameterDecorator
+    : unknown;
+
 export type ParameterInjector<Options, Data, Id extends string = string> =
-  InjectorFactory<Options> & {
+  InjectorFactory<Options> & BareInjector<Options> & {
     readonly definition: ParameterInjectorDefinition<Options, Data, Id>;
   };
 
@@ -117,8 +123,12 @@ export function defineParameterInjector<
     resolverId: options.resolverId,
     createMetadata: options.createMetadata,
   });
-  const factory = ((decoratorOptions: Options) => {
-    return ((target: object, method: string | symbol | undefined, parameterIndex: number) => {
+  const decorate = (
+    decoratorOptions: Options,
+    target: object,
+    method: string | symbol | undefined,
+    parameterIndex: number,
+  ): void => {
       if (method === undefined) {
         throw new TypeError(
           `Parameter injector "${definition.id}" may only decorate managed method parameters.`,
@@ -131,6 +141,20 @@ export function defineParameterInjector<
         parameterIndex,
         data: definition.createMetadata(decoratorOptions),
       });
+  };
+  const factory = (function (...args: readonly unknown[]): ParameterDecorator | void {
+    if (args.length >= 3 && typeof args[2] === "number") {
+      decorate(
+        undefined as Options,
+        args[0] as object,
+        args[1] as string | symbol | undefined,
+        args[2],
+      );
+      return;
+    }
+    const decoratorOptions = args[0] as Options;
+    return ((target: object, method: string | symbol | undefined, parameterIndex: number) => {
+      decorate(decoratorOptions, target, method, parameterIndex);
     }) as ParameterDecorator;
   }) as ParameterInjector<Options, Data, Id>;
   Object.defineProperty(factory, "definition", {

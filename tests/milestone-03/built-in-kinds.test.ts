@@ -24,6 +24,24 @@ describe("Milestone 3 — built-in managed class kinds", () => {
     expect(metadata?.data).toEqual({ scope: "singleton" });
   });
 
+  it("supports bare built-in decorators when configuration is omitted", () => {
+    @Service
+    class BareService {}
+
+    @Controller
+    class BareController {}
+
+    @Provider
+    class BareProvider {}
+
+    expect(getManagedClassMetadata(BareService)?.data).toEqual({ scope: "singleton" });
+    expect(getManagedClassMetadata(BareController)?.data).toEqual({ prefix: undefined });
+    expect(getManagedClassMetadata(BareProvider)?.data).toEqual({
+      lifecycleHooks: PROVIDER_LIFECYCLE_HOOKS,
+      constructorPolicy: "zero-arguments",
+    });
+  });
+
   it("@Controller() creates core.controller metadata", () => {
     @Controller()
     class HealthController {}

@@ -133,4 +133,32 @@ describe("managed class decorators", () => {
     expect(metadata).not.toHaveProperty("sourceFile");
     expect(metadata).not.toHaveProperty("vite");
   });
+
+  it("supports bare usage for generic decorators whose options are optional", () => {
+    const kind = defineClassKind({
+      id: "example.optional-worker",
+      injectable: true,
+      autoDiscover: true,
+      analyzeConstructor: true,
+      managedMethods: false,
+    });
+    const OptionalWorker = defineManagedClassDecorator<
+      { readonly scope?: string } | undefined,
+      { readonly scope: string }
+    >({
+      id: "example.optional-worker-decorator",
+      compilerSymbol: { moduleSpecifier: "test.example", exportName: "OptionalWorker" },
+      kind,
+      createMetadata: (options) => Object.freeze({ scope: options?.scope ?? "default" }),
+    });
+
+    @OptionalWorker
+    class BareWorker {}
+
+    @OptionalWorker({ scope: "custom" })
+    class ConfiguredWorker {}
+
+    expect(getManagedClassMetadata(BareWorker)?.data).toEqual({ scope: "default" });
+    expect(getManagedClassMetadata(ConfiguredWorker)?.data).toEqual({ scope: "custom" });
+  });
 });

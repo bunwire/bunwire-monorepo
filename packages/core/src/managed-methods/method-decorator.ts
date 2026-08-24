@@ -33,8 +33,14 @@ type DecoratorFactory<Options> = [Options] extends [void]
     ? (options?: Exclude<Options, undefined>) => MethodDecorator
     : (options: Options) => MethodDecorator;
 
+type BareDecorator<Options> = [Options] extends [void]
+  ? MethodDecorator
+  : undefined extends Options
+    ? MethodDecorator
+    : unknown;
+
 export type ManagedMethodDecorator<Options, Data, Id extends string = string> =
-  DecoratorFactory<Options> & {
+  DecoratorFactory<Options> & BareDecorator<Options> & {
     readonly definition: ManagedMethodDecoratorDefinition<Options, Data, Id>;
   };
 
@@ -106,12 +112,17 @@ export function defineManagedMethodDecorator<
     createMetadata: options.createMetadata,
   });
 
-  const factory = ((decoratorOptions: Options) => {
-    return ((target: object, method: string | symbol | {
+  type MethodContext = string | symbol | {
       readonly kind?: unknown;
       readonly name?: unknown;
       readonly metadata?: unknown;
-    }, descriptor?: PropertyDescriptor) => {
+    };
+  const decorate = (
+    decoratorOptions: Options,
+    target: object,
+    method: MethodContext,
+    descriptor?: PropertyDescriptor,
+  ): unknown => {
       // Accept the standard decorator calling convention as well as legacy
       // TypeScript decorators. Generated plans remain runtime-authoritative,
       // while class decoration transfers this metadata to the prototype for
@@ -148,7 +159,28 @@ export function defineManagedMethodDecorator<
         method,
         data: definition.createMetadata(decoratorOptions),
       });
-    }) as MethodDecorator;
+  };
+
+  const factory = (function (...args: readonly unknown[]): MethodDecorator | unknown {
+    const isBareDecorator = args.length >= 2 && (
+      typeof args[1] === "string"
+      || typeof args[1] === "symbol"
+      || (typeof args[1] === "object"
+        && args[1] !== null
+        && (args[1] as { readonly kind?: unknown }).kind === "method")
+    );
+    if (isBareDecorator) {
+      return decorate(
+        undefined as Options,
+        args[0] as object,
+        args[1] as MethodContext,
+        args[2] as PropertyDescriptor | undefined,
+      );
+    }
+    const decoratorOptions = args[0] as Options;
+    return ((target: object, method: MethodContext, descriptor?: PropertyDescriptor) => (
+      decorate(decoratorOptions, target, method, descriptor)
+    )) as MethodDecorator;
   }) as ManagedMethodDecorator<Options, Data, Id>;
 
   Object.defineProperty(factory, "definition", {

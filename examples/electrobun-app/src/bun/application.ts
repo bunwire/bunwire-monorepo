@@ -38,7 +38,7 @@ export class DatabaseService {
   }
 }
 
-@Service()
+@Service
 export class UserService {
   constructor(private readonly database: DatabaseService) {}
 

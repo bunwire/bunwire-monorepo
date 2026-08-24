@@ -8,9 +8,11 @@ Use `defineClassKind()` to describe capabilities and `defineManagedClassDecorato
 
 Core's built-in specializations use that same API:
 
-- `@Service({ scope: "singleton" | "transient" })` describes injectable business/application classes. The default scope metadata is `singleton`; ordinary Service methods are not managed methods.
-- `@Controller(prefix?)` describes injectable, registry-managed classes that may own adapter-defined managed methods. The optional prefix is retained as generic metadata for adapters.
-- `@Provider()` describes registry-managed lifecycle classes with the known `register` and `boot` hooks. These hooks are lifecycle metadata, not ordinary managed methods or routes.
+- `@Service`, `@Service()`, or `@Service({ scope: "singleton" | "transient" })` describes injectable business/application classes. The default scope metadata is `singleton`; ordinary Service methods are not managed methods.
+- `@Controller`, `@Controller()`, or `@Controller(prefix)` describes injectable, registry-managed classes that may own adapter-defined managed methods. The optional prefix is retained as generic metadata for adapters.
+- `@Provider` or `@Provider()` describes registry-managed lifecycle classes with the known `register` and `boot` hooks. These hooks are lifecycle metadata, not ordinary managed methods or routes.
+
+Managed class, method, and parameter decorators created through Bunwire's generic definition APIs support bare syntax whenever their options type is `void` or includes `undefined`. Supplying an explicit options value still uses the factory form; decorators with required options remain factory-only.
 
 In v1 Bunwire constructs Providers with zero supplied constructor arguments and performs no Provider constructor injection. A Provider constructor must therefore be callable with zero arguments; optional, defaulted, and rest parameters are valid, while required parameters are rejected by the typed Provider registry. Dependencies and bindings needed during startup are handled through the framework-owned `register(container)` hook.
 

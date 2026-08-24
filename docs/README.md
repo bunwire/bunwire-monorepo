@@ -186,6 +186,8 @@ Core provides the mechanism; the adapter gives the mechanism platform meaning an
 
 # 3. The Managed Class Model
 
+Decorators whose configuration is optional may be written either bare or as a factory. For example, `@Service` and `@Service()` are equivalent, while `@Service({ scope: "transient" })` retains the explicit factory form. The same rule applies to generic managed class, method, and parameter decorators whose options type is `void` or includes `undefined`; decorators with required options remain factory-only.
+
 An **outer/class decorator** opts a class into Bunwire's managed application graph and describes how the compiler/runtime should treat that class.
 
 The built-in managed classes are initially:

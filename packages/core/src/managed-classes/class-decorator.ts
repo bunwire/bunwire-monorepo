@@ -32,8 +32,14 @@ type DecoratorFactory<Options> = [Options] extends [void]
     ? (options?: Exclude<Options, undefined>) => ClassDecorator
     : (options: Options) => ClassDecorator;
 
+type BareDecorator<Options> = [Options] extends [void]
+  ? ClassDecorator
+  : undefined extends Options
+    ? ClassDecorator
+    : unknown;
+
 export type ManagedClassDecorator<Options, Data, Id extends string = string> =
-  DecoratorFactory<Options> & {
+  DecoratorFactory<Options> & BareDecorator<Options> & {
     readonly definition: ManagedClassDecoratorDefinition<Options, Data, Id>;
   };
 
@@ -67,8 +73,11 @@ export function defineManagedClassDecorator<
     validateTarget: options.validateTarget,
   });
 
-  const factory = ((decoratorOptions: Options) => {
-    return ((target: Function, standardContext?: { readonly kind?: unknown; readonly metadata?: unknown }) => {
+  const decorate = (
+    decoratorOptions: Options,
+    target: Function,
+    standardContext?: { readonly kind?: unknown; readonly metadata?: unknown },
+  ): void => {
       const managedTarget = target as ManagedClassTarget;
       definition.validateTarget?.(managedTarget);
       const metadata: ManagedClassMetadata<Data> = {
@@ -99,6 +108,26 @@ export function defineManagedClassDecorator<
           }
         }
       }
+  };
+
+  const factory = (function (...args: readonly unknown[]): ClassDecorator | void {
+    const [value, standardContext] = args;
+    const isBareLegacyDecorator = args.length === 1 && typeof value === "function";
+    const isBareStandardDecorator = args.length === 2
+      && typeof value === "function"
+      && typeof standardContext === "object"
+      && standardContext !== null
+      && (standardContext as { readonly kind?: unknown }).kind === "class";
+    if (isBareLegacyDecorator || isBareStandardDecorator) {
+      decorate(undefined as Options, value as Function, standardContext as {
+        readonly kind?: unknown;
+        readonly metadata?: unknown;
+      } | undefined);
+      return;
+    }
+    const decoratorOptions = value as Options;
+    return ((target: Function, context?: { readonly kind?: unknown; readonly metadata?: unknown }) => {
+      decorate(decoratorOptions, target, context);
     }) as ClassDecorator;
   }) as ManagedClassDecorator<Options, Data, Id>;
 

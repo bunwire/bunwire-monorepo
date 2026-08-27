@@ -11,6 +11,8 @@ Core's built-in specializations use that same API:
 - `@Service`, `@Service()`, or `@Service({ scope: "singleton" | "transient" })` describes injectable business/application classes. The default scope metadata is `singleton`; ordinary Service methods are not managed methods.
 - `@Controller`, `@Controller()`, or `@Controller(prefix)` describes injectable, registry-managed classes that may own adapter-defined managed methods. The optional prefix is retained as generic metadata for adapters.
 - `@Provider` or `@Provider()` describes registry-managed lifecycle classes with the known `register` and `boot` hooks. These hooks are lifecycle metadata, not ordinary managed methods or routes.
+- `@Event` or `@Event()` describes a registry-managed occurrence/data class. Event constructors are ordinary application payload constructors and are never analyzed as DI constructors.
+- `@Listener(EventClass)` describes an injectable, constructor-analyzed reaction class whose framework-owned entry point is `handle(event)`.
 
 Managed class, method, and parameter decorators created through Bunwire's generic definition APIs support bare syntax whenever their options type is `void` or includes `undefined`. Supplying an explicit options value still uses the factory form; decorators with required options remain factory-only.
 
@@ -23,6 +25,36 @@ In v1 Bunwire constructs Providers with zero supplied constructor arguments and 
 `start()` creates the root `Container`, applies convention defaults, stores any manual context under `APPLICATION_CONTEXT`, constructs each distinct `@Provider()` class with zero arguments, and awaits every `register(rootContainer)` call. Convention defaults are staged first so explicit Provider bindings win through the container's last-binding-wins semantics. A second or concurrent `start()` call throws `ApplicationStateError`; startup is never repeated silently.
 
 `runInvocation()` is the Core boundary used by later adapters and managed-method machinery. It is available only after startup completes. Each call creates a child container, stores its real `InvocationContext` under `INVOCATION_CONTEXT`, applies optional invocation-local configuration, runs each Provider `boot(context)`, and then calls the supplied handler. Child-local values are isolated, including across concurrent invocations, while inherited root singletons keep root identity.
+
+## Events and managed listeners
+
+Core owns canonical runtime-independent events and direct listener dispatch:
+
+```ts
+@Event()
+export class UserRegistered {
+  protected alias = "user.registered";
+
+  constructor(readonly userId: string) {}
+}
+
+@Listener(UserRegistered)
+export class AuditUserRegistration {
+  constructor(private readonly audit: AuditService) {}
+
+  async handle(event: UserRegistered) {
+    await this.audit.record(event.userId);
+  }
+}
+```
+
+Event classes are identity plus data; they do not define `handle()`, are not container-constructed, and are normally instantiated with `new`. The optional protected `alias` is compiler metadata for introspection/integrations. It is globally unique but never replaces the canonical exported class constructor as runtime identity, and class names are not inferred as aliases.
+
+Listeners use normal constructor DI and the existing managed-invocation engine. The compiler requires one public concrete `handle(event)` method whose sole parameter has the exact target event type. Generated registries contain immutable event definitions, a lexical alias index, listener definitions, managed handle plans, and source-ordered relationships; runtime performs no discovery.
+
+`EventDispatcher` is an application-owned container binding and may itself be injected. `dispatch(event)` resolves the exact event constructor, creates one isolated invocation scope, and awaits listeners sequentially in generated source order. The exact event instance is passed to every listener. A failure rejects dispatch with the original error and skips later listeners; zero listeners is valid. Nested and concurrent dispatches create independent invocation scopes. Logical event cycles are application behavior and are not prohibited.
+
+Adapters may inspect the Core event registry and later delegate selected listeners to platform facilities. Direct dispatch remains Core behavior; queued listeners, serialization, priorities, concurrent fan-out, and alias/string dispatch are not implemented.
 
 ## Managed methods and invocation plans
 
@@ -100,7 +132,7 @@ V1 permits one primary host adapter. `withAdapter()` requires an `Adapter` insta
 
 Adapter startup extends the existing kernel ordering: Core creates the root container and applies convention defaults; the adapter prepares a native context without accepting managed traffic; Core stores that context as `APPLICATION_CONTEXT`; adapter validation hooks run; all application and adapter-owned Providers register; runtime registry consumers connect managed metadata; and the adapter completes host start. Only then does the Application enter `running`. Each host dispatch uses the existing `invokeManagedMethod()` boundary, so Provider boot, invocation scopes, caller validation, and parameter resolution retain their established order.
 
-`defineRuntimeRegistry()` is the compiler/runtime contract for generated and prebuilt metadata. It carries managed class entries with scope and indexed constructor dependencies, a generated Provider list, and complete managed-method plans. Application startup validates canonical kind/decorator identities and malformed entries, registers constructor metadata and convention class bindings, then runs generated and explicitly contributed Providers through the same lifecycle. Registry consumers connect methods only after Provider registration. Runtime never scans source or reclassifies parameters.
+`defineRuntimeRegistry()` is the compiler/runtime contract for generated and prebuilt metadata. It carries managed class entries with scope and indexed constructor dependencies, a generated Provider list, complete managed-method plans, canonical events/listeners, and the event-alias index. Application startup validates canonical descriptor/decorator identity and shared event/listener record identity, registers constructor metadata and convention class bindings, installs the default dispatcher, then runs generated and explicitly contributed Providers through the same lifecycle. Registry consumers connect metadata only after Provider registration. Runtime never scans source or reclassifies parameters.
 
 The base `Adapter.prepareHost()` implements the manual escape hatch: if the application was configured with `withContext(existingContext)`, that exact context is used. Full adapters override `prepareHost()` to create native objects and may still explicitly honor the manual context path. Native configuration callbacks are adapter-owned typed callbacks and receive the actual host objects, not Core wrappers.
 

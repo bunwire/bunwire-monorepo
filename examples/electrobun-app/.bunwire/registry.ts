@@ -27,6 +27,10 @@ export const applicationRegistry = defineRuntimeRegistry({
     defineManagedMethodPlan({ kind: __bunwire_import_8.definition.kind, ownerKind: __bunwire_import_7.definition.kind, target: __bunwire_import_6, method: "get", data: { "path": "get" }, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }, { source: "container", methodIndex: 1, token: __bunwire_import_5 }, { source: "container", methodIndex: 2, token: __bunwire_import_9 }, { source: "resolver", methodIndex: 3, resolverId: createParameterResolverId("electrobun.window"), data: undefined }, { source: "transport", methodIndex: 4, argumentIndex: 1, optional: true, rest: false }], middleware: [defineMiddlewareAttachment(__bunwire_import_4, [])] }),
     defineManagedMethodPlan({ kind: __bunwire_import_10.definition.kind, ownerKind: __bunwire_import_7.definition.kind, target: __bunwire_import_6, method: "deleted", data: { "path": "deleted" }, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }, { source: "resolver", methodIndex: 1, resolverId: createParameterResolverId("electrobun.context"), data: undefined }], middleware: [] }),
   ],
+  events: [
+  ],
+  eventAliases: [
+  ],
 });
-export const BUNWIRE_REGISTRY_HASH = "2e20e579ed406e154baa437d79d504e271951324ed49491621805a957bfafeaa";
+export const BUNWIRE_REGISTRY_HASH = "c937fe4132497e9cc53af1cfe2df44f805afc5768c5d563eeea2fd111c0ca6eb";
 export default applicationRegistry;

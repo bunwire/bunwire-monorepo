@@ -1304,6 +1304,50 @@ First release is allowed only when all architectural gates and end-to-end tests 
 
 ---
 
+# Milestone 14 — Core Events and Managed Listeners
+
+## Goal
+
+Add runtime-independent, compiler-backed events and DI-managed listeners to Core without creating a second architecture or runtime source discovery path.
+
+## Deliverables
+
+- canonical Core `@Event()` and `@Listener(Event)` decorators and class kinds;
+- optional protected literal event aliases with a generated canonical alias index;
+- compiler validation of event declarations, listener targets, and exact `handle(event)` contracts;
+- immutable generated event definitions, listener definitions, managed handle plans, and explicit ordered relationships;
+- application-owned, replaceable `EventDispatcher` using exact constructor identity;
+- sequential, fail-fast, zero-listener, nested, and concurrent-safe direct dispatch;
+- listener constructor DI and one invocation scope/Provider boot pass per event dispatch;
+- documentation establishing Core ownership and deferring queue integration.
+
+## Implementation steps
+
+1. Add canonical event/listener kinds, decorators, runtime definitions, errors, and public exports.
+2. Extend `RuntimeRegistry` and Application validation with identity-shared event/listener/alias records.
+3. Bind the default dispatcher before Provider registration and reuse the invocation engine for handle plans.
+4. Register Core symbols in compiler extension aggregation and add event/listener-specific static analysis.
+5. Generate source-ordered relationships and a lexical alias index without runtime discovery.
+6. Add behavioral, adversarial, generated-output, DI, inheritance, and regression coverage.
+7. Update Core architecture, package guides, Bun ownership notes, exports, and progress records.
+
+## Tests
+
+- [x] **[Automated / Compiler]** Exact Core symbols and re-exports are recognized; same-name and same-ID counterfeits cannot authorize event/listener behavior.
+- [x] **[Automated / Compiler]** Event payload constructors are not DI-analyzed and events require no handler.
+- [x] **[Automated / Compiler]** Alias syntax, uniqueness, non-inheritance, and deterministic indexing are enforced.
+- [x] **[Automated / Compiler]** Listener event targets and exact public concrete `handle(event)` signatures are validated.
+- [x] **[Automated / Generated Output]** Event definitions, listener plans, relationships, aliases, imports, and hashes are deterministic.
+- [x] **[Automated / Integration]** Listener dependencies and `EventDispatcher` resolve through the normal container.
+- [x] **[Automated / Runtime]** Zero, one, multiple, failing, nested, subclass, concurrent, and replacement-dispatcher cases follow the documented semantics.
+- [x] **[Automated / Regression]** Managed classes/methods, DI, adapters, callers, generated registries, and package boundaries remain green.
+
+## Exit criteria
+
+Core owns canonical direct events completely; no High/Medium correctness finding remains; focused suites, full typechecking, all tests, all builds, export audits, boundaries, and generated-output inspection pass; queues remain unimplemented.
+
+---
+
 # Release Checkpoints
 
 ## Checkpoint A — Core Runtime Kernel
@@ -1398,6 +1442,7 @@ After Milestone 13.
 | Electrobun messages |  | ✓ | ✓ | ✓ |
 | Generated RPC contracts |  | ✓ | ✓ | ✓ |
 | Platform independence | ✓ | ✓ | ✓ | ✓ |
+| Core events/listeners | ✓ | ✓ | ✓ | ✓ |
 
 ---
 

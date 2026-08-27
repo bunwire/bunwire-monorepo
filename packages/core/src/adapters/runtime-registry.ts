@@ -11,6 +11,10 @@ import {
   type RegistryConsumerId,
 } from "./identifiers.js";
 import type { NamespacedIdentifier } from "../managed-classes/identifiers.js";
+import type {
+  EventAliasDefinition,
+  EventDefinition,
+} from "../events/definitions.js";
 
 export interface ManagedClassRegistryEntry<Data = unknown> {
   readonly kind: ManagedClassKind;
@@ -24,6 +28,8 @@ export interface RuntimeRegistry {
   readonly classes: readonly ManagedClassRegistryEntry[];
   readonly providers: readonly Constructable<object>[];
   readonly methods: readonly ManagedMethodPlan[];
+  readonly events: readonly EventDefinition[];
+  readonly eventAliases: readonly EventAliasDefinition[];
 }
 
 export type ManagedClassRegistryEntryInput<Data = unknown> = Omit<
@@ -38,17 +44,25 @@ export interface DefineRuntimeRegistryOptions {
   readonly classes?: readonly ManagedClassRegistryEntryInput[];
   readonly providers?: readonly Constructable<object>[];
   readonly methods?: readonly ManagedMethodPlan[];
+  readonly events?: readonly EventDefinition[];
+  readonly eventAliases?: readonly EventAliasDefinition[];
 }
 
 export function defineRuntimeRegistry(options: DefineRuntimeRegistryOptions = {}): RuntimeRegistry {
   return Object.freeze({
-    classes: Object.freeze((options.classes ?? []).map((entry) => Object.freeze({
-      ...entry,
-      scope: entry.scope ?? (entry.kind === MIDDLEWARE_KIND ? "transient" : "singleton"),
-      dependencies: Object.freeze((entry.dependencies ?? []).map((dependency) => Object.freeze({ ...dependency }))),
-    }))),
+    classes: Object.freeze((options.classes ?? []).map((entry) => (
+      Object.isFrozen(entry)
+        ? entry as ManagedClassRegistryEntry
+        : Object.freeze({
+            ...entry,
+            scope: entry.scope ?? (entry.kind === MIDDLEWARE_KIND ? "transient" : "singleton"),
+            dependencies: Object.freeze((entry.dependencies ?? []).map((dependency) => Object.freeze({ ...dependency }))),
+          })
+    ))),
     providers: Object.freeze([...(options.providers ?? [])]),
     methods: Object.freeze([...(options.methods ?? [])]),
+    events: Object.freeze([...(options.events ?? [])]),
+    eventAliases: Object.freeze([...(options.eventAliases ?? [])]),
   });
 }
 

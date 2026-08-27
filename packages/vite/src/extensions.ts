@@ -1,6 +1,10 @@
 import {
   CONTROLLER_KIND,
   Controller,
+  EVENT_KIND,
+  Event,
+  LISTENER_KIND,
+  Listener,
   MIDDLEWARE_KIND,
   Middleware,
   ManagedClassKindRegistry,
@@ -74,6 +78,8 @@ export function aggregateCompilerExtensions(
     CONTROLLER_KIND,
     PROVIDER_KIND,
     MIDDLEWARE_KIND,
+    EVENT_KIND,
+    LISTENER_KIND,
   ]);
   const methodKinds = new ManagedMethodKindRegistry();
   const classDecorators = new Map<string, ManagedClassDecoratorDefinition<any, any>>();
@@ -101,10 +107,14 @@ export function aggregateCompilerExtensions(
   registerIdentity(classDecorators, Controller.definition, "Managed class-decorator");
   registerIdentity(classDecorators, Provider.definition, "Managed class-decorator");
   registerIdentity(classDecorators, Middleware.definition, "Managed class-decorator");
+  registerIdentity(classDecorators, Event.definition, "Managed class-decorator");
+  registerIdentity(classDecorators, Listener.definition, "Managed class-decorator");
   registerCompilerSymbol(Service.definition);
   registerCompilerSymbol(Controller.definition);
   registerCompilerSymbol(Provider.definition);
   registerCompilerSymbol(Middleware.definition);
+  registerCompilerSymbol(Event.definition);
+  registerCompilerSymbol(Listener.definition);
 
   try {
     for (const kind of adapter.classKinds) {
@@ -172,6 +182,8 @@ export function aggregateCompilerExtensions(
     CONTROLLER_KIND,
     PROVIDER_KIND,
     MIDDLEWARE_KIND,
+    EVENT_KIND,
+    LISTENER_KIND,
   ];
   for (const kind of adapter.classKinds) {
     if (!registeredClassKinds.includes(kind)) {

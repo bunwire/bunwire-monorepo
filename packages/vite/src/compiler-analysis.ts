@@ -2,7 +2,10 @@ import path from "node:path";
 import {
   Inject,
   CONTROLLER_KIND,
+  EVENT_KIND,
+  EventDispatcher,
   INJECT_DECORATOR_ID,
+  LISTENER_KIND,
   MIDDLEWARE_KIND,
   Use,
   type CompilerSymbolReference,
@@ -124,6 +127,19 @@ export interface AnalyzedManagedClass {
   readonly constructor: AnalyzedConstructorPlan | undefined;
   readonly middleware: readonly AnalyzedMiddlewareAttachment[];
   readonly methods: readonly AnalyzedManagedMethod[];
+  readonly event: AnalyzedEventClass | undefined;
+  readonly listener: AnalyzedListenerClass | undefined;
+}
+
+export interface AnalyzedEventClass {
+  readonly alias: string | undefined;
+  readonly aliasLocation: BunwireSourceLocation | undefined;
+}
+
+export interface AnalyzedListenerClass {
+  readonly event: CompilerRuntimeReference;
+  readonly eventSymbolName: string;
+  readonly handleLocation: BunwireSourceLocation;
 }
 
 export interface BunwireCompilerAnalysis {
@@ -898,6 +914,169 @@ function validateMiddlewareExport(
   }
 }
 
+function validateDirectClassExport(
+  declaration: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+  code: BunwireCompilerError["code"],
+  label: string,
+): void {
+  const name = declaration.name as ts.Identifier;
+  const symbol = checker.getSymbolAtLocation(name) as ts.Symbol;
+  const canonical = canonicalSymbol(checker, symbol);
+  const moduleSymbol = checker.getSymbolAtLocation(declaration.getSourceFile());
+  const exported = moduleSymbol
+    ? checker.getExportsOfModule(moduleSymbol).some((candidate) => (
+      canonicalSymbol(checker, candidate) === canonical
+    ))
+    : false;
+  if (!exported) {
+    fail(
+      code,
+      `${label} class "${name.text}" must be exported directly from "${declaration.getSourceFile().fileName}" so the generated registry can import it.`,
+      name,
+    );
+  }
+}
+
+function analyzeEventClass(
+  declaration: ts.ClassDeclaration,
+  checker: ts.TypeChecker,
+): AnalyzedEventClass {
+  const name = declaration.name as ts.Identifier;
+  if (hasModifier(declaration, ts.SyntaxKind.AbstractKeyword)) {
+    fail("EVENT_CLASS_INVALID", `Event class "${name.text}" must be concrete and cannot be abstract.`, declaration);
+  }
+  validateDirectClassExport(declaration, checker, "EVENT_CLASS_INVALID", "Event");
+  let alias: string | undefined;
+  let aliasLocation: BunwireSourceLocation | undefined;
+  for (const member of declaration.members) {
+    const memberName = member.name;
+    const isAlias = memberName && (
+      (ts.isIdentifier(memberName) || ts.isStringLiteralLike(memberName))
+        ? memberName.text === "alias"
+        : ts.isComputedPropertyName(memberName)
+          && ts.isStringLiteralLike(memberName.expression)
+          && memberName.expression.text === "alias"
+    );
+    if (!isAlias) continue;
+    if (memberName && ts.isComputedPropertyName(memberName)) {
+      fail("EVENT_ALIAS_INVALID", "Event alias must not use a computed property name.", memberName);
+    }
+    if (!ts.isPropertyDeclaration(member)) {
+      fail(
+        "EVENT_ALIAS_INVALID",
+        "Event alias must be a protected non-static instance property with a deterministic string literal initializer.",
+        member,
+      );
+    }
+    if (!hasModifier(member, ts.SyntaxKind.ProtectedKeyword)
+      || hasModifier(member, ts.SyntaxKind.PublicKeyword)
+      || hasModifier(member, ts.SyntaxKind.PrivateKeyword)
+      || hasModifier(member, ts.SyntaxKind.StaticKeyword)) {
+      fail(
+        "EVENT_ALIAS_INVALID",
+        "Event alias must be declared as a protected non-static instance property.",
+        member,
+      );
+    }
+    if (!member.initializer || !ts.isStringLiteral(member.initializer)
+      || member.initializer.text.trim().length === 0) {
+      fail(
+        "EVENT_ALIAS_INVALID",
+        "Event alias must be initialized with a non-empty direct string literal.",
+        member.initializer ?? member,
+      );
+    }
+    if (alias !== undefined) {
+      fail("EVENT_ALIAS_INVALID", `Event class "${name.text}" declares alias more than once.`, member);
+    }
+    alias = member.initializer.text;
+    aliasLocation = locationOf(member);
+  }
+  return Object.freeze({ alias, aliasLocation });
+}
+
+function analyzeListenerClass(
+  declaration: ts.ClassDeclaration,
+  match: DecoratorMatch<any>,
+  checker: ts.TypeChecker,
+  managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>,
+): AnalyzedListenerClass {
+  const name = declaration.name as ts.Identifier;
+  if (hasModifier(declaration, ts.SyntaxKind.AbstractKeyword)) {
+    fail("LISTENER_CLASS_INVALID", `Listener class "${name.text}" must be concrete and cannot be abstract.`, declaration);
+  }
+  validateDirectClassExport(declaration, checker, "LISTENER_CLASS_INVALID", "Listener");
+  const argumentsList = match.call?.arguments ?? [];
+  const argument = argumentsList[0];
+  if (argumentsList.length !== 1 || !argument) {
+    fail(
+      "LISTENER_EVENT_INVALID",
+      `@Listener() on "${name.text}" requires exactly one canonical event class argument.`,
+      match.decorator,
+    );
+  }
+  const eventExpression = unwrapExpression(argument);
+  const eventSymbol = symbolFromRuntimeExpression(checker, eventExpression, "LISTENER_EVENT_INVALID");
+  const canonicalEvent = canonicalSymbol(checker, eventSymbol);
+  const eventManaged = managedBySymbol.get(canonicalEvent);
+  if (eventManaged?.kind !== EVENT_KIND) {
+    fail(
+      "LISTENER_EVENT_INVALID",
+      `Listener "${name.text}" target "${eventExpression.getText()}" must be a registered class canonically decorated with Core @Event().`,
+      eventExpression,
+    );
+  }
+  const listenerSymbol = canonicalSymbol(checker, checker.getSymbolAtLocation(name) as ts.Symbol);
+  const instanceType = checker.getDeclaredTypeOfSymbol(listenerSymbol);
+  const handle = checker.getPropertyOfType(instanceType, "handle");
+  const declarations = handle?.declarations?.filter(ts.isMethodDeclaration) ?? [];
+  const concrete = declarations.filter((candidate) => (
+    !hasModifier(candidate, ts.SyntaxKind.StaticKeyword)
+    && !hasModifier(candidate, ts.SyntaxKind.AbstractKeyword)
+    && Boolean(candidate.body)
+  ));
+  const callable = handle && checker.getSignaturesOfType(
+    checker.getTypeOfSymbolAtLocation(handle, declaration),
+    ts.SignatureKind.Call,
+  ).length > 0;
+  if (!callable || declarations.length !== 1 || concrete.length !== 1) {
+    fail(
+      "LISTENER_HANDLER_INVALID",
+      `Listener "${name.text}" must provide or inherit exactly one concrete callable instance handle(event) method without overloads.`,
+      declaration,
+    );
+  }
+  const method = concrete[0] as ts.MethodDeclaration;
+  if (hasModifier(method, ts.SyntaxKind.PrivateKeyword)
+    || hasModifier(method, ts.SyntaxKind.ProtectedKeyword)) {
+    fail("LISTENER_HANDLER_INVALID", `Listener "${name.text}" handle(event) method must be public.`, method);
+  }
+  const parameter = method.parameters[0];
+  if (method.parameters.length !== 1 || !parameter
+    || parameter.questionToken || parameter.initializer || parameter.dotDotDotToken
+    || decoratorsOf(parameter).length > 0) {
+    fail(
+      "LISTENER_HANDLER_INVALID",
+      `Listener "${name.text}" handle(event) must declare exactly one required, non-rest, undecorated event parameter.`,
+      method,
+    );
+  }
+  const parameterSymbol = symbolFromTypeNode(checker, parameter.type);
+  if (parameterSymbol !== canonicalEvent) {
+    fail(
+      "LISTENER_HANDLER_INVALID",
+      `Listener "${name.text}" handle parameter type must resolve exactly to event "${eventManaged.declaration.name?.text}".`,
+      parameter,
+    );
+  }
+  return Object.freeze({
+    event: runtimeReference(checker, eventExpression, canonicalEvent),
+    eventSymbolName: checker.symbolToString(canonicalEvent),
+    handleLocation: locationOf(method),
+  });
+}
+
 function validateMiddlewareHandle(
   declaration: ts.ClassDeclaration,
   checker: ts.TypeChecker,
@@ -1096,6 +1275,7 @@ function analyzeConstructor(
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>,
   checker: ts.TypeChecker,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
+  intrinsicInjectables: ReadonlySet<ts.Symbol>,
 ): ConstructorAnalysisResult {
   const constructors = declaration.members.filter(ts.isConstructorDeclaration);
   const implementation = constructors.find((constructor) => constructor.body) ?? constructors[0];
@@ -1137,7 +1317,7 @@ function analyzeConstructor(
     }
     const symbol = symbolFromTypeNode(checker, parameter.type);
     const managed = symbol ? managedBySymbol.get(symbol) : undefined;
-    if (symbol && managed?.kind.injectable) {
+    if (symbol && (managed?.kind.injectable || intrinsicInjectables.has(symbol))) {
       dependencies.push(Object.freeze({
         index,
         source: "container",
@@ -1170,6 +1350,7 @@ function analyzeMethodParameters(
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind }>,
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
+  intrinsicInjectables: ReadonlySet<ts.Symbol>,
 ): readonly AnalyzedMethodParameter[] {
   let argumentIndex = 0;
   const parameters: AnalyzedMethodParameter[] = [];
@@ -1208,7 +1389,7 @@ function analyzeMethodParameters(
     }
     const symbol = symbolFromTypeNode(checker, parameter.type);
     const managed = symbol ? managedBySymbol.get(symbol) : undefined;
-    if (symbol && managed?.kind.injectable) {
+    if (symbol && (managed?.kind.injectable || intrinsicInjectables.has(symbol))) {
       parameters.push(Object.freeze({
         source: "container",
         methodIndex,
@@ -1593,6 +1774,7 @@ function analyzeManagedMethods(
   middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
   middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
   middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]>,
+  intrinsicInjectables: ReadonlySet<ts.Symbol>,
 ): readonly AnalyzedManagedMethod[] {
   const methods: AnalyzedManagedMethod[] = [];
   for (const member of declaration.members) {
@@ -1685,6 +1867,7 @@ function analyzeManagedMethods(
       managedBySymbol,
       injectorDefinitions,
       injectDefinitions,
+      intrinsicInjectables,
     );
     const middleware = analyzeUseEntries(
       uses,
@@ -1767,6 +1950,13 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
   const checker = context.checker;
   const policySyntax = analyzeMiddlewarePolicySyntax(context.program, options.bootstrapPath);
   const occupiedSymbols = new Map<ts.Symbol, CompilerDefinition>();
+  const eventDispatcherSymbol = resolveModuleExportSymbol(
+    context,
+    options.projectRoot,
+    { moduleSpecifier: "@bunwire/core", exportName: "EventDispatcher" },
+    "Core EventDispatcher",
+  );
+  const intrinsicInjectables = new Set<ts.Symbol>([eventDispatcherSymbol]);
   const classDefinitions = resolveCompilerDefinitions(
     context,
     options.projectRoot,
@@ -1863,6 +2053,38 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     });
   }
 
+  const eventsByDeclaration = new Map<ts.ClassDeclaration, AnalyzedEventClass>();
+  const listenersByDeclaration = new Map<ts.ClassDeclaration, AnalyzedListenerClass>();
+  const eventAliases = new Map<string, { readonly declaration: ts.ClassDeclaration; readonly location: BunwireSourceLocation }>();
+  for (const [declaration, match] of discovered) {
+    if (match.definition.kind === EVENT_KIND) {
+      const event = analyzeEventClass(declaration, checker);
+      eventsByDeclaration.set(declaration, event);
+      if (event.alias !== undefined && event.aliasLocation) {
+        const existing = eventAliases.get(event.alias);
+        if (existing) {
+          fail(
+            "EVENT_ALIAS_INVALID",
+            `Event alias ${JSON.stringify(event.alias)} is declared by both "${existing.declaration.name?.text}" and "${declaration.name?.text}". Event aliases must be unique across the configured source universe.`,
+            declaration,
+          );
+        }
+        eventAliases.set(event.alias, {
+          declaration,
+          location: event.aliasLocation,
+        });
+      }
+    }
+  }
+  for (const [declaration, match] of discovered) {
+    if (match.definition.kind === LISTENER_KIND) {
+      listenersByDeclaration.set(
+        declaration,
+        analyzeListenerClass(declaration, match, checker, managedBySymbol),
+      );
+    }
+  }
+
   const middlewareTargetsBySymbol = new Map<ts.Symbol, ts.ClassDeclaration>();
   for (const declaration of middlewareByDeclaration.keys()) {
     const symbol = checker.getSymbolAtLocation(declaration.name as ts.Identifier) as ts.Symbol;
@@ -1891,6 +2113,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       managedBySymbol,
       checker,
       injectDefinitions,
+      intrinsicInjectables,
     );
     constructorsBySymbol.set(canonical, analysis);
     constructorsByDeclaration.set(declaration, analysis);
@@ -1931,6 +2154,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       middlewareTargetsBySymbol,
       middlewareTargetsByAlias,
       middlewarePolicy.groups,
+      intrinsicInjectables,
     );
     if (!match || !declaration.name) {
       continue;
@@ -1940,12 +2164,19 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       name: declaration.name.text,
       kind: match.definition.kind,
       decoratorId: match.id,
-      data: middlewareByDeclaration.get(declaration)?.data ?? decoratorData(match),
+      data: middlewareByDeclaration.get(declaration)?.data
+        ?? (match.definition.kind === EVENT_KIND
+          ? Object.freeze({ type: "event" as const })
+          : match.definition.kind === LISTENER_KIND
+            ? Object.freeze({ type: "listener" as const })
+            : decoratorData(match)),
       target: runtimeReference(checker, declaration.name, symbol),
       location: locationOf(declaration),
       constructor: constructorsByDeclaration.get(declaration)?.plan,
       middleware,
       methods,
+      event: eventsByDeclaration.get(declaration),
+      listener: listenersByDeclaration.get(declaration),
     }));
   }
   const controllerMappings = new Map<AnalyzedManagedClass, AnalyzedMiddlewareAttachment[]>();

@@ -15,6 +15,20 @@ import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import type { ManagedMethodKind } from "../managed-methods/method-kind.js";
 import type { ParameterResolverDefinition } from "../managed-methods/resolvers.js";
 import { validateMiddlewareDefinition } from "../middleware/managed-middleware.js";
+import {
+  EVENT_KIND,
+  LISTENER_KIND,
+  isListenerHandlePlan,
+  validateEventDefinition,
+  validateListenerDefinition,
+  type EventAliasDefinition,
+  type EventDefinition,
+  type ListenerDefinition,
+} from "../events/definitions.js";
+import {
+  EventDispatcher,
+  createDefaultEventDispatcher,
+} from "../events/dispatcher.js";
 import type { MiddlewarePolicyConfiguration } from "../middleware/policy.js";
 import { ApplicationStateError } from "./errors.js";
 import {
@@ -253,6 +267,23 @@ export class Application<ApplicationContext = unknown> {
         }
       }
 
+      rootContainer.instance(
+        EventDispatcher,
+        createDefaultEventDispatcher(
+          this.#runtimeRegistry.events,
+          async (listeners, event) => {
+            for (const listener of listeners) {
+              this.#invocationEngine.validateInvocation(listener.handle, [event]);
+            }
+            await this.runInvocation(async (context) => {
+              for (const listener of listeners) {
+                await this.#invocationEngine.invoke(listener.handle, context, [event]);
+              }
+            });
+          },
+        ),
+      );
+
       const adapterRuntime = this.#adapter
         ? Adapter.runtimeDefinition(this.#adapter)
         : undefined;
@@ -415,7 +446,9 @@ export class Application<ApplicationContext = unknown> {
       if (!registry
         || !Array.isArray(registry.classes)
         || !Array.isArray(registry.providers)
-        || !Array.isArray(registry.methods)) {
+        || !Array.isArray(registry.methods)
+        || !Array.isArray(registry.events)
+        || !Array.isArray(registry.eventAliases)) {
       throw new TypeError("Runtime registry is malformed; use defineRuntimeRegistry().");
     }
     const targets = new Set<Function>();
@@ -505,6 +538,91 @@ export class Application<ApplicationContext = unknown> {
         );
       }
       methodIdentities.add(identity);
+    }
+    this.validateEventRegistry(
+      registry.events,
+      registry.eventAliases,
+      registry.classes,
+      registry.methods,
+    );
+  }
+
+  private validateEventRegistry(
+    events: readonly EventDefinition[],
+    aliases: readonly EventAliasDefinition[],
+    classes: readonly import("../adapters/runtime-registry.js").ManagedClassRegistryEntry[],
+    methods: readonly ManagedMethodPlan[],
+  ): void {
+    const eventTargets = new Set<Function>();
+    const listenerTargets = new Set<Function>();
+    const eventDefinitions = new Set<EventDefinition>();
+    for (const event of events) {
+      validateEventDefinition(event);
+      if (eventTargets.has(event.target)) {
+        throw new TypeError(`Runtime registry contains duplicate event target "${event.target.name}".`);
+      }
+      eventTargets.add(event.target);
+      eventDefinitions.add(event);
+      if (!classes.includes(event)) {
+        throw new TypeError(
+          `Runtime event "${event.target.name}" must be the same canonical object present in the managed-class registry.`,
+        );
+      }
+      for (const listener of event.listeners) {
+        validateListenerDefinition(listener);
+        if (listenerTargets.has(listener.target)) {
+          throw new TypeError(
+            `Runtime listener "${listener.target.name}" is registered more than once across event relationships.`,
+          );
+        }
+        listenerTargets.add(listener.target);
+        if (!classes.includes(listener)) {
+          throw new TypeError(
+            `Runtime listener "${listener.target.name}" must be the same canonical object present in the managed-class registry.`,
+          );
+        }
+        if (!methods.includes(listener.handle)) {
+          throw new TypeError(
+            `Runtime listener "${listener.target.name}" handle must be the same canonical plan present in the managed-method registry.`,
+          );
+        }
+      }
+    }
+    for (const entry of classes) {
+      if (entry.kind === EVENT_KIND && !eventTargets.has(entry.target)) {
+        throw new TypeError(`Runtime event class "${entry.target.name}" has no canonical event definition.`);
+      }
+      if (entry.kind === LISTENER_KIND && !listenerTargets.has(entry.target)) {
+        throw new TypeError(`Runtime listener class "${entry.target.name}" has no canonical event relationship.`);
+      }
+    }
+    for (const plan of methods) {
+      if (isListenerHandlePlan(plan)
+        && !events.some((event) => event.listeners.some((listener) => listener.handle === plan))) {
+        throw new TypeError(
+          `Runtime listener handle "${plan.target.name}.${String(plan.method)}" has no canonical event relationship.`,
+        );
+      }
+    }
+    const aliasNames = new Set<string>();
+    for (const alias of aliases) {
+      if (!alias || typeof alias !== "object" || !Object.isFrozen(alias)
+        || typeof alias.alias !== "string" || alias.alias.trim().length === 0
+        || !eventDefinitions.has(alias.event) || alias.event.alias !== alias.alias) {
+        throw new TypeError("Runtime event alias entries must reference their canonical event definitions.");
+      }
+      if (aliasNames.has(alias.alias)) {
+        throw new TypeError(`Runtime registry contains duplicate event alias "${alias.alias}".`);
+      }
+      aliasNames.add(alias.alias);
+    }
+    for (const event of events) {
+      if (event.alias !== undefined
+        && !aliases.some((alias) => alias.alias === event.alias && alias.event === event)) {
+        throw new TypeError(
+          `Runtime event "${event.target.name}" alias "${event.alias}" is missing from the canonical alias index.`,
+        );
+      }
     }
   }
 }

@@ -1,4 +1,4 @@
-# TypeScript Application Framework — Architecture Specification v0.4
+# TypeScript Application Framework — Architecture Specification v0.5
 
 > Working architecture for Bunwire. This revision incorporates the clarified managed-class model, Provider lifecycle, compiled invocation plans, explicit token injection, adapter-extensible class/method decorators, and `bunwire.config.*` build configuration.
 
@@ -36,6 +36,7 @@ The framework should provide:
 - generated invocation plans;
 - application lifecycle management;
 - middleware;
+- runtime-independent events, managed listeners, aliases, and deterministic direct dispatch;
 - strong TypeScript typing;
 - generated RPC metadata/contracts;
 - Electrobun-specific infrastructure resolution through the Electrobun adapter.
@@ -1446,6 +1447,46 @@ Middleware functions are not part of the release API. `@Use()` accepts canonical
 
 ---
 
+# 34A. Core Events and Managed Listeners
+
+Core events are compiler-authorized occurrence/data classes:
+
+```ts
+@Event()
+export class UserRegistered {
+  protected alias = "user.registered";
+
+  constructor(readonly userId: string) {}
+}
+```
+
+An Event has canonical class identity, ordinary application payload data, and an optional alias. It is not injectable, its constructor is not a DI plan, and it has no `handle()` method. The compiler accepts only Core's exact exported `Event` symbol. An undecorated subclass is not an event; a separately decorated subclass receives its own identity and does not inherit the base alias.
+
+Aliases are protected non-static properties with direct non-empty string literal initializers. They are unique across the configured source universe and appear in a deterministic generated alias index. An alias references the canonical event definition; it never becomes the identity for class-based dispatch, and Bunwire never infers an alias from a TypeScript class name.
+
+Listeners are DI-managed reaction classes:
+
+```ts
+@Listener(UserRegistered)
+export class AuditRegistration {
+  constructor(private readonly audit: AuditService) {}
+
+  async handle(event: UserRegistered) {
+    await this.audit.record(event.userId);
+  }
+}
+```
+
+The compiler requires the exact canonical event target and one public, concrete, non-overloaded `handle(event)` method with one required undecorated parameter of that exact event type. A separately decorated listener may inherit a compatible concrete handler, but an undecorated subclass gains no listener identity. Listener constructors use the standard managed-class DI and cycle rules.
+
+Generated registries contain immutable event definitions, listener definitions, canonical handle plans, explicit source-ordered event-to-listener relationships, and a lexical alias index. Runtime never scans source or rebuilds listener relationships.
+
+`EventDispatcher` is bound by the Application before Provider registration, so an explicit Provider may replace it for tests. Direct dispatch resolves the exact runtime constructor object, creates one invocation scope, and invokes every listener plan sequentially with the same event instance. Provider `boot()` runs once for that event invocation. A listener failure propagates unchanged and stops the remaining listeners; a registered event with zero listeners succeeds. Nested dispatch creates another invocation scope, concurrent dispatches do not share iteration state, and Core imposes no logical cycle prohibition.
+
+Core owns direct dispatch. A future runtime package may consume these canonical definitions for optional queue integration, but it must not create a parallel event identity or dispatcher. Queues, priorities, fan-out concurrency, continue-after-error, serialization, and string/alias dispatch are not part of this system.
+
+---
+
 # 35. Invocation Runtime
 
 Conceptually:
@@ -1815,6 +1856,12 @@ The following are release-defining rules.
 31. **Runtime adapter configuration belongs in `bootstrap.ts`, not duplicated in build configuration.**
 32. **The framework does not replace the underlying platform runtime.**
 33. **`withContext()` is an explicit/manual host integration path; full adapters should normally create and register their own context.**
+34. **Events are canonical occurrence/data classes, not Services or executable handlers.**
+35. **Listeners use normal DI and compiler-generated managed `handle(event)` plans.**
+36. **Event aliases are secondary metadata and never replace canonical constructor identity.**
+37. **Direct event dispatch is ordered, sequential, fail-fast, and owned by Core.**
+38. **A registered event with zero listeners is valid.**
+39. **Runtime packages may extend Core events with integrations but must not create parallel event systems.**
 
 ---
 
@@ -1855,6 +1902,7 @@ Scopes
 Provider lifecycle
 Invocation
 Middleware
+Events / managed listeners / EventDispatcher
 Metadata
 Adapter extension APIs
 ```

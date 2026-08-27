@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 13 — Hardening and First Release (complete)
+Current milestone: Milestone 14 — Core Events and Managed Listeners (complete)
 
 Overall status:
 
@@ -27,6 +27,7 @@ Overall status:
 - Middleware Redesign 12F: Complete — [details](progress/milestone-12f.md)
 - Prior-milestone regression closure: Complete — [details](progress/prior-milestone-regression-closure.md)
 - Milestone 13: Complete — [details](progress/milestone-13.md)
+- Milestone 14: Complete — [details](progress/milestone-14.md)
 
 ## Implemented
 
@@ -54,19 +55,20 @@ Overall status:
 - Post-review hardening rejects computed middleware-policy access fail-closed, validates caller bounds before invocation lifecycle side effects, and preserves `@Use()` runtime metadata across legacy and standard decorators.
 - Prior-milestone regression closure adds nominal runtime tokens, constructable class-token validation, public generated import identities, host-aware path identity, exact virtual-module declarations, byte-stable shared artifact generation, and real Vite source/config invalidation.
 - Milestone 13 prepares audited public `0.1.0` packages, exact export/tarball contracts, precise bootstrap diagnostics, a buildable fake second-adapter example, release documentation, deterministic performance/churn checks, and CI release gates without publishing or tagging.
+- Milestone 14 adds canonical Core events and aliases, compiler-validated DI-managed listeners, deterministic generated relationships, and exact-identity sequential dispatch with isolated invocation scopes.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None. Milestone 13 and the documented implementation sequence are complete.
+- None; Milestone 14 is complete.
 
 ## Next
 
-- Publish/tag Bunwire `0.1.0` only through a separate explicitly authorized release operation, or begin separately approved post-release work.
+- Future runtime packages may consume the completed Core event system for optional integrations such as queued listeners.
 
 ## Blockers
 
-- None. Milestone 13 is unblocked.
+- None.
 
 ## Milestone Progress Files
 
@@ -91,3 +93,4 @@ Overall status:
 - [Middleware Redesign Milestone 12F](progress/milestone-12f.md)
 - [Prior-milestone regression closure](progress/prior-milestone-regression-closure.md)
 - [Milestone 13](progress/milestone-13.md)
+- [Milestone 14](progress/milestone-14.md)

@@ -377,6 +377,21 @@ Milestone 13 deliberately reuses the completed prior-milestone regression eviden
 | Compiler/startup/invocation sanity and generation stability | `tests/performance-sanity.mjs` |
 | Clean checkout install/typecheck/test/build | `.github/workflows/quality.yml`, `pnpm quality`, and `tests/clean-install.mjs` |
 
+## Milestone 14 — Core events and managed listeners
+
+Coverage lives in `tests/milestone-14`, backed by `tests/fixtures/milestone-14-events`.
+
+| Requirement | Automated evidence |
+| --- | --- |
+| Canonical Event/Listener authorization | Built-in descriptor assertions, same-name ignore cases, same-ID counterfeits, and forged Core kind conflicts |
+| Event payload and alias rules | Ordinary constructors, no handler, protected literal syntax, duplicates, non-inheritance, and lexical alias index |
+| Listener compiler contract | Canonical target, constructor DI, intrinsic dispatcher DI, inherited handler, and missing/static/overloaded/mismatched/extra-parameter diagnostics |
+| Generated registry | Byte-stable source/hash, semantic typecheck, immutable identity-shared definitions, plans, relationships, and aliases |
+| Direct dispatch | Exact instance, zero/one/multiple listeners, sequential awaiting, fail-fast propagation, and subclass rejection |
+| Invocation lifecycle | One child scope and Provider boot pass per dispatch, nested scopes, concurrent isolation, and singleton listener default |
+| Replaceability and boundaries | Provider override of `EventDispatcher`, adapter-safe registry shape, no runtime scanning, and no class-name identity |
+| Behavioral fixture | `UserRegistered("123")` resolves listeners and `AuditService` through the generated registry and container |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

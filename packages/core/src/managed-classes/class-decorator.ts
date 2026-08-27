@@ -24,6 +24,7 @@ export interface ManagedClassDecoratorDefinition<
   readonly kind: ManagedClassKind;
   readonly createMetadata: (options: Options) => Data;
   readonly validateTarget: ((target: ManagedClassTarget) => void) | undefined;
+  readonly bare: boolean;
 }
 
 type DecoratorFactory<Options> = [Options] extends [void]
@@ -53,6 +54,7 @@ export interface DefineManagedClassDecoratorOptions<
   readonly kind: ManagedClassKind;
   readonly createMetadata: (options: Options) => Data;
   readonly validateTarget?: (target: ManagedClassTarget) => void;
+  readonly bare?: boolean;
 }
 
 export function defineManagedClassDecorator<
@@ -71,6 +73,7 @@ export function defineManagedClassDecorator<
     kind: options.kind,
     createMetadata: options.createMetadata,
     validateTarget: options.validateTarget,
+    bare: options.bare ?? true,
   });
 
   const decorate = (
@@ -118,7 +121,7 @@ export function defineManagedClassDecorator<
       && typeof standardContext === "object"
       && standardContext !== null
       && (standardContext as { readonly kind?: unknown }).kind === "class";
-    if (isBareLegacyDecorator || isBareStandardDecorator) {
+    if (definition.bare && (isBareLegacyDecorator || isBareStandardDecorator)) {
       decorate(undefined as Options, value as Function, standardContext as {
         readonly kind?: unknown;
         readonly metadata?: unknown;

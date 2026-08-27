@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import {
+  EVENT_KIND,
+  LISTENER_KIND,
   MIDDLEWARE_KIND,
   type CompilerSymbolReference,
   type MiddlewareClassMetadata,
@@ -90,6 +92,14 @@ function classSortKey(entry: AnalyzedManagedClass): string {
   return `${canonicalCompilerPath(entry.target.declaration.filePath)}\0${entry.target.exportName}`;
 }
 
+function sourceSortKey(entry: AnalyzedManagedClass): string {
+  return `${canonicalCompilerPath(entry.location.filePath)}\0${String(entry.location.line).padStart(10, "0")}\0${String(entry.location.column).padStart(10, "0")}`;
+}
+
+function referenceKey(reference: CompilerRuntimeReference): string {
+  return `${canonicalCompilerPath(reference.declaration.filePath)}\0${reference.exportName}`;
+}
+
 export function generateRuntimeRegistryModule(
   options: GenerateRuntimeRegistryModuleOptions,
 ): GeneratedRuntimeRegistryModule {
@@ -152,7 +162,69 @@ export function generateRuntimeRegistryModule(
     options.extensions.methodDecorators.map((definition) => [definition.id, definition]),
   );
 
+  const eventClasses = classes
+    .filter((entry) => entry.kind === EVENT_KIND)
+    .sort((left, right) => compareText(sourceSortKey(left), sourceSortKey(right)));
+  const listenerClasses = classes
+    .filter((entry) => entry.kind === LISTENER_KIND)
+    .sort((left, right) => compareText(sourceSortKey(left), sourceSortKey(right)));
+  const eventsByReference = new Map(eventClasses.map((entry) => [referenceKey(entry.target), entry]));
+  const listenersByEvent = new Map<AnalyzedManagedClass, AnalyzedManagedClass[]>();
+  for (const listener of listenerClasses) {
+    if (!listener.listener) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `Listener "${listener.name}" is missing its compiled event relationship.`,
+        { location: listener.location },
+      );
+    }
+    const event = eventsByReference.get(referenceKey(listener.listener.event));
+    if (!event) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `Listener "${listener.name}" references an event outside the canonical generated event registry.`,
+        { location: listener.location },
+      );
+    }
+    const related = listenersByEvent.get(event) ?? [];
+    related.push(listener);
+    listenersByEvent.set(event, related);
+  }
+  const listenerVariables = new Map<AnalyzedManagedClass, string>();
+  const listenerDeclarations = listenerClasses.map((entry, index) => {
+    const relationship = entry.listener as NonNullable<AnalyzedManagedClass["listener"]>;
+    const variable = `__bunwire_listener_${index}`;
+    listenerVariables.set(entry, variable);
+    const dependencies = (entry.constructor?.dependencies ?? []).map((dependency) => (
+      `{ index: ${dependency.index}, token: ${runtimeReference(dependency.token)} }`
+    ));
+    return `const ${variable} = defineListenerDefinition({ target: ${runtimeReference(entry.target)}, event: ${runtimeReference(relationship.event)}, dependencies: [${dependencies.join(", ")}] });`;
+  });
+  const eventVariables = new Map<AnalyzedManagedClass, string>();
+  const eventDeclarations = eventClasses.map((entry, index) => {
+    if (!entry.event) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `Event "${entry.name}" is missing compiled event metadata.`,
+        { location: entry.location },
+      );
+    }
+    const variable = `__bunwire_event_${index}`;
+    eventVariables.set(entry, variable);
+    const listeners = (listenersByEvent.get(entry) ?? [])
+      .sort((left, right) => compareText(sourceSortKey(left), sourceSortKey(right)))
+      .map((listener) => listenerVariables.get(listener) as string);
+    const alias = entry.event.alias === undefined ? "" : `, alias: ${JSON.stringify(entry.event.alias)}`;
+    return `const ${variable} = defineEventDefinition({ target: ${runtimeReference(entry.target)}${alias}, listeners: [${listeners.join(", ")}] });`;
+  });
+
   const classRecords = classes.map((entry) => {
+    if (entry.kind === EVENT_KIND) {
+      return `    ${eventVariables.get(entry) as string}`;
+    }
+    if (entry.kind === LISTENER_KIND) {
+      return `    ${listenerVariables.get(entry) as string}`;
+    }
     const decorator = classDecoratorById.get(entry.decoratorId);
     if (!decorator) {
       throw new BunwireCompilerError(
@@ -222,6 +294,9 @@ export function generateRuntimeRegistryModule(
     ));
     return `    defineManagedMethodPlan({ kind: ${methodDecoratorRuntime}.definition.kind, ownerKind: ${ownerDecoratorRuntime}.definition.kind, target: ${target}, method: ${JSON.stringify(method.name)}, data: ${stableValue(method.data)}, parameters: [${parameters.join(", ")}], middleware: [${middleware.join(", ")}] })`;
   }));
+  methodRecords.push(...listenerClasses.map((entry) => (
+    `    ${(listenerVariables.get(entry) as string)}.handle`
+  )));
 
   const importLines = [...imports.values()]
     .sort((left, right) => compareText(
@@ -242,6 +317,8 @@ export function generateRuntimeRegistryModule(
     "defineManagedMethodPlan",
     ...(hasMiddlewareAttachments ? ["defineMiddlewareAttachment"] : []),
     ...(hasMiddlewareDefinitions ? ["defineMiddlewareDefinition"] : []),
+    ...(eventClasses.length > 0 ? ["defineEventAlias", "defineEventDefinition"] : []),
+    ...(listenerClasses.length > 0 ? ["defineListenerDefinition"] : []),
     "defineRuntimeRegistry",
   ];
   const body = [
@@ -249,6 +326,9 @@ export function generateRuntimeRegistryModule(
     `import { ${coreHelpers.join(", ")} } from "@bunwire/core";`,
     ...importLines,
     "",
+    ...listenerDeclarations,
+    ...eventDeclarations,
+    ...(listenerDeclarations.length > 0 || eventDeclarations.length > 0 ? [""] : []),
     "export const applicationRegistry = defineRuntimeRegistry({",
     "  classes: [",
     ...classRecords.map((line) => `${line},`),
@@ -258,6 +338,15 @@ export function generateRuntimeRegistryModule(
     "  ],",
     "  methods: [",
     ...methodRecords.map((line) => `${line},`),
+    "  ],",
+    "  events: [",
+    ...eventClasses.map((entry) => `    ${eventVariables.get(entry) as string},`),
+    "  ],",
+    "  eventAliases: [",
+    ...eventClasses
+      .filter((entry) => entry.event?.alias !== undefined)
+      .sort((left, right) => compareText(left.event?.alias ?? "", right.event?.alias ?? ""))
+      .map((entry) => `    defineEventAlias(${JSON.stringify(entry.event?.alias)}, ${eventVariables.get(entry) as string}),`),
     "  ],",
     "});",
     "",

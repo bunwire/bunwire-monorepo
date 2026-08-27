@@ -5,6 +5,11 @@ import {
   PROVIDER_KIND,
   SERVICE_KIND,
 } from "../managed-classes/built-ins.js";
+import {
+  EVENT_KIND,
+  LISTENER_KIND,
+  listenerHandleKind,
+} from "../events/definitions.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { ManagedClassKindRegistry } from "../managed-classes/class-kind-registry.js";
 import { CallerArgumentError, ManagedMethodPlanError } from "./errors.js";
@@ -46,8 +51,10 @@ export class InvocationEngine {
     CONTROLLER_KIND,
     PROVIDER_KIND,
     MIDDLEWARE_KIND,
+    EVENT_KIND,
+    LISTENER_KIND,
   ]);
-  readonly #methodKinds = new ManagedMethodKindRegistry();
+  readonly #methodKinds = new ManagedMethodKindRegistry([listenerHandleKind()]);
 
   registerClassKind(kind: ManagedClassKind): this {
     this.#classKinds.register(kind);

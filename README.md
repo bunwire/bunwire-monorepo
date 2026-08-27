@@ -4,7 +4,7 @@ Bunwire is a TypeScript application kernel and compiler for managed classes, dep
 
 ## Packages
 
-- `@bunwire/core` — Application lifecycle, bindings, tokens, managed classes and methods, middleware, runtime registries, and adapter extension contracts.
+- `@bunwire/core` — Application lifecycle, bindings, tokens, managed classes and methods, middleware, canonical events/listeners, runtime registries, and adapter extension contracts.
 - `@bunwire/vite` — bounded source discovery, TypeScript analysis, generated registries/clients, physical artifacts, and `virtual:bunwire/*` Vite modules.
 - `@bunwire/electrobun` — Electrobun startup, RPC dispatch, managed decorators/injectors, middleware context, and generated-client transport integration.
 

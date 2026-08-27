@@ -53,6 +53,37 @@ export {
   type ServiceScope,
 } from "./managed-classes/built-ins.js";
 export {
+  EVENT_KIND,
+  Event,
+  LISTENER_KIND,
+  Listener,
+  assertEventTarget,
+  assertListenerTarget,
+  defineEventAlias,
+  defineEventDefinition,
+  defineListenerDefinition,
+  validateEventDefinition,
+  validateListenerDefinition,
+  type DefineEventDefinitionOptions,
+  type DefineListenerDefinitionOptions,
+  type EventAliasDefinition,
+  type EventClassMetadata,
+  type EventConstructor,
+  type EventDefinition,
+  type EventListener,
+  type ListenerClassMetadata,
+  type ListenerConstructor,
+  type ListenerDefinition,
+} from "./events/definitions.js";
+export {
+  EventDispatcher,
+  type EventListenerInvoker,
+} from "./events/dispatcher.js";
+export {
+  EventDefinitionError,
+  EventDispatchError,
+} from "./events/errors.js";
+export {
   Middleware,
   assertMiddlewareTarget,
   defineMiddlewareAttachment,

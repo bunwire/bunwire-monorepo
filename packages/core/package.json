@@ -1,7 +1,7 @@
 {
   "name": "@bunwire/core",
   "version": "0.1.1",
-  "description": "Platform-independent application kernel, dependency injection, managed methods, and adapter extension APIs for Bunwire.",
+  "description": "Platform-independent Bunwire kernel with dependency injection, managed methods, events/listeners, and adapter extension APIs.",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -27,6 +27,6 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config ../../vitest.config.ts tests/milestone-01 tests/milestone-02 tests/milestone-03 tests/milestone-04 tests/milestone-05 tests/milestone-06 tests/milestone-12a tests/milestone-12c/core-local-attachments.test.ts tests/milestone-12d/core-middleware-policy.test.ts tests/milestone-12f/managed-middleware-finalization.test.ts"
+    "test": "vitest run --config ../../vitest.config.ts tests/milestone-01 tests/milestone-02 tests/milestone-03 tests/milestone-04 tests/milestone-05 tests/milestone-06 tests/milestone-12a tests/milestone-12c/core-local-attachments.test.ts tests/milestone-12d/core-middleware-policy.test.ts tests/milestone-12f/managed-middleware-finalization.test.ts tests/milestone-14/events-runtime.test.ts"
   }
 }

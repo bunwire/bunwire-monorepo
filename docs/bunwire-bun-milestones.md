@@ -14,14 +14,14 @@ The package is intended to provide a cohesive Bun-native application framework a
 - sessions and CSRF
 - authentication, OAuth integration, and authorization
 - server-driven pages with `@bunwire/vite`
-- events and listeners
+- integration with Core events and listeners
 - jobs, queues, workers, retries, and failed jobs
 - scheduled tasks and scheduler runtime
 - commands and CLI execution
 - Bun-native WebSockets
-- runtime scopes, lifecycle, graceful shutdown, and testability
+- Bun-specific runtime scopes, Core lifecycle integration, graceful shutdown, and testability
 
-For the initial implementation, all of these concepts remain inside `@bunwire/bun`, even when some may later prove generic enough to extract into `@bunwire/core`.
+For the initial implementation, Bun-specific runtime systems remain inside `@bunwire/bun`, even when some may later prove generic enough to extract into `@bunwire/core`. Core's existing Application lifecycle, compiler/registry machinery, container and invocation infrastructure, middleware foundations, and direct event/listener system remain canonical and must be consumed rather than duplicated.
 
 The implementation must preserve Bunwire's established architectural rules:
 
@@ -110,7 +110,11 @@ For this implementation:
 
 ```text
 @bunwire/core
-    existing extension/compiler/container APIs only
+    Application and lifecycle orchestration
+    compiler and generated registry machinery
+    container, DI, and invocation infrastructure
+    middleware foundations
+    canonical events/listeners and direct EventDispatcher
 
 @bunwire/validation
     validation engine
@@ -119,7 +123,10 @@ For this implementation:
     existing Vite/build integration used where needed
 
 @bunwire/bun
-    Bun-specific application features and optional integrations in this plan
+    BunAdapter and Bun-specific runtime roles
+    Bun-specific execution-scope kinds and contextual values
+    HTTP, web, pages, jobs/queues, scheduling, commands, and WebSockets
+    optional queued-listener integration using Core event identities
 ```
 
 Core already owns canonical event identity, aliases, direct managed listeners, generated relationships, and `EventDispatcher`. Do not duplicate them in Bun. Jobs, queues, schedules, execution scopes, and queued-listener integration remain Bun responsibilities unless separately moved by an authoritative Core milestone.
@@ -141,17 +148,17 @@ Applications remain free to use Prisma, Drizzle, Kysely, Bun SQL, Redis, SQLite,
 
 ---
 
-# Milestone 1 — Package Foundation, Bun Application, and Runtime Roles
+# Milestone 1 — Package Foundation, Bun Adapter, and Runtime Roles
 
 ## Goal
 
-Create the `@bunwire/bun` package foundation and establish the central Bun application runtime without implementing feature subsystems prematurely.
+Create the `@bunwire/bun` package foundation and attach Bun's host/runtime integration to the existing Core Application without implementing feature subsystems prematurely.
 
 ## Scope
 
-Implement the package entry points, Bun application object, configuration surface, bootstrap lifecycle, and runtime-role model.
+Implement the package entry points, class-based `BunAdapter`, configuration surface, Core lifecycle integration, generated-registry consumer, and runtime-role model.
 
-The same Bunwire application must be capable of booting as different process roles without every role starting the HTTP server.
+The same configured Core Application must be capable of starting through `BunAdapter` as different process roles without every role starting the HTTP server.
 
 Initial runtime roles:
 
@@ -166,20 +173,16 @@ command
 
 - Create the package with proper workspace/build/test configuration.
 - Integrate with existing Bunwire Core application/container/compiler extension APIs.
-- Implement the central `BunApplication` / Bun runtime application abstraction.
-- Define lifecycle states such as:
-  - created
-  - configuring
-  - booting
-  - running
-  - stopping
-  - disposed
-- Define runtime-role selection.
+- Implement `BunAdapter` using Core's class-based primary-host adapter model.
+- Define `BunAdapter` configuration and runtime-role selection.
+- Attach `BunAdapter` to the same Core Application returned by `defineApp()`.
+- Consume the generated runtime registry through Core's existing `withRuntimeRegistry(...)` startup path.
 - Ensure HTTP-specific startup is not executed for worker/scheduler/command roles.
-- Provide lifecycle hooks/events internally where needed without yet implementing the public event subsystem.
-- Implement deterministic startup/shutdown behavior.
-- Reject invalid lifecycle transitions.
-- Ensure boot failure performs safe cleanup of already-started resources.
+- Integrate Bun host preparation, runtime startup, and resource cleanup with Core's Application/adapter lifecycle.
+- Use internal lifecycle notifications only where necessary; they must not replace or redefine Core's public event/listener system.
+- Preserve Core's deterministic lifecycle transitions and duplicate-`start()` rejection.
+- Ensure startup failure safely cleans up Bun resources initialized during the failed attempt.
+- Establish a Core-owned generic shutdown/disposal boundary if Bun's graceful resource cleanup requires lifecycle support not yet exposed by Core; do not introduce a separate Bun application state machine.
 - Define package-level extension/registration entry points needed by later milestones.
 - Establish generated-registry consumption without adding concrete Bun class kinds yet.
 - Add a minimal example application used by later integration tests.
@@ -188,28 +191,29 @@ command
 
 ### Automated
 
-- application can be created
-- application boots once
-- duplicate boot is rejected or deterministically handled
-- application can shut down
-- shutdown is idempotent where intended
-- boot failure disposes initialized resources
+- `defineApp()` returns the Core Application configured with `BunAdapter`
+- `BunAdapter` attaches as the primary host adapter
+- `app.withRuntimeRegistry(registry).start()` starts once
+- duplicate `start()` is rejected by Core
+- Core-owned shutdown/disposal cleans up Bun resources
+- shutdown/disposal is idempotent where intended
+- startup failure disposes initialized Bun resources
 - HTTP role starts only HTTP-owned resources
 - worker role does not start HTTP
 - scheduler role does not start HTTP
 - command role does not start HTTP
-- application lifecycle ordering is deterministic
+- Core Application and Bun adapter lifecycle ordering is deterministic
 
 ### Behavioral
 
-- start and stop a minimal Bunwire Bun application
+- configure a minimal Core Application with `BunAdapter`, load its generated registry, start it, and exercise graceful cleanup
 - verify process termination does not leave hanging resources
 
 ## Acceptance Criteria
 
-- `@bunwire/bun` can bootstrap a Bunwire application with no feature-specific runtime hacks.
+- `@bunwire/bun` can attach to and start through the Core Application with no feature-specific lifecycle hacks.
 - Runtime roles are explicit.
-- Later subsystems have one lifecycle to integrate with.
+- Later subsystems integrate with the one Core-owned lifecycle.
 - No source scanning occurs during application startup.
 
 ---
@@ -941,15 +945,15 @@ Consume Core's canonical `@Event()`, `@Listener(Event)`, generated registry, DI-
 - reuse Core's canonical `@Event()` decorator
 - consume Core's generated event registry identity and alias index
 - no class-name string identity
-- validate event declaration structure
+- add no Bun-specific event declaration or validation path
 
 ### Listeners
 
 - reuse Core's canonical `@Listener(Event)` decorator
 - listener classes resolved through DI
-- compiler validates referenced event is canonical/registered
-- generated event → listeners relationship
-- deterministic listener ordering
+- consume Core compiler validation of canonical/registered event targets
+- consume Core's generated event → listeners relationships
+- preserve Core's deterministic listener ordering
 
 ### Dispatch
 
@@ -982,18 +986,16 @@ Do not require a dynamic EventEmitter registry for compiler-known listeners.
 
 ### Testing
 
-Provide enough dispatcher abstraction that event dispatch can be faked/recorded in tests later without global monkey-patching.
+Use Core's replaceable application-owned dispatcher surface so event dispatch can be faked/recorded in tests without global monkey-patching.
 
 ## Tests
 
-### Compiler/Automated
+### Compiler/Integration
 
-- canonical event/listener recognition
-- fake decorator rejection
-- listener references unregistered event → diagnostic
-- generated event-listener relationship
-- listener constructor DI planning
-- deterministic listener order
+- Bun compilation consumes Core's canonical event/listener recognition
+- Core still rejects fake decorators and unregistered listener targets in a Bun application
+- Bun's generated registry preserves Core event-listener relationships and constructor DI plans
+- Bun adds no parallel event/listener definitions or compiler diagnostics
 
 ### Runtime/Automated
 
@@ -1800,7 +1802,7 @@ The architecture should permit these later without requiring the package foundat
 - more built-in validation rules for files/HTTP
 - advanced page protocol features
 - additional WebSocket conveniences
-- extraction of genuinely generic event/job/schedule/scope concepts into Core
+- extraction of genuinely generic job/schedule/Bun-scope concepts into Core
 
 These are additive only if the milestones above preserve the contracts and extension points described in this plan.
 
@@ -1818,7 +1820,7 @@ These are additive only if the milestones above preserve the contracts and exten
 6. `@Request()` Form Requests integrate cleanly with `@bunwire/validation`.
 7. Sessions, CSRF, authentication, OAuth integration, and authorization work as coherent subsystems.
 8. Server-driven pages integrate with Bun HTTP and `@bunwire/vite`.
-9. Events/listeners are compiler-discovered and DI-managed.
+9. Bun applications consume Core's compiler-discovered, DI-managed events/listeners and direct dispatcher without redefining them.
 10. Jobs are canonically identified, serializable, queueable, retryable, and executable by workers.
 11. Queued listeners reuse the queue system.
 12. Scheduled tasks are compiler-backed and can directly execute or dispatch jobs.

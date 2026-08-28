@@ -2,7 +2,7 @@
 
 `@bunwire/bun` is Bunwire's first-party **application runtime for Bun**.
 
-Its purpose is not merely to provide another HTTP routing library around `Bun.serve()`. It is intended to provide the application-level framework experience around Bun: HTTP controllers, middleware, request validation, sessions, CSRF, authentication and authorization, server-driven pages, events and listeners, jobs and queues, scheduling, commands, WebSockets, application lifecycle management, and the runtime infrastructure required to execute all of those features coherently.
+Its purpose is not merely to provide another HTTP routing library around `Bun.serve()`. It is intended to provide the application-level framework experience around Bun: HTTP controllers, middleware, request validation, sessions, CSRF, authentication and authorization, server-driven pages, Core event/listener integration, jobs and queues, scheduling, commands, WebSockets, Core lifecycle participation, and the runtime infrastructure required to execute all of those features coherently.
 
 The general philosophy is:
 
@@ -216,29 +216,42 @@ as an arbitrary runtime string.
 
 ---
 
-# 5. `BunApplication`
+# 5. Core `Application` and `BunAdapter`
 
-The Bun package needs a central application runtime.
+The Bun package integrates with the existing `@bunwire/core` `Application` through a class-based primary host adapter.
 
-Conceptually:
+The bootstrap file configures and exports the Core Application without starting it:
 
 ```ts
-const app = Bunwire.create();
+import { defineApp } from "@bunwire/core";
+import { BunAdapter } from "@bunwire/bun";
 
-await app.run();
+export default defineApp()
+  .withAdapter(new BunAdapter({
+    role: "http",
+  }));
 ```
 
-The application represents more than the HTTP server.
+The Bun host entrypoint supplies the generated registry and crosses Core's public startup boundary exactly once:
 
-The same application container and generated registry may be booted under different runtime roles:
+```ts
+import registry from "virtual:bunwire/registry";
+import app from "./bootstrap";
+
+await app
+  .withRuntimeRegistry(registry)
+  .start();
+```
+
+`BunAdapter` represents more than the HTTP server. The same Core Application configuration, container registrations, generated registry, and managed-class infrastructure may be started under different Bun runtime roles:
 
 ```text
-BunApplication
-│
-├── HTTP server
-├── queue worker
-├── scheduler
-└── command process
+Core Application
+└── BunAdapter
+    ├── http → HTTP server
+    ├── worker → queue worker
+    ├── scheduler → scheduler
+    └── command → command process
 ```
 
 These processes should share the same application configuration, container registrations, generated registry, and managed-class infrastructure while starting only the runtime systems they actually require.
@@ -249,20 +262,22 @@ A queue worker, for example, should not need to start `Bun.serve()`.
 
 # 6. Application lifecycle
 
-The application needs a coherent lifecycle from the beginning.
+`@bunwire/core` owns Application lifecycle orchestration. `BunAdapter` participates in that lifecycle through the established adapter attachment, host preparation, registry consumption, startup, and resource-cleanup boundaries rather than maintaining a second application state machine.
 
 Conceptually:
 
 ```text
-create
+defineApp() creates Core Application
  ↓
 configure
  ↓
-bootstrap
+attach BunAdapter and generated registry
  ↓
-boot services
+app.start()
  ↓
-start runtime role
+Core prepares context and boots Providers
+ ↓
+BunAdapter starts selected runtime role
  ↓
 running
  ↓
@@ -306,7 +321,7 @@ finish/release current job appropriately
 dispose worker/application resources
 ```
 
-Individual subsystems should not invent unrelated process lifecycle mechanisms.
+Individual Bun subsystems should register their resources with the shared lifecycle. If Bun requires a generic shutdown/disposal capability that Core does not yet expose, that capability must be added to Core's Application/adapter lifecycle rather than implemented as a parallel Bun-owned application lifecycle.
 
 ---
 
@@ -1819,11 +1834,13 @@ For the first implementation phase, the ownership is deliberately simple.
 
 ```text
 @bunwire/core
-├── existing compiler
-├── existing managed class/method system
-├── existing DI/container
-├── existing adapter/class-kind extension APIs
-└── no new queue/event/schedule architecture yet
+├── Application and lifecycle orchestration
+├── compiler and generated registry machinery
+├── managed class/method and invocation system
+├── DI/container and generic invocation scopes
+├── adapter/class-kind extension APIs
+├── middleware foundations
+└── canonical events, listeners, and direct EventDispatcher
 ```
 
 ```text
@@ -1838,10 +1855,16 @@ For the first implementation phase, the ownership is deliberately simple.
 ```
 
 ```text
+@bunwire/vite
+├── existing Vite/build integration
+└── frontend page component resolution and assets
+```
+
+```text
 @bunwire/bun
-├── BunApplication
-├── application lifecycle
-├── execution scopes
+├── BunAdapter and runtime-role integration
+├── Bun resource startup/graceful-shutdown participation
+├── Bun-specific execution-scope kinds and contextual values
 │
 ├── HTTP
 │   ├── Bun.serve integration
@@ -1869,8 +1892,8 @@ For the first implementation phase, the ownership is deliberately simple.
 │   ├── validation/flash integration
 │   └── @bunwire/vite bridge
 │
-├── events
-│   └── listeners
+├── Core event integration
+│   └── optional queued-listener integration
 │
 ├── jobs
 │   ├── queue manager
@@ -1899,15 +1922,13 @@ For the first implementation phase, the ownership is deliberately simple.
 
 Nothing in this architecture assumes all these concepts must remain Bun-specific forever.
 
-After they have been implemented and proven, Bunwire can evaluate concepts such as:
+After the remaining Bun-owned systems have been implemented and proven, Bunwire can evaluate concepts such as:
 
 ```text
-events
-listeners
 job identity
 scheduled-task metadata
-execution scopes
-generic lifecycle machinery
+Bun-specific execution-scope kinds
+queue and scheduling contracts
 ```
 
 for extraction into Core.
@@ -1948,10 +1969,16 @@ The initial implementation deliberately avoids making that abstraction decision 
 
 # 51. Overall developer experience
 
-A mature Bunwire Bun application should eventually read approximately like this:
+A mature Bunwire Bun application should eventually be configured in a bootstrap file approximately like this:
 
 ```ts
-const app = Bunwire.create();
+import { defineApp } from "@bunwire/core";
+import { BunAdapter } from "@bunwire/bun";
+
+const app = defineApp()
+  .withAdapter(new BunAdapter({
+    role: "http",
+  }));
 
 app.withMiddlewares(registry => {
   registry.use("session");
@@ -1971,7 +1998,18 @@ app.withSchedule(schedule => {
     .dailyAt("04:00");
 });
 
-await app.run();
+export default app;
+```
+
+The host entrypoint starts that configured Core Application:
+
+```ts
+import registry from "virtual:bunwire/registry";
+import app from "./bootstrap";
+
+await app
+  .withRuntimeRegistry(registry)
+  .start();
 ```
 
 Controller:

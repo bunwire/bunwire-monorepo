@@ -18,6 +18,8 @@
     "quality": "pnpm check:boundaries && pnpm typecheck && pnpm test:electrobun-sdk-contract && pnpm test && pnpm build && pnpm test:built-exports"
   },
   "devDependencies": {
+    "@bunwire/bun": "workspace:*",
+    "@bunwire/core": "workspace:*",
     "@bunwire/electrobun": "workspace:*",
     "@types/node": "^22.20.1",
     "typescript": "5.9.3",

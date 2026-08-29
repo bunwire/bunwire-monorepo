@@ -1,0 +1,16 @@
+{
+  "name": "@bunwire/example-bun-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "build": "pnpm generate && tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@bunwire/bun": "workspace:*",
+    "@bunwire/core": "workspace:*",
+    "@bunwire/vite": "workspace:*"
+  }
+}

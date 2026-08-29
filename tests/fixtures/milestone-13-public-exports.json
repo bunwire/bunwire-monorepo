@@ -467,5 +467,20 @@
       "defineElectrobunContext",
       "normalizeElectrobunPath"
     ]
+  },
+  "bun": {
+    "runtime": [
+      "BUN_COMPILER_DESCRIPTOR",
+      "BunAdapter",
+      "BunAdapterError"
+    ],
+    "declarations": [
+      "BUN_COMPILER_DESCRIPTOR",
+      "BunAdapter",
+      "BunAdapterError",
+      "BunAdapterOptions",
+      "BunRuntimeContext",
+      "BunRuntimeRole"
+    ]
   }
 }

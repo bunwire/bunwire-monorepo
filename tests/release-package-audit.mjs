@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import {
   mkdtemp,
   mkdir,
+  readFile,
   readdir,
   rm,
   writeFile,
@@ -11,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const releasePackages = ["core", "vite", "electrobun"];
+const releasePackages = ["core", "vite", "electrobun", "bun"];
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), "bunwire-release-pack-"));
 const packRoot = path.join(temporaryRoot, "packs");
 const consumerRoot = path.join(temporaryRoot, "consumer");
@@ -49,6 +50,7 @@ try {
   const tarballs = new Map();
   for (const packageName of releasePackages) {
     const packageRoot = path.join(repositoryRoot, "packages", packageName);
+    const sourceManifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
     runNode(pnpmPath, ["pack", "--pack-destination", packRoot], packageRoot);
     const candidates = (await readdir(packRoot))
       .filter((entry) => entry.endsWith(".tgz") && ![...tarballs.values()].some((value) => path.basename(value) === entry));
@@ -73,8 +75,8 @@ try {
     }
 
     const manifest = JSON.parse(runExecutable("tar", ["-xOf", tarball, "package/package.json"], repositoryRoot));
-    if (manifest.version !== "0.1.0" || manifest.private === true || manifest.publishConfig?.access !== "public") {
-      throw new Error(`@bunwire/${packageName} is not configured as a public 0.1.0 package.`);
+    if (manifest.version !== sourceManifest.version || manifest.private === true || manifest.publishConfig?.access !== "public") {
+      throw new Error(`@bunwire/${packageName} is not configured as a public ${sourceManifest.version} package.`);
     }
     if (Object.values(manifest.dependencies ?? {}).some((version) => String(version).startsWith("workspace:"))) {
       throw new Error(`@bunwire/${packageName} packed manifest retains a workspace dependency protocol.`);
@@ -82,11 +84,13 @@ try {
   }
 
   const packedCore = `file:${tarballs.get("core").replaceAll("\\", "/")}`;
+  const packedBun = `file:${tarballs.get("bun").replaceAll("\\", "/")}`;
   await writeFile(path.join(consumerRoot, "package.json"), JSON.stringify({
     name: "bunwire-packed-consumer",
     private: true,
     type: "module",
     dependencies: {
+      "@bunwire/bun": packedBun,
       "@bunwire/core": packedCore,
       "@bunwire/vite": `file:${tarballs.get("vite").replaceAll("\\", "/")}`,
       "@bunwire/electrobun": `file:${tarballs.get("electrobun").replaceAll("\\", "/")}`,
@@ -112,6 +116,7 @@ try {
   }, null, 2));
   await writeFile(path.join(consumerRoot, "consumer.ts"), `
 import { Controller, Service, createToken, defineApp } from "@bunwire/core";
+import { BunAdapter } from "@bunwire/bun";
 import { bunwire, defineBunwireConfig } from "@bunwire/vite";
 import { ElectrobunAdapter, Route } from "@bunwire/electrobun";
 
@@ -121,13 +126,15 @@ const VALUE = createToken<string>("value");
 const config = defineBunwireConfig({ source: "./src", bootstrap: "./src/bootstrap.ts" });
 const plugin = bunwire();
 const app = defineApp().withAdapter(new ElectrobunAdapter());
-void [VALUE, Values, ReleaseController, config, plugin, app];
+const bunApp = defineApp().withAdapter(new BunAdapter({ handleSignals: false }));
+void [VALUE, Values, ReleaseController, config, plugin, app, bunApp];
 `);
   await writeFile(path.join(consumerRoot, "consumer.mjs"), `
 import { createToken, defineApp } from "@bunwire/core";
+import { BunAdapter } from "@bunwire/bun";
 import { bunwire } from "@bunwire/vite";
 import { ElectrobunAdapter } from "@bunwire/electrobun";
-if (typeof createToken !== "function" || typeof defineApp !== "function" || typeof bunwire !== "function" || typeof ElectrobunAdapter !== "function") {
+if (typeof createToken !== "function" || typeof defineApp !== "function" || typeof bunwire !== "function" || typeof ElectrobunAdapter !== "function" || typeof BunAdapter !== "function") {
   throw new Error("Packed Bunwire public ESM exports are incomplete.");
 }
 `);
@@ -136,7 +143,7 @@ if (typeof createToken !== "function" || typeof defineApp !== "function" || type
   runNode(path.join(consumerRoot, "node_modules/typescript/bin/tsc"), ["-p", "tsconfig.json", "--pretty", "false"], consumerRoot);
   runNode(path.join(consumerRoot, "consumer.mjs"), [], consumerRoot);
 
-  console.log("Bunwire 0.1.0 tarball contents, manifests, isolated typechecking, and ESM imports passed.");
+  console.log("Bunwire tarball contents, manifests, isolated typechecking, and ESM imports passed for all release packages.");
 } finally {
   await rm(temporaryRoot, { force: true, recursive: true });
 }

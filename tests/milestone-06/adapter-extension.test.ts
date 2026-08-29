@@ -823,3 +823,164 @@ describe("Milestone 6 — extension identity and malformed contribution defenses
     );
   });
 });
+
+describe("Bun Milestone 1 — Core-owned adapter shutdown", () => {
+  const lifecycleDescriptor = defineAdapterCompilerDescriptor({ id: "lifecycle.host" });
+
+  it("stops a running adapter exactly once and makes shutdown terminal", async () => {
+    const events: string[] = [];
+    class LifecycleAdapter extends Adapter<object> {
+      static readonly compiler = lifecycleDescriptor;
+      constructor() { super(); }
+      protected override prepareHost(): object {
+        events.push("prepare");
+        return {};
+      }
+      protected override startHost(): void { events.push("start"); }
+      protected override stopHost(): void { events.push("stop"); }
+    }
+    const app = defineApp().withAdapter(new LifecycleAdapter());
+
+    await app.start();
+    expect(app.state).toBe("running");
+
+    await Promise.all([app.stop(), app.stop()]);
+
+    expect(events).toEqual(["prepare", "start", "stop"]);
+    expect(app.state).toBe("stopped");
+    expect(app.isRunning).toBe(false);
+    await app.stop();
+    expect(events).toEqual(["prepare", "start", "stop"]);
+    await expect(app.start()).rejects.toThrow(/called once.*stopped/i);
+    await expect(app.runInvocation(() => undefined)).rejects.toThrow(
+      /require a running Application.*stopped/i,
+    );
+  });
+
+  it("allows adapters with the default no-op stop hook", async () => {
+    class StartOnlyAdapter extends Adapter<object> {
+      static readonly compiler = lifecycleDescriptor;
+      constructor() { super(); }
+      protected override prepareHost(): object { return {}; }
+    }
+    const app = defineApp().withAdapter(new StartOnlyAdapter());
+
+    await app.start();
+    await app.stop();
+
+    expect(app.state).toBe("stopped");
+  });
+
+  it("waits for startup before stopping and rejects invocations during cleanup", async () => {
+    const startGate = deferred();
+    const stopGate = deferred();
+    const stopStarted = deferred();
+    const events: string[] = [];
+    class GatedAdapter extends Adapter<object> {
+      static readonly compiler = lifecycleDescriptor;
+      constructor() { super(); }
+      protected override prepareHost(): object { return {}; }
+      protected override async startHost(): Promise<void> {
+        events.push("start:begin");
+        await startGate.promise;
+        events.push("start:end");
+      }
+      protected override async stopHost(): Promise<void> {
+        events.push("stop:begin");
+        stopStarted.resolve();
+        await stopGate.promise;
+        events.push("stop:end");
+      }
+    }
+    const app = defineApp().withAdapter(new GatedAdapter());
+
+    const starting = app.start();
+    const stopping = app.stop();
+    expect(app.state).toBe("starting");
+
+    startGate.resolve();
+    await starting;
+    await stopStarted.promise;
+    expect(app.state).toBe("stopping");
+    await expect(app.runInvocation(() => undefined)).rejects.toThrow(
+      /require a running Application.*stopping/i,
+    );
+
+    stopGate.resolve();
+    await stopping;
+    expect(events).toEqual(["start:begin", "start:end", "stop:begin", "stop:end"]);
+    expect(app.state).toBe("stopped");
+  });
+
+  it("rolls back prepared adapter resources when startup fails", async () => {
+    const events: string[] = [];
+    class FailingAdapter extends Adapter<object> {
+      static readonly compiler = lifecycleDescriptor;
+      constructor() { super(); }
+      protected override prepareHost(): object {
+        events.push("prepare");
+        return {};
+      }
+      protected override startHost(): never {
+        events.push("start");
+        throw new Error("startup failed");
+      }
+      protected override stopHost(): void { events.push("stop"); }
+    }
+    const app = defineApp().withAdapter(new FailingAdapter());
+
+    await expect(app.start()).rejects.toThrow("startup failed");
+
+    expect(events).toEqual(["prepare", "start", "stop"]);
+    expect(app.state).toBe("failed");
+    await app.stop();
+    expect(events).toEqual(["prepare", "start", "stop"]);
+  });
+
+  it("preserves startup and rollback errors in an AggregateError", async () => {
+    class DoubleFailureAdapter extends Adapter<object> {
+      static readonly compiler = lifecycleDescriptor;
+      constructor() { super(); }
+      protected override prepareHost(): object { return {}; }
+      protected override startHost(): never { throw new Error("startup failed"); }
+      protected override stopHost(): never { throw new Error("cleanup failed"); }
+    }
+    const app = defineApp().withAdapter(new DoubleFailureAdapter());
+
+    let received: unknown;
+    try {
+      await app.start();
+    } catch (error) {
+      received = error;
+    }
+
+    expect(received).toBeInstanceOf(AggregateError);
+    expect((received as AggregateError).errors).toEqual([
+      expect.objectContaining({ message: "startup failed" }),
+      expect.objectContaining({ message: "cleanup failed" }),
+    ]);
+    expect(app.state).toBe("failed");
+  });
+
+  it("moves to failed and reuses the same rejection when normal cleanup fails", async () => {
+    const cleanupError = new Error("cleanup failed");
+    let stops = 0;
+    class FailingStopAdapter extends Adapter<object> {
+      static readonly compiler = lifecycleDescriptor;
+      constructor() { super(); }
+      protected override prepareHost(): object { return {}; }
+      protected override stopHost(): never {
+        stops += 1;
+        throw cleanupError;
+      }
+    }
+    const app = defineApp().withAdapter(new FailingStopAdapter());
+    await app.start();
+
+    await expect(app.stop()).rejects.toBe(cleanupError);
+    await expect(app.stop()).rejects.toBe(cleanupError);
+
+    expect(stops).toBe(1);
+    expect(app.state).toBe("failed");
+  });
+});

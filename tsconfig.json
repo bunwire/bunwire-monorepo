@@ -2,8 +2,10 @@
   "files": [],
   "references": [
     { "path": "./packages/core" },
+    { "path": "./packages/bun" },
     { "path": "./packages/vite" },
     { "path": "./packages/electrobun" },
+    { "path": "./examples/bun-app" },
     { "path": "./examples/electrobun-app" },
     { "path": "./examples/fake-queue-app" }
   ]

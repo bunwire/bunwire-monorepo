@@ -44,7 +44,13 @@ import type {
   ProviderRegistry,
 } from "./registry.js";
 
-export type ApplicationState = "configuring" | "starting" | "running" | "failed";
+export type ApplicationState =
+  | "configuring"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "failed";
 
 export class Application<ApplicationContext = unknown> {
   readonly #providerClasses: ProviderConstructor[] = [];
@@ -61,6 +67,9 @@ export class Application<ApplicationContext = unknown> {
   #adapter: Adapter<any> | undefined;
   #runtimeRegistry: RuntimeRegistry = defineRuntimeRegistry();
   #hasMiddlewarePolicy = false;
+  #startPromise: Promise<void> | undefined;
+  #stopPromise: Promise<void> | undefined;
+  #adapterStopPromise: Promise<void> | undefined;
 
   get state(): ApplicationState {
     return this.#state;
@@ -226,6 +235,19 @@ export class Application<ApplicationContext = unknown> {
     }
 
     this.#state = "starting";
+    const startPromise = this.performStart();
+    this.#startPromise = startPromise;
+    await startPromise;
+  }
+
+  async stop(): Promise<void> {
+    if (!this.#stopPromise) {
+      this.#stopPromise = this.stopFromCurrentState();
+    }
+    await this.#stopPromise;
+  }
+
+  private async performStart(): Promise<void> {
     const rootContainer = new Container();
     this.#rootContainer = rootContainer;
 
@@ -340,9 +362,72 @@ export class Application<ApplicationContext = unknown> {
       }
       this.#state = "running";
     } catch (error) {
+      let cleanupError: unknown;
+      try {
+        await this.stopAdapter();
+      } catch (caught) {
+        cleanupError = caught;
+      }
+      this.#state = "failed";
+      if (cleanupError !== undefined) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "Application startup failed and adapter cleanup also failed.",
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async stopFromCurrentState(): Promise<void> {
+    if (this.#state === "configuring") {
+      this.#state = "stopped";
+      return;
+    }
+
+    if (this.#state === "starting") {
+      try {
+        await this.#startPromise;
+      } catch {
+        return;
+      }
+    }
+
+    if (this.#state === "failed" || this.#state === "stopped") {
+      return;
+    }
+
+    if (this.#state !== "running") {
+      throw new ApplicationStateError(
+        `Application.stop() cannot begin from state "${this.#state}".`,
+      );
+    }
+
+    this.#state = "stopping";
+    try {
+      await this.stopAdapter();
+      this.#state = "stopped";
+    } catch (error) {
       this.#state = "failed";
       throw error;
     }
+  }
+
+  private stopAdapter(): Promise<void> {
+    if (!this.#adapter || !this.#hasApplicationContext) {
+      return Promise.resolve();
+    }
+    if (!this.#adapterStopPromise) {
+      this.#adapterStopPromise = Adapter.stop(
+        this.#adapter,
+        this.createAdapterHostContext(
+          this.#adapter,
+          this.#rootContainer as Container,
+          this.#runtimeRegistry,
+        ),
+      );
+    }
+    return this.#adapterStopPromise;
   }
 
   async runInvocation<Result>(

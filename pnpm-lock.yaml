@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@bunwire/bun':
+        specifier: workspace:*
+        version: link:packages/bun
+      '@bunwire/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@bunwire/electrobun':
         specifier: workspace:*
         version: link:packages/electrobun
@@ -23,6 +29,18 @@ importers:
       vitest:
         specifier: 3.2.4
         version: 3.2.4(@types/node@22.20.1)
+
+  examples/bun-app:
+    dependencies:
+      '@bunwire/bun':
+        specifier: workspace:*
+        version: link:../../packages/bun
+      '@bunwire/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@bunwire/vite':
+        specifier: workspace:*
+        version: link:../../packages/vite
 
   examples/electrobun-app:
     dependencies:
@@ -41,6 +59,16 @@ importers:
       '@bunwire/core':
         specifier: workspace:*
         version: link:../../packages/core
+
+  packages/bun:
+    dependencies:
+      '@bunwire/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@types/bun':
+        specifier: 1.4.0
+        version: 1.4.0
 
   packages/core: {}
 

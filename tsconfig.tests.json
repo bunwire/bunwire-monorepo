@@ -11,6 +11,7 @@
     "experimentalDecorators": true,
     "noEmit": true,
     "paths": {
+      "@bunwire/bun": ["packages/bun/src/index.ts"],
       "@bunwire/core": ["packages/core/src/index.ts"],
       "@bunwire/vite": ["packages/vite/src/index.ts"],
       "@bunwire/electrobun": ["packages/electrobun/src/index.ts"],

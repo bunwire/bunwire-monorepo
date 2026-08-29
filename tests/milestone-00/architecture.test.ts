@@ -14,6 +14,12 @@ describe("package boundaries", () => {
     ])).toEqual([{ path: "fixture.ts", specifier: "@bunwire/electrobun" }]);
   });
 
+  it("rejects a deliberate Core to Bun import", () => {
+    expect(findForbiddenCoreImports([
+      { path: "fixture.ts", source: 'export { BunAdapter } from "@bunwire/bun";' },
+    ])).toEqual([{ path: "fixture.ts", specifier: "@bunwire/bun" }]);
+  });
+
   it("accepts the actual Core source tree", async () => {
     await expect(checkCoreBoundaries(process.cwd())).resolves.toEqual([]);
   });

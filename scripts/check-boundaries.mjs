@@ -7,7 +7,8 @@ const forbiddenCoreSpecifiers = [
   /^@bunwire\/vite(?:\/|$)/,
   /^electrobun(?:\/|$)/,
   /^@bunwire\/electrobun(?:\/|$)/,
-  /(?:^|\/)packages\/(?:vite|electrobun)(?:\/|$)/,
+  /^@bunwire\/bun(?:\/|$)/,
+  /(?:^|\/)packages\/(?:vite|electrobun|bun)(?:\/|$)/,
 ];
 
 const forbiddenRuntimeDiscoverySpecifiers = [/^node:fs(?:\/|$)/, /^fs(?:\/|$)/];
@@ -16,8 +17,11 @@ const forbiddenVitePlatformTerms = [
   /(?:^|["'.])electrobun(?:[\/."']|$)/i,
   /\bELECTROBUN_[A-Z0-9_]+\b/,
   /\bElectrobun(?:Adapter|Method|Middleware|Route|Message|Window|Webview|Context)\b/,
+  /@bunwire\/bun/i,
+  /\bBUN_COMPILER_DESCRIPTOR\b/,
+  /\bBunAdapter\b/,
 ];
-const crossPackageSourceSpecifier = /(?:^|\/)packages\/(core|vite|electrobun)\/src(?:\/|$)/;
+const crossPackageSourceSpecifier = /(?:^|\/)packages\/(core|vite|electrobun|bun)\/src(?:\/|$)/;
 
 const importPattern = /(?:import|export)\s+(?:type\s+)?(?:[^"']*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
 
@@ -94,16 +98,17 @@ export async function checkCoreBoundaries(rootDirectory) {
 }
 
 export async function checkReleaseBoundaries(rootDirectory) {
-  const [core, vite, electrobun] = await Promise.all([
+  const [core, vite, electrobun, bun] = await Promise.all([
     relativeSourceFiles(rootDirectory, "core"),
     relativeSourceFiles(rootDirectory, "vite"),
     relativeSourceFiles(rootDirectory, "electrobun"),
+    relativeSourceFiles(rootDirectory, "bun"),
   ]);
   return {
     coreImports: findForbiddenCoreImports(core),
     vitePlatformTerms: findVitePlatformTerms(vite),
-    runtimeDiscoveryImports: findForbiddenRuntimeDiscoveryImports([...core, ...electrobun]),
-    crossPackageSourceImports: findCrossPackageSourceImports([...core, ...vite, ...electrobun]),
+    runtimeDiscoveryImports: findForbiddenRuntimeDiscoveryImports([...core, ...electrobun, ...bun]),
+    crossPackageSourceImports: findCrossPackageSourceImports([...core, ...vite, ...electrobun, ...bun]),
   };
 }
 

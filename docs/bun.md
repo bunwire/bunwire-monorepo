@@ -323,6 +323,8 @@ dispose worker/application resources
 
 Individual Bun subsystems should register their resources with the shared lifecycle. If Bun requires a generic shutdown/disposal capability that Core does not yet expose, that capability must be added to Core's Application/adapter lifecycle rather than implemented as a parallel Bun-owned application lifecycle.
 
+Milestone 1 establishes that generic boundary as terminal `app.stop()`. `BunAdapter` uses it for exactly-once adapter cleanup and, by default, translates SIGINT/SIGTERM into graceful shutdown before restoring native signal termination. Applications that own process signals may disable that integration through adapter configuration.
+
 ---
 
 # 7. Execution scopes

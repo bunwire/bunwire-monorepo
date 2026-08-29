@@ -12,6 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@bunwire/bun": fileURLToPath(new URL("./packages/bun/src/index.ts", import.meta.url)),
       "@bunwire/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
       "@bunwire/vite": fileURLToPath(new URL("./packages/vite/src/index.ts", import.meta.url)),
       "@bunwire/electrobun": fileURLToPath(new URL("./packages/electrobun/src/index.ts", import.meta.url)),

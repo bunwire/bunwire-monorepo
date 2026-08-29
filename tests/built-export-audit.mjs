@@ -8,7 +8,7 @@ const allowlist = JSON.parse(await readFile(
   path.join(repositoryRoot, "tests/fixtures/milestone-13-public-exports.json"),
   "utf8",
 ));
-const packageNames = ["core", "vite", "electrobun"];
+const packageNames = ["core", "vite", "electrobun", "bun"];
 
 for (const packageName of packageNames) {
   const packageRoot = path.join(repositoryRoot, "packages", packageName);

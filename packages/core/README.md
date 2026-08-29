@@ -24,6 +24,10 @@ In v1 Bunwire constructs Providers with zero supplied constructor arguments and 
 
 `start()` creates the root `Container`, applies convention defaults, stores any manual context under `APPLICATION_CONTEXT`, constructs each distinct `@Provider()` class with zero arguments, and awaits every `register(rootContainer)` call. Convention defaults are staged first so explicit Provider bindings win through the container's last-binding-wins semantics. A second or concurrent `start()` call throws `ApplicationStateError`; startup is never repeated silently.
 
+`stop()` is the terminal Core-owned shutdown boundary. A running Application moves through `stopping` to `stopped`, rejects new managed invocations as soon as stopping begins, and invokes its primary adapter's protected cleanup hook exactly once. Repeated or concurrent stops share the same cleanup result, and a stopped Application cannot restart. A stop requested while startup is pending waits for startup to settle before cleaning up.
+
+If startup fails after adapter context preparation, Core invokes adapter cleanup before leaving the Application in `failed`. When startup and rollback both fail, Core throws an `AggregateError` containing both failures. Provider/container disposal and active-invocation draining are not implied by this initial shutdown contract.
+
 `runInvocation()` is the Core boundary used by later adapters and managed-method machinery. It is available only after startup completes. Each call creates a child container, stores its real `InvocationContext` under `INVOCATION_CONTEXT`, applies optional invocation-local configuration, runs each Provider `boot(context)`, and then calls the supplied handler. Child-local values are isolated, including across concurrent invocations, while inherited root singletons keep root identity.
 
 ## Events and managed listeners

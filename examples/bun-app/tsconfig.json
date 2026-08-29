@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/example.tsbuildinfo",
+    "types": ["bun"]
+  },
+  "include": ["src/**/*.ts", ".bunwire/**/*.ts"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/bun" },
+    { "path": "../../packages/vite" }
+  ]
+}

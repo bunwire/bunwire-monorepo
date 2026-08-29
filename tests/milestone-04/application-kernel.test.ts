@@ -124,6 +124,17 @@ describe("Milestone 4 — Application definition and startup", () => {
     expect(() => app.withContext({ late: true })).toThrow(/cannot modify.*running/i);
     expect(() => app.withConventionBindings(() => {})).toThrow(/cannot modify.*running/i);
   });
+
+  it("can be terminally stopped before startup without creating a root container", async () => {
+    const app = defineApp();
+
+    await app.stop();
+
+    expect(app.state).toBe("stopped");
+    expect(app.isRunning).toBe(false);
+    expect(() => app.rootContainer).toThrow(ApplicationStateError);
+    await expect(app.start()).rejects.toThrow(/called once.*stopped/i);
+  });
 });
 
 describe("Milestone 4 — Provider registry and lifecycle", () => {

@@ -944,11 +944,21 @@ Middleware
 Managed method
         ↓
 Transport result / completion
+        ↓
+app.stop()
+        ↓
+Application rejects new invocations
+        ↓
+primary adapter cleanup
+        ↓
+Application stopped
 ```
 
-The exact internal adapter lifecycle method names are implementation details. The public lifecycle boundary is `app.start()`.
+The normal public lifecycle boundaries are `app.start()` and terminal `app.stop()`. Adapter hook names remain implementation details for application developers.
 
 Core's v1 startup contract fails clearly if `start()` is called a second time or while a first startup is still running. Configuration methods likewise reject changes after startup begins. Provider registries are deduplicated by class identity, and all asynchronous `register()` calls finish before the Application enters its running state or accepts managed invocations.
+
+Core's terminal shutdown contract moves a running Application through `stopping` to `stopped`, rejects new invocations once stopping begins, and invokes primary-adapter cleanup exactly once. Repeated or concurrent stops share the cleanup result. A stop requested during startup waits for startup to settle. If startup fails after host context preparation, Core runs adapter cleanup before leaving the Application in `failed`; simultaneous startup and rollback failures are preserved in an `AggregateError`. Active-invocation draining and Provider/container disposal require their own explicit lifecycle contracts and are not inferred here.
 
 Until adapter transports and compiled managed-method plans are connected, Core exposes `runInvocation()` as the generic managed-invocation boundary. It creates an isolated child container and real `InvocationContext`, applies invocation-local bindings, runs Provider `boot(context)`, and only then calls the invocation handler. This is lifecycle/scope orchestration rather than automatic exposure of Service or Controller methods.
 

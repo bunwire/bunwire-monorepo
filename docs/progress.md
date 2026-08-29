@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 14 — Core Events and Managed Listeners (complete)
+Current milestone: None — `@bunwire/bun` Milestone 1 is complete
 
 Overall status:
 
@@ -28,6 +28,7 @@ Overall status:
 - Prior-milestone regression closure: Complete — [details](progress/prior-milestone-regression-closure.md)
 - Milestone 13: Complete — [details](progress/milestone-13.md)
 - Milestone 14: Complete — [details](progress/milestone-14.md)
+- `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
 
 ## Implemented
 
@@ -56,15 +57,17 @@ Overall status:
 - Prior-milestone regression closure adds nominal runtime tokens, constructable class-token validation, public generated import identities, host-aware path identity, exact virtual-module declarations, byte-stable shared artifact generation, and real Vite source/config invalidation.
 - Milestone 13 prepares audited public `0.1.0` packages, exact export/tarball contracts, precise bootstrap diagnostics, a buildable fake second-adapter example, release documentation, deterministic performance/churn checks, and CI release gates without publishing or tagging.
 - Milestone 14 adds canonical Core events and aliases, compiler-validated DI-managed listeners, deterministic generated relationships, and exact-identity sequential dispatch with isolated invocation scopes.
+- `@bunwire/bun` Milestone 1 adds the public Bun adapter package, immutable runtime roles, generated-registry consumption, Core-owned terminal shutdown and startup rollback, signal cleanup, a minimal Bun example, and complete workspace/release verification.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None; Milestone 14 is complete.
+- None.
+- [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- Future runtime packages may consume the completed Core event system for optional integrations such as queued listeners.
+- `@bunwire/bun` Milestone 2 — Execution Scopes and Contextual Resolution.
 
 ## Blockers
 
@@ -94,3 +97,4 @@ Overall status:
 - [Prior-milestone regression closure](progress/prior-milestone-regression-closure.md)
 - [Milestone 13](progress/milestone-13.md)
 - [Milestone 14](progress/milestone-14.md)
+- [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)

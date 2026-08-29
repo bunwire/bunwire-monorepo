@@ -160,6 +160,8 @@ export abstract class Adapter<Context = unknown> {
 
   protected startHost(_context: AdapterHostContext<Context>): void | Promise<void> {}
 
+  protected stopHost(_context: AdapterHostContext<Context>): void | Promise<void> {}
+
   static compilerDescriptor(adapter: Adapter<any>): AdapterCompilerDescriptor {
     const AdapterClass = adapter.constructor as AdapterConstructor;
     if (!Object.prototype.hasOwnProperty.call(AdapterClass, "compiler")) {
@@ -213,5 +215,12 @@ export abstract class Adapter<Context = unknown> {
     context: AdapterHostContext<Context>,
   ): Promise<void> {
     await adapter.startHost(context);
+  }
+
+  static async stop<Context>(
+    adapter: Adapter<Context>,
+    context: AdapterHostContext<Context>,
+  ): Promise<void> {
+    await adapter.stopHost(context);
   }
 }

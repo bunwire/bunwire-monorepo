@@ -87,6 +87,7 @@ These rules apply to every milestone.
 35. Request and message semantics remain distinct.
 36. Generated registries/contracts are compiler output and require no manual maintenance.
 37. Runtime adapter configuration belongs in `bootstrap.ts`; `bunwire.config.*` must not require duplicating the same adapter instance configuration.
+38. `app.stop()` is the terminal public shutdown boundary; adapter cleanup remains Core-orchestrated rather than runtime-package-specific.
 
 ## Required test layers
 
@@ -484,6 +485,8 @@ managed invocation pipeline
 ## Exit criteria
 
 The application has a single public startup boundary, Provider and Service semantics are completely separated, and manual host context can be supplied without inventing another Provider lifecycle method.
+
+The later `@bunwire/bun` Milestone 1 extends this completed kernel vertically with terminal `app.stop()`, `stopping`/`stopped` states, exactly-once primary-adapter cleanup, stop-during-start coordination, and startup-failure rollback. It does not add Provider/container disposal or active-invocation draining.
 
 ---
 

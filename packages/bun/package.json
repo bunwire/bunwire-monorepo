@@ -1,16 +1,16 @@
 {
-  "name": "@bunwire/electrobun",
+  "name": "@bunwire/bun",
   "version": "0.1.1",
-  "description": "Electrobun host adapter, managed RPC decorators, middleware context, and generated-client runtime for Bunwire.",
+  "description": "Bun-native host adapter, runtime roles, and application integrations for Bunwire.",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bunwire/bunwire-monorepo.git",
-    "directory": "packages/electrobun"
+    "directory": "packages/bun"
   },
   "homepage": "https://github.com/bunwire/bunwire-monorepo#readme",
   "bugs": "https://github.com/bunwire/bunwire-monorepo/issues",
-  "keywords": ["bunwire", "electrobun", "rpc", "typescript"],
+  "keywords": ["bunwire", "bun", "application-framework", "typescript"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,10 +27,12 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config ../../vitest.config.ts tests/milestone-11/electrobun-adapter.test.ts tests/milestone-12/generated-client-e2e.test.ts tests/milestone-12/middleware-compiler.test.ts tests/milestone-12e/electrobun-generated-host.test.ts tests/milestone-12e/electrobun-managed-middleware.test.ts"
+    "test": "vitest run --config ../../vitest.config.ts tests/bun/milestone-01"
   },
   "dependencies": {
-    "@bunwire/core": "workspace:^",
-    "electrobun": "1.18.1"
+    "@bunwire/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.0"
   }
 }

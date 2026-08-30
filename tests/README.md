@@ -392,6 +392,33 @@ Coverage lives in `tests/milestone-14`, backed by `tests/fixtures/milestone-14-e
 | Replaceability and boundaries | Provider override of `EventDispatcher`, adapter-safe registry shape, no runtime scanning, and no class-name identity |
 | Behavioral fixture | `UserRegistered("123")` resolves listeners and `AuditService` through the generated registry and container |
 
+## `@bunwire/bun` Milestone 2 — Execution scopes
+
+Coverage lives in `tests/bun/milestone-02/execution-scopes.test.ts`.
+
+| Requirement | Automated evidence |
+| --- | --- |
+| Canonical scope identities | Frozen descriptors and exact parent-kind assertions |
+| Context and service isolation | Parent/sibling visibility, per-scope caching, root-singleton identity, and descendant shadowing |
+| WebSocket hierarchy | Connection/message parent validation, inheritance, isolation, and cascading disposal |
+| Deterministic cleanup | Idempotent LIFO resource/child disposal, unresolved-resource exclusion, and flattened aggregate failures |
+| Managed execution | Handler/cleanup failure preservation and concurrent HTTP/job contextual isolation |
+| Graceful shutdown | New-scope rejection, active-run waiting, manual-scope cleanup, signal-handler ordering, and failed-stop propagation |
+| Architecture boundary | Bun source rejects AsyncLocalStorage/global-context machinery |
+
+## `@bunwire/bun` Milestone 4 — HTTP middleware
+
+Coverage lives in `tests/bun/milestone-04`, backed by `tests/fixtures/bun-milestone-04` and the generated Bun example.
+
+| Requirement | Automated evidence |
+| --- | --- |
+| Generated policy | Aliases, parameters, groups, nested groups, Controller mappings, four-scope ordering, and deduplication |
+| Compiler failures | Duplicate aliases, alias/group ambiguity, group cycles, and unresolved references |
+| HTTP filters | Actual-path `*`/`**` matching, uppercase method filtering, exclusion precedence, and startup validation |
+| Managed execution | Transient DI, Provider-boot bindings, before/after nesting, short circuit, and one invocation scope |
+| Request isolation | Concurrent requests retain distinct Bun execution scopes and middleware contexts |
+| Native process | Parameterized middleware headers and short-circuit responses run through real `Bun.serve()` |
+
 ## Commands
 
 - `pnpm test` runs the complete centralized Vitest suite.

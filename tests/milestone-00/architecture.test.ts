@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { checkCoreBoundaries, findForbiddenCoreImports } from "../../scripts/check-boundaries.mjs";
+import {
+  checkCoreBoundaries,
+  findForbiddenBunGlobalContext,
+  findForbiddenCoreImports,
+} from "../../scripts/check-boundaries.mjs";
 
 describe("package boundaries", () => {
   it("rejects a deliberate Core to Vite import", () => {
@@ -18,6 +22,13 @@ describe("package boundaries", () => {
     expect(findForbiddenCoreImports([
       { path: "fixture.ts", source: 'export { BunAdapter } from "@bunwire/bun";' },
     ])).toEqual([{ path: "fixture.ts", specifier: "@bunwire/bun" }]);
+  });
+
+  it("rejects AsyncLocalStorage as Bun contextual-resolution state", () => {
+    expect(findForbiddenBunGlobalContext([{
+      path: "fixture.ts",
+      source: 'import { AsyncLocalStorage } from "node:async_hooks";',
+    }])).toHaveLength(2);
   });
 
   it("accepts the actual Core source tree", async () => {

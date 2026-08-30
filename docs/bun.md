@@ -376,6 +376,14 @@ Job Scope
 
 These scope concepts may eventually become useful enough to move into Core, but they will initially be developed for `@bunwire/bun`.
 
+Milestone 2 implements these as public Bun-owned primitives over Core child containers. `BunExecutionScopeManager` owns one application scope and creates explicit `http-request`, `queue-job`, `command`, `scheduled-task`, `websocket-connection`, and `websocket-message` scopes. WebSocket message scopes must be children of a live connection scope; all other child kinds attach to the application scope.
+
+Each scope exposes its child container through canonical scope resolution, supports generic typed contextual values, and can cache explicitly registered scoped services. Only resources registered through the scope API with an explicit disposer participate in scope cleanup; inherited Core/application singletons are never inferred to be disposable.
+
+Managed scope execution uses `manager.run()`, which guarantees cleanup and preserves simultaneous handler/cleanup failures. Descendants and resolved resources dispose in reverse order, all cleanup is attempted, and multiple failures are aggregated. Application shutdown rejects new scopes, waits for active managed executions, disposes remaining manually created scopes, and then completes BunAdapter cleanup. No `AsyncLocalStorage` or global mutable current-context mechanism is used.
+
+Milestone 3 introduces the concrete HTTP context token with the native request/server, compiled route identity, parameters, method, and current request scope. Job, command, scheduled-task, and WebSocket context tokens remain owned by their later feature milestones so their public types are not prematurely fixed as `unknown`.
+
 ---
 
 # 8. HTTP runtime
@@ -394,7 +402,9 @@ Bun.serve({
 
 Bunwire should not emulate Express internally.
 
-The compiler already knows routes, methods and controller targets, so the Bun runtime should translate those structures as directly as practical into Bun's routing capabilities.
+The compiler knows routes, methods and Core Controller targets, so the Bun runtime translates those structures directly into grouped native `{ path: { METHOD: handler } }` routes. Bun owns the HTTP method decorators; Core's canonical `@Controller()` remains the only Controller class identity.
+
+Each managed route runs inside an `http-request` execution scope. Bun supplies that container as the parent of Core's invocation child so contextual bindings are visible to Provider boot, Controller DI, parameter resolvers, and middleware without becoming global. The initial response boundary accepts only native `Response`; result normalization and replaceable exception rendering arrive in Milestone 5.
 
 The application's HTTP lifecycle should follow a deterministic flow:
 
@@ -447,22 +457,22 @@ authenticated principal
 request metadata
 ```
 
-Conceptually:
+The Milestone 3 public shape is:
 
 ```ts
-interface BunRequestContext {
-  request: Request;
-
+interface BunHttpContext {
+  request: BunRequest;
+  server: Server;
   route: {
-    params: Record<string, string>;
+    method: BunHttpMethod;
+    path: string;
+    params: Readonly<Record<string, string>>;
   };
-
-  auth: AuthContext;
-  session?: Session;
+  scope: BunExecutionScope;
 }
 ```
 
-The exact shape can evolve, but the distinction must remain clear.
+It is frozen and available explicitly through Bun `@Context()` or the `BUN_HTTP_CONTEXT` runtime token. Query, cookie, session, auth, validation, and richer request facilities remain later milestones.
 
 A class like:
 
@@ -514,11 +524,13 @@ It supports:
 
 ```text
 include / exclude
-→ path filtering
+→ actual case-sensitive URL pathname filtering
 
 only / except
-→ transport filtering
+→ canonical uppercase HTTP method filtering
 ```
+
+The frozen `BunMiddlewareContext` extends the native HTTP context with the actual pathname, canonical method, `transport: "http"`, current request scope, and immutable attachment parameters. Path patterns use `*` within one segment and `**` as a complete multi-segment wildcard; query strings and fragments do not participate.
 
 and middleware references such as:
 
@@ -529,6 +541,8 @@ and middleware references such as:
 Built-in framework functionality should use this same middleware system wherever appropriate.
 
 Bunwire's own middleware should not secretly bypass the public middleware pipeline.
+
+Generated middleware executes in deterministic global, centralized Controller mapping, Controller `@Use`, then method `@Use` order. Identical target-plus-parameter attachments are deduplicated at their earliest position while parameter-distinct attachments remain independent executions.
 
 ---
 

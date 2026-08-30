@@ -292,11 +292,11 @@ Introduce Bun HTTP controllers/routes as canonical compiler concepts and transla
 
 ## Scope
 
-Implement Bun controller/route decorators and compiler integration required for Bun-native HTTP dispatch.
+Implement Bun HTTP route decorators on Core's canonical Controller and the compiler integration required for Bun-native HTTP dispatch.
 
 ## Requirements
 
-- Register canonical Bun controller class kind/descriptor using Core extension APIs.
+- Reuse Core's canonical `Controller` class kind and register canonical Bun HTTP route method identity through Core extension APIs.
 - Implement canonical HTTP method decorators required for the initial release:
   - `@Get`
   - `@Post`
@@ -306,6 +306,8 @@ Implement Bun controller/route decorators and compiler integration required for 
   - `@Options`
   - `@Head`
 - Support controller path prefix plus method route path.
+- Export explicit Bun HTTP context injection and native server configuration types.
+- Reject caller-visible route parameters; framework values use parameter injectors or container DI.
 - Authorize decorator factories by resolved TypeScript symbol identity.
 - Detect duplicate/conflicting routes at compile time where statically knowable.
 - Validate illegal route definitions.
@@ -316,6 +318,7 @@ Implement Bun controller/route decorators and compiler integration required for 
 - Resolve controllers through Bunwire DI.
 - Invoke controller methods through compiled managed-method plans.
 - Preserve access to native Bun/Web `Request` and native `Response`.
+- Fill unregistered methods on compiled paths with deterministic 405 responses and `Allow`; use a deterministic native 404 fallback.
 - Implement deterministic 404 and method-not-allowed behavior through the framework exception/response path once available; temporary minimal responses are acceptable until Milestone 5.
 
 ## Tests
@@ -373,8 +376,8 @@ Use the established middleware contract without redesigning its public semantics
   - `exclude`
   - `only`
   - `except`
-- Interpret `include`/`exclude` as Bun HTTP path filtering.
-- Interpret `only`/`except` as HTTP method/transport filtering.
+- Interpret `include`/`exclude` as case-sensitive filtering against the actual URL pathname, excluding query and fragment components.
+- Interpret `only`/`except` as canonical uppercase HTTP method filtering.
 - Support middleware aliases.
 - Support `@Use(...)`.
 - Support Laravel-style parameters:

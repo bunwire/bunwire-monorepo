@@ -43,6 +43,16 @@ interface CallerContractHandlerData {
   }) => string;
 }
 
+interface NoCallerContractHandlerData {
+  readonly type: "bunwire.no-caller-contract";
+  readonly methodKindIds: readonly string[];
+}
+
+interface CallerContractStrategy {
+  readonly handler: CallerContractHandlerData | undefined;
+  readonly excludedKindIds: ReadonlySet<string>;
+}
+
 interface ContractEntry {
   readonly owner: AnalyzedManagedClass;
   readonly method: AnalyzedManagedMethod;
@@ -60,22 +70,58 @@ function isObject(value: unknown): value is Record<PropertyKey, unknown> {
 
 function readHandler(
   extensions: DiscoveredCompilerExtensions,
-): CallerContractHandlerData | undefined {
+): CallerContractStrategy {
   const candidates = extensions.metadataHandlers.filter((handler) => (
     isObject(handler.data) && handler.data.type === "bunwire.caller-contract"
   ));
-  const handler = candidates[0];
-  if (candidates.length === 0 && extensions.adapter.methodKinds.length === 0) {
-    return undefined;
-  }
-  if (candidates.length !== 1 || !handler || !isObject(handler.data)) {
+  const optOuts = extensions.metadataHandlers.filter((handler) => (
+    isObject(handler.data) && handler.data.type === "bunwire.no-caller-contract"
+  ));
+  if (candidates.length > 1) {
     throw new BunwireCompilerError(
       "REGISTRY_GENERATION_INVALID",
-      candidates.length === 0
-        ? `Adapter "${extensions.adapter.id}" does not contribute a caller-contract compiler metadata handler.`
-        : `Adapter "${extensions.adapter.id}" contributes more than one caller-contract compiler metadata handler.`,
+      `Adapter "${extensions.adapter.id}" contributes more than one caller-contract compiler metadata handler.`,
     );
   }
+  const registeredKinds = new Set<string>(extensions.adapter.methodKinds.map(({ id }) => id));
+  const excludedKindIds = new Set<string>();
+  for (const optOut of optOuts) {
+    const data = optOut.data as Partial<NoCallerContractHandlerData>;
+    if (!Array.isArray(data.methodKindIds)) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `No-caller-contract compiler metadata handler "${optOut.id}" is malformed.`,
+      );
+    }
+    for (const kindId of data.methodKindIds) {
+      if (typeof kindId !== "string" || !registeredKinds.has(kindId)) {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `No-caller-contract compiler metadata handler "${optOut.id}" references unregistered method kind "${String(kindId)}".`,
+        );
+      }
+      if (excludedKindIds.has(kindId)) {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `Managed method kind "${kindId}" is excluded from caller contracts more than once.`,
+        );
+      }
+      excludedKindIds.add(kindId);
+    }
+  }
+  const handler = candidates[0];
+  if (candidates.length === 0 && extensions.adapter.methodKinds.length === 0) {
+    return { handler: undefined, excludedKindIds };
+  }
+  if (!handler) {
+    const uncovered = extensions.adapter.methodKinds.find(({ id }) => !excludedKindIds.has(id));
+    if (!uncovered) return { handler: undefined, excludedKindIds };
+    throw new BunwireCompilerError(
+      "REGISTRY_GENERATION_INVALID",
+      `Adapter "${extensions.adapter.id}" does not contribute a caller-contract strategy for method kind "${uncovered.id}".`,
+    );
+  }
+  if (!isObject(handler.data)) throw new Error("Unreachable malformed metadata handler.");
   const data = handler.data as Partial<CallerContractHandlerData>;
   if (!isObject(data.factory)
     || typeof data.factory.moduleSpecifier !== "string"
@@ -106,9 +152,24 @@ function readHandler(
         `Caller-contract compiler metadata handler "${handler.id}" maps method kind "${method.kindId}" more than once.`,
       );
     }
+    if (excludedKindIds.has(method.kindId)) {
+      throw new BunwireCompilerError(
+        "REGISTRY_GENERATION_INVALID",
+        `Managed method kind "${method.kindId}" cannot both generate and opt out of caller contracts.`,
+      );
+    }
     kindIds.add(method.kindId);
   }
-  return data as CallerContractHandlerData;
+  const uncovered = extensions.adapter.methodKinds.find(({ id }) => (
+    !kindIds.has(id) && !excludedKindIds.has(id)
+  ));
+  if (uncovered) {
+    throw new BunwireCompilerError(
+      "REGISTRY_GENERATION_INVALID",
+      `Adapter "${extensions.adapter.id}" does not contribute a caller-contract strategy for method kind "${uncovered.id}".`,
+    );
+  }
+  return { handler: data as CallerContractHandlerData, excludedKindIds };
 }
 
 function generateEmptyCallerContractModule(): GeneratedCallerContractModule {
@@ -156,7 +217,7 @@ export function generateCallerContractModule(
   options: GenerateCallerContractModuleOptions,
 ): GeneratedCallerContractModule {
   const mode = options.importMode ?? "relative";
-  const handler = readHandler(options.extensions);
+  const { handler } = readHandler(options.extensions);
   if (!handler) return generateEmptyCallerContractModule();
   const methodModes = new Map(handler.methods.map((entry) => [entry.kindId, entry.mode]));
   const entries: ContractEntry[] = [];

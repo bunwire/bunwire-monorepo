@@ -7,17 +7,23 @@ import {
 } from "@bunwire/vite";
 
 describe("Bun Milestone 1 — compiler and generated-registry integration", () => {
-  it("discovers BunAdapter's empty compiler descriptor from the bootstrap", async () => {
+  it("discovers BunAdapter's compiler descriptor from the bootstrap", async () => {
     const root = path.join(fileURLToPath(new URL("../../../", import.meta.url)), "examples/bun-app");
     const application = await analyzeBunwireApplication({ root });
 
     expect(application.extensions.adapter.id).toBe("bun.adapter");
     expect(application.extensions.adapter.classKinds).toEqual([]);
-    expect(application.extensions.adapter.methodKinds).toEqual([]);
-    expect(application.analysis.classes).toEqual([]);
+    expect(application.extensions.adapter.methodKinds.map(({ id }) => id)).toEqual([
+      "bun.http-route",
+    ]);
+    expect(application.analysis.classes.map(({ name }) => name)).toEqual([
+      "HomeController",
+      "ExampleHttpMiddleware",
+      "ExampleGuardMiddleware",
+    ]);
   });
 
-  it("generates a deterministic empty client contract when an adapter has no method kinds", async () => {
+  it("generates a deterministic empty client contract for server-only Bun HTTP methods", async () => {
     const root = path.join(fileURLToPath(new URL("../../../", import.meta.url)), "examples/bun-app");
     const application = await analyzeBunwireApplication({ root });
     const generated = generateCallerContractModule({

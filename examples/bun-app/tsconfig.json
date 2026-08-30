@@ -4,6 +4,7 @@
     "rootDir": ".",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/example.tsbuildinfo",
+    "experimentalDecorators": true,
     "types": ["bun"]
   },
   "include": ["src/**/*.ts", ".bunwire/**/*.ts"],

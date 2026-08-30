@@ -1,12 +1,14 @@
-# Bunwire Bun foundation example
+# Bunwire Bun HTTP example
 
-This example demonstrates the Milestone 1 composition boundary:
+This example demonstrates the Bun composition and native HTTP boundary:
 
 - `bootstrap.ts` configures and exports Core's Application with `BunAdapter`;
 - Bunwire's compiler generates the runtime registry without executing the bootstrap;
-- `main.ts` loads that registry, starts once, and stops through Core's lifecycle.
+- a Core `@Controller()` uses Bun `@Get`, `@Post`, and explicit `@Context()`;
+- canonical Core middleware is configured through a parameterized group, filters native HTTP paths/methods, adds response headers, and short-circuits one route;
+- `main.ts` loads that registry and starts once, with shutdown owned by Core and `BunAdapter` signal handling.
 
-No HTTP server or later Bun subsystem is expected in Milestone 1.
+The server listens with Bun's native router. Try `GET /api`, `POST /api/echo/:id`, or `GET /api/blocked`. Result normalization and replaceable exception rendering remain later milestones.
 
 ```sh
 pnpm --filter @bunwire/example-bun-app build

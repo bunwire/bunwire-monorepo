@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config ../../vitest.config.ts tests/bun/milestone-01"
+    "test": "vitest run --config ../../vitest.config.ts tests/bun"
   },
   "dependencies": {
     "@bunwire/core": "workspace:^"

@@ -14,6 +14,7 @@ export interface ManagedInvocationOptions<
   ApplicationContext = unknown,
   Result = unknown,
 > {
+  readonly parentContainer?: Container;
   readonly configure?: (
     context: InvocationContext<ApplicationContext>,
   ) => void | Promise<void>;

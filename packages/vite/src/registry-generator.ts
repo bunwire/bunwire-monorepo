@@ -16,6 +16,7 @@ import { BunwireCompilerError } from "./diagnostics.js";
 import { canonicalCompilerPath } from "./path-identity.js";
 import type { DiscoveredCompilerExtensions } from "./extensions.js";
 import { BUNWIRE_REGISTRY_MODULE_ID } from "./virtual-modules.js";
+import { validateManagedMethodIdentities } from "./managed-method-validation.js";
 
 export interface GenerateRuntimeRegistryModuleOptions {
   readonly analysis: BunwireCompilerAnalysis;
@@ -103,6 +104,7 @@ function referenceKey(reference: CompilerRuntimeReference): string {
 export function generateRuntimeRegistryModule(
   options: GenerateRuntimeRegistryModuleOptions,
 ): GeneratedRuntimeRegistryModule {
+  validateManagedMethodIdentities(options.analysis, options.extensions);
   const mode = options.importMode ?? "relative";
   const classes = [...options.analysis.classes]
     .sort((left, right) => compareText(classSortKey(left), classSortKey(right)));

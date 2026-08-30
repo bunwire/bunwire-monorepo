@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: None — `@bunwire/bun` Milestone 1 is complete
+Current milestone: None — `@bunwire/bun` Milestone 4 is complete
 
 Overall status:
 
@@ -29,6 +29,9 @@ Overall status:
 - Milestone 13: Complete — [details](progress/milestone-13.md)
 - Milestone 14: Complete — [details](progress/milestone-14.md)
 - `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
+- `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
+- `@bunwire/bun` Milestone 3: Complete — [details](../packages/bun/progress/milestone-03.md)
+- `@bunwire/bun` Milestone 4: Complete — [details](../packages/bun/progress/milestone-04.md)
 
 ## Implemented
 
@@ -58,16 +61,19 @@ Overall status:
 - Milestone 13 prepares audited public `0.1.0` packages, exact export/tarball contracts, precise bootstrap diagnostics, a buildable fake second-adapter example, release documentation, deterministic performance/churn checks, and CI release gates without publishing or tagging.
 - Milestone 14 adds canonical Core events and aliases, compiler-validated DI-managed listeners, deterministic generated relationships, and exact-identity sequential dispatch with isolated invocation scopes.
 - `@bunwire/bun` Milestone 1 adds the public Bun adapter package, immutable runtime roles, generated-registry consumption, Core-owned terminal shutdown and startup rollback, signal cleanup, a minimal Bun example, and complete workspace/release verification.
+- `@bunwire/bun` Milestone 2 adds public Bun execution scopes, isolated contextual bindings, per-scope service caching, nested WebSocket scope identity, deterministic explicit disposal, active-run shutdown coordination, and global-context architecture enforcement.
+- `@bunwire/bun` Milestone 3 adds Core Controller-based HTTP decorators, compiler-validated generated native routes, explicit frozen HTTP context, request-scope inheritance into Core invocation, deterministic 404/405/500 behavior, and graceful `Bun.serve()` lifecycle integration.
+- `@bunwire/bun` Milestone 4 adds generated Core middleware execution around Bun HTTP Controllers with immutable native context, actual-path/method filters, DI, deterministic policy ordering, parameters, short-circuiting, and concurrent request isolation.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- None.
+- No milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- `@bunwire/bun` Milestone 2 — Execution Scopes and Contextual Resolution.
+- `@bunwire/bun` Milestone 5 — Response Resolution and Exception Pipeline.
 
 ## Blockers
 
@@ -98,3 +104,6 @@ Overall status:
 - [Milestone 13](progress/milestone-13.md)
 - [Milestone 14](progress/milestone-14.md)
 - [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)
+- [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
+- [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)
+- [`@bunwire/bun` Milestone 4](../packages/bun/progress/milestone-04.md)

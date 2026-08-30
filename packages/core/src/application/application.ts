@@ -437,7 +437,13 @@ export class Application<ApplicationContext = unknown> {
     this.assertRunning();
 
     const rootContainer = this.#rootContainer as Container;
-    const invocationContainer = rootContainer.createChild();
+    const parentContainer = options.parentContainer ?? rootContainer;
+    if (!(parentContainer instanceof Container) || parentContainer.root !== rootContainer) {
+      throw new ApplicationStateError(
+        "Managed invocation parentContainer must be a Core Container rooted in this Application.",
+      );
+    }
+    const invocationContainer = parentContainer.createChild();
     const context = Object.freeze({
       id: this.#nextInvocationId++,
       application: this,

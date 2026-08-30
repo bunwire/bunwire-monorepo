@@ -22,7 +22,10 @@ class RecordingBunAdapter extends BunAdapter {
 }
 
 const app = defineApp()
-  .withAdapter(new RecordingBunAdapter({ handleSignals: mode === "signal" }))
+  .withAdapter(new RecordingBunAdapter({
+    handleSignals: mode === "signal",
+    http: { port: 0 },
+  }))
   .withRuntimeRegistry(defineRuntimeRegistry());
 
 await app.start();

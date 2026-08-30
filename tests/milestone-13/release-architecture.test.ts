@@ -36,6 +36,7 @@ describe("Milestone 13 — release architecture gates", () => {
       coreImports: [],
       vitePlatformTerms: [],
       runtimeDiscoveryImports: [],
+      bunGlobalContext: [],
       crossPackageSourceImports: [],
     });
   });

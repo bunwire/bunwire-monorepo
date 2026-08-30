@@ -1,17 +1,32 @@
 import {
   Adapter,
+  defineAdapterValidationHook,
   defineRuntimeRegistryConsumer,
   type AdapterHostContext,
   type AdapterPreparationContext,
   type Application,
 } from "@bunwire/core";
 import { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
+import {
+  BunExecutionScopeManager,
+} from "./execution-scopes.js";
+import {
+  bunHttpContextResolver,
+  consumeBunHttpRegistry,
+  createBunHttpRuntimeState,
+  startBunHttpServer,
+  stopBunHttpServer,
+  validateBunHttpMiddleware,
+  type BunHttpRuntimeState,
+} from "./http-runtime.js";
+import type { BunHttpServerOptions } from "./http.js";
 
 export type BunRuntimeRole = "http" | "worker" | "scheduler" | "command";
 
 export interface BunAdapterOptions {
   readonly role?: BunRuntimeRole;
   readonly handleSignals?: boolean;
+  readonly http?: BunHttpServerOptions;
 }
 
 export interface BunRuntimeContext {
@@ -20,6 +35,8 @@ export interface BunRuntimeContext {
 
 interface BunRuntimeState {
   registryConsumed: boolean;
+  scopeManager: BunExecutionScopeManager;
+  http: BunHttpRuntimeState;
   signal: BunShutdownSignal | undefined;
   signalHandlers: ReadonlyMap<BunShutdownSignal, () => void> | undefined;
 }
@@ -98,8 +115,18 @@ function installSignalHandlers(
 
 const bunRegistryConsumer = defineRuntimeRegistryConsumer<"bun.registry", BunRuntimeContext>({
   id: "bun.registry",
-  consume(_registry, context): void {
-    stateFor(context.applicationContext).registryConsumed = true;
+  consume(registry, context): void {
+    const state = stateFor(context.applicationContext);
+    consumeBunHttpRegistry(state.http, registry, context);
+    state.registryConsumed = true;
+  },
+});
+
+const bunValidationHook = defineAdapterValidationHook<"bun.validate", BunRuntimeContext>({
+  id: "bun.validate",
+  validate({ applicationContext, registry }): void {
+    const state = stateFor(applicationContext);
+    validateBunHttpMiddleware(state.http, registry);
   },
 });
 
@@ -108,6 +135,7 @@ export class BunAdapter extends Adapter<BunRuntimeContext> {
 
   readonly #role: BunRuntimeRole;
   readonly #handleSignals: boolean;
+  readonly #http: BunHttpServerOptions;
 
   constructor(options: BunAdapterOptions = {}) {
     if (typeof options !== "object" || options === null || Array.isArray(options)) {
@@ -122,9 +150,30 @@ export class BunAdapter extends Adapter<BunRuntimeContext> {
     if (options.handleSignals !== undefined && typeof options.handleSignals !== "boolean") {
       throw new BunAdapterError("BunAdapter handleSignals must be a boolean when supplied.");
     }
-    super({ registryConsumers: [bunRegistryConsumer] });
+    if (options.http !== undefined && (typeof options.http !== "object" || options.http === null || Array.isArray(options.http))) {
+      throw new BunAdapterError("BunAdapter http options must be an object when supplied.");
+    }
+    if (role !== "http" && options.http !== undefined) {
+      throw new BunAdapterError("BunAdapter http options can only be used with the http runtime role.");
+    }
+    const http = options.http ?? {};
+    if (http.hostname !== undefined && (typeof http.hostname !== "string" || http.hostname.trim().length === 0)) {
+      throw new BunAdapterError("BunAdapter HTTP hostname must be a non-empty string when supplied.");
+    }
+    if (http.port !== undefined && (!Number.isInteger(http.port) || http.port < 0 || http.port > 65_535)) {
+      throw new BunAdapterError("BunAdapter HTTP port must be an integer between 0 and 65535.");
+    }
+    if (http.onServer !== undefined && typeof http.onServer !== "function") {
+      throw new BunAdapterError("BunAdapter HTTP onServer callback must be callable when supplied.");
+    }
+    super({
+      parameterResolvers: [bunHttpContextResolver],
+      registryConsumers: [bunRegistryConsumer],
+      validationHooks: [bunValidationHook],
+    });
     this.#role = role;
     this.#handleSignals = options.handleSignals ?? true;
+    this.#http = Object.freeze({ ...http });
   }
 
   protected override prepareHost(context: AdapterPreparationContext): BunRuntimeContext {
@@ -134,27 +183,50 @@ export class BunAdapter extends Adapter<BunRuntimeContext> {
       );
     }
     const runtimeContext = Object.freeze({ role: this.#role });
+    const scopeManager = new BunExecutionScopeManager(context.rootContainer);
     runtimeStates.set(runtimeContext, {
       registryConsumed: false,
+      scopeManager,
+      http: createBunHttpRuntimeState(),
       signal: undefined,
       signalHandlers: undefined,
     });
     return runtimeContext;
   }
 
-  protected override startHost(context: AdapterHostContext<BunRuntimeContext>): void {
+  protected override async startHost(context: AdapterHostContext<BunRuntimeContext>): Promise<void> {
     const state = stateFor(context.applicationContext);
     if (!state.registryConsumed) {
       throw new BunAdapterError(
         "BunAdapter cannot start before consuming the generated Bunwire runtime registry.",
       );
     }
+    if (context.applicationContext.role === "http") {
+      await startBunHttpServer(state.http, state.scopeManager, this.#http);
+    }
     if (this.#handleSignals) {
       installSignalHandlers(context.application, state);
     }
   }
 
-  protected override stopHost(context: AdapterHostContext<BunRuntimeContext>): void {
-    removeSignalHandlers(stateFor(context.applicationContext));
+  protected override async stopHost(context: AdapterHostContext<BunRuntimeContext>): Promise<void> {
+    const state = stateFor(context.applicationContext);
+    const errors: unknown[] = [];
+    try {
+      await stopBunHttpServer(state.http);
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await state.scopeManager.dispose();
+    } catch (error) {
+      errors.push(error);
+    } finally {
+      removeSignalHandlers(state);
+    }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) {
+      throw new AggregateError(errors, "Bun HTTP server and execution-scope cleanup both failed.");
+    }
   }
 }

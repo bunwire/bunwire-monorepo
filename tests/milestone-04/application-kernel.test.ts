@@ -485,4 +485,22 @@ describe("Milestone 4 — child and invocation scopes", () => {
     expect(() => app.rootContainer.get(REQUEST_ID)).toThrow(/no binding is registered/i);
     expect(() => app.rootContainer.get(BOOT_VALUE)).toThrow(/no binding is registered/i);
   });
+
+  it("creates managed invocation children beneath an explicit same-application parent", async () => {
+    const REQUEST_VALUE = createToken<string>("explicit-invocation-parent");
+    const app = defineApp();
+    await app.start();
+    const requestScope = app.rootContainer.createChild().value(REQUEST_VALUE, "request");
+
+    await expect(app.runInvocation((context) => {
+      expect(context.container.parent).toBe(requestScope);
+      expect(context.container.get(REQUEST_VALUE)).toBe("request");
+      expect(context.rootContainer).toBe(app.rootContainer);
+    }, { parentContainer: requestScope })).resolves.toBeUndefined();
+
+    const foreignParent = new Container();
+    await expect(app.runInvocation(() => undefined, {
+      parentContainer: foreignParent,
+    })).rejects.toThrow(/rooted in this Application/i);
+  });
 });

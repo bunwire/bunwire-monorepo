@@ -12,6 +12,10 @@ const forbiddenCoreSpecifiers = [
 ];
 
 const forbiddenRuntimeDiscoverySpecifiers = [/^node:fs(?:\/|$)/, /^fs(?:\/|$)/];
+const forbiddenBunGlobalContextPatterns = [
+  /\bAsyncLocalStorage\b/,
+  /["'](?:node:)?async_hooks(?:\/[^"']*)?["']/,
+];
 const forbiddenVitePlatformTerms = [
   /@bunwire\/electrobun/i,
   /(?:^|["'.])electrobun(?:[\/."']|$)/i,
@@ -92,6 +96,12 @@ export function findCrossPackageSourceImports(files) {
   });
 }
 
+export function findForbiddenBunGlobalContext(files) {
+  return files.flatMap((file) => forbiddenBunGlobalContextPatterns
+    .filter((pattern) => pattern.test(file.source))
+    .map((pattern) => ({ path: file.path, pattern: pattern.source })));
+}
+
 export async function checkCoreBoundaries(rootDirectory) {
   const coreSource = path.join(rootDirectory, "packages", "core", "src");
   return findForbiddenCoreImports(await collectTypeScriptFiles(coreSource));
@@ -108,6 +118,7 @@ export async function checkReleaseBoundaries(rootDirectory) {
     coreImports: findForbiddenCoreImports(core),
     vitePlatformTerms: findVitePlatformTerms(vite),
     runtimeDiscoveryImports: findForbiddenRuntimeDiscoveryImports([...core, ...electrobun, ...bun]),
+    bunGlobalContext: findForbiddenBunGlobalContext(bun),
     crossPackageSourceImports: findCrossPackageSourceImports([...core, ...vite, ...electrobun, ...bun]),
   };
 }

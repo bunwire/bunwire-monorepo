@@ -12,15 +12,36 @@ describe("Bun Milestone 1 — compiler and generated-registry integration", () =
     const application = await analyzeBunwireApplication({ root });
 
     expect(application.extensions.adapter.id).toBe("bun.adapter");
-    expect(application.extensions.adapter.classKinds).toEqual([]);
+    expect(application.extensions.adapter.classKinds.map(({ id }) => id)).toEqual([
+      "bun.request",
+      "bun.job",
+      "bun.scheduled-task",
+      "bun.command",
+    ]);
     expect(application.extensions.adapter.methodKinds.map(({ id }) => id)).toEqual([
       "bun.http-route",
+      "bun.job.handle",
+      "bun.scheduled-task.handle",
+      "bun.command.handle",
     ]);
-    expect(application.analysis.classes.map(({ name }) => name)).toEqual([
+    expect(application.analysis.classes.map(({ name }) => name).sort()).toEqual([
+      "CsrfMiddleware",
+      "AuthenticateMiddleware",
+      "GuestMiddleware",
+      "AuthorizeMiddleware",
+      "EchoNormalizer",
+      "EchoRequest",
       "HomeController",
       "ExampleHttpMiddleware",
       "ExampleGuardMiddleware",
-    ]);
+      "ExampleActionRecorded",
+      "ExampleEventAudit",
+      "RecordExampleAction",
+      "ExampleQueuedAudit",
+      "QueueExampleAction",
+      "ExampleJobAudit",
+      "RecordExampleJob",
+    ].sort());
   });
 
   it("generates a deterministic empty client contract for server-only Bun HTTP methods", async () => {

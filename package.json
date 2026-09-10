@@ -21,7 +21,12 @@
     "@bunwire/bun": "workspace:*",
     "@bunwire/core": "workspace:*",
     "@bunwire/electrobun": "workspace:*",
+    "@bunwire/validation": "workspace:*",
     "@types/node": "^22.20.1",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "typescript": "5.9.3",
     "vite": "7.3.6",
     "vitest": "3.2.4"

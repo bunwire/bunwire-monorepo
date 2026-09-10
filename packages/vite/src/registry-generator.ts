@@ -255,12 +255,12 @@ export function generateRuntimeRegistryModule(
     const dependencies = (entry.constructor?.dependencies ?? []).map((dependency) => (
       `{ index: ${dependency.index}, token: ${runtimeReference(dependency.token)} }`
     ));
-    const scope = entry.kind.id === "core.service"
+    const scope = entry.scope ?? (entry.kind.id === "core.service"
       && typeof entry.data === "object"
       && entry.data !== null
       && (entry.data as { readonly scope?: unknown }).scope === "transient"
       ? "transient"
-      : "singleton";
+      : "singleton");
     return `    { kind: ${decoratorRuntime}.definition.kind, target: ${target}, data: ${stableValue(entry.data)}, scope: ${JSON.stringify(scope)}, dependencies: [${dependencies.join(", ")}] }`;
   });
 
@@ -270,7 +270,7 @@ export function generateRuntimeRegistryModule(
 
   const methodRecords = classes.flatMap((entry) => entry.methods.map((method) => {
     const decorator = methodDecoratorById.get(method.decoratorId);
-    if (!decorator) {
+    if (!decorator && !method.intrinsicKindSymbol) {
       throw new BunwireCompilerError(
         "REGISTRY_GENERATION_INVALID",
         `Managed method "${entry.name}.${method.name}" references unknown canonical decorator "${method.decoratorId}".`,
@@ -280,7 +280,9 @@ export function generateRuntimeRegistryModule(
     const target = runtimeReference(entry.target);
     const classDecorator = classDecoratorById.get(entry.decoratorId) as NonNullable<ReturnType<typeof classDecoratorById.get>>;
     const ownerDecoratorRuntime = compilerReference(classDecorator.compilerSymbol);
-    const methodDecoratorRuntime = compilerReference(decorator.compilerSymbol);
+    const methodKindRuntime = method.intrinsicKindSymbol
+      ? compilerReference(method.intrinsicKindSymbol)
+      : `${compilerReference(decorator!.compilerSymbol)}.definition.kind`;
     const parameters = method.parameters.map((parameter) => {
       switch (parameter.source) {
         case "transport":
@@ -288,18 +290,23 @@ export function generateRuntimeRegistryModule(
         case "container":
           return `{ source: "container", methodIndex: ${parameter.methodIndex}, token: ${runtimeReference(parameter.token)} }`;
         case "resolver":
-          return `{ source: "resolver", methodIndex: ${parameter.methodIndex}, resolverId: createParameterResolverId(${JSON.stringify(parameter.resolverId)}), data: ${stableValue(parameter.data)} }`;
+          return `{ source: "resolver", methodIndex: ${parameter.methodIndex}, resolverId: createParameterResolverId(${JSON.stringify(parameter.resolverId)}), data: ${stableValue(parameter.data)}${parameter.token === undefined ? "" : `, token: ${runtimeReference(parameter.token)}`} }`;
       }
     });
     const middleware = method.middleware.map((middlewareEntry) => (
       `defineMiddlewareAttachment(${runtimeReference(middlewareEntry.target)}, ${stableValue(middlewareEntry.parameters)})`
     ));
-    return `    defineManagedMethodPlan({ kind: ${methodDecoratorRuntime}.definition.kind, ownerKind: ${ownerDecoratorRuntime}.definition.kind, target: ${target}, method: ${JSON.stringify(method.name)}, data: ${stableValue(method.data)}, parameters: [${parameters.join(", ")}], middleware: [${middleware.join(", ")}] })`;
+    return `    defineManagedMethodPlan({ kind: ${methodKindRuntime}, ownerKind: ${ownerDecoratorRuntime}.definition.kind, target: ${target}, method: ${JSON.stringify(method.name)}, data: ${stableValue(method.data)}, parameters: [${parameters.join(", ")}], middleware: [${middleware.join(", ")}] })`;
   }));
   methodRecords.push(...listenerClasses.map((entry) => (
     `    ${(listenerVariables.get(entry) as string)}.handle`
   )));
 
+  const classAttachmentRecords = classes.flatMap((entry) => (entry.attachments ?? []).map((attachment) => {
+    if (!(options.extensions.classAttachments ?? []).includes(attachment.definition)) throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", "Class attachment uses an unregistered definition.", { location: attachment.location });
+    return `    defineManagedClassAttachment({ target: ${runtimeReference(entry.target)}, definition: ${compilerReference(attachment.definition.compilerSymbol)}.definition, data: ${stableValue(attachment.data)} }),`;
+  }));
+  const scheduleRecords = options.analysis.schedules.map((entry) => `    defineRuntimeSchedule({ ...${stableValue({ id: entry.id, execution: entry.execution, arguments: entry.arguments, cron: entry.cron, ...(entry.timezone === undefined ? {} : { timezone: entry.timezone }), overlap: entry.overlap, ...(entry.lockFor === undefined ? {} : { lockFor: entry.lockFor }) })}, target: ${runtimeReference(entry.target)} }),`);
   const importLines = [...imports.values()]
     .sort((left, right) => compareText(
       `${left.moduleSpecifier}\0${left.exportName}`,
@@ -315,12 +322,14 @@ export function generateRuntimeRegistryModule(
     ))
   ));
   const coreHelpers = [
+    ...(classAttachmentRecords.length ? ["defineManagedClassAttachment"] : []),
     "createParameterResolverId",
     "defineManagedMethodPlan",
     ...(hasMiddlewareAttachments ? ["defineMiddlewareAttachment"] : []),
     ...(hasMiddlewareDefinitions ? ["defineMiddlewareDefinition"] : []),
     ...(eventClasses.length > 0 ? ["defineEventAlias", "defineEventDefinition"] : []),
     ...(listenerClasses.length > 0 ? ["defineListenerDefinition"] : []),
+    ...(scheduleRecords.length > 0 ? ["defineRuntimeSchedule"] : []),
     "defineRuntimeRegistry",
   ];
   const body = [
@@ -332,6 +341,8 @@ export function generateRuntimeRegistryModule(
     ...eventDeclarations,
     ...(listenerDeclarations.length > 0 || eventDeclarations.length > 0 ? [""] : []),
     "export const applicationRegistry = defineRuntimeRegistry({",
+    ...(classAttachmentRecords.length ? ["  classAttachments: [", ...classAttachmentRecords, "  ],"] : []),
+    ...(scheduleRecords.length ? ["  schedules: [", ...scheduleRecords, "  ],"] : []),
     "  classes: [",
     ...classRecords.map((line) => `${line},`),
     "  ],",

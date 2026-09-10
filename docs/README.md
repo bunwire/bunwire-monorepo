@@ -191,6 +191,8 @@ Decorators whose configuration is optional may be written either bare or as a fa
 
 An **outer/class decorator** opts a class into Bunwire's managed application graph and describes how the compiler/runtime should treat that class.
 
+Supplementary metadata uses `defineManagedClassAttachmentDecorator()` rather than a second managed-class decorator. A definition declares its canonical compiler export, allowed canonical class kinds and pure metadata factory, and is contributed through an adapter descriptor's `classAttachments`. Both attachment/managed-decorator orders are valid. Attachments are own-class-only, unique by definition ID, and cannot be inherited. Vite rejects misplaced or counterfeit attachments and nonliteral metadata, then emits `defineManagedClassAttachment()` records in the optional/default-empty `RuntimeRegistry.classAttachments` sidecar. Core validates complete canonical sidecar delivery and agreement with own decorator metadata. The owning class record, its constructor plan and event/listener identities are unchanged. `ManagedClassIdentityHandlerData` (`bunwire.managed-class-identity`) optionally validates one stable namespace across selected class kinds and their attachment metadata without platform-specific compiler branches.
+
 The built-in managed classes are initially:
 
 ```text
@@ -547,6 +549,8 @@ The compiler then generates the owning class, method, extension metadata, and co
 ---
 
 # 12. Method Parameters: Two Coordinate Systems
+
+Adapters may additionally declare a compiler-only `ManagedClassCompilationHandlerData` policy (`bunwire.managed-class-compilation`). It selects contributed class kinds, a Core singleton/transient binding scope, protected literal property names, a pure metadata compiler callback, and intrinsic named method/kind exports. Each intrinsic method declares no parameters, payload-only transport parameters, or an exact allowlist of framework resolver IDs. The compiler reads literal properties and generates own public non-overloaded invocation plans without a method decorator or source execution. Core authorizes only the exact declared class/kind/name combinations, verifies canonical class decorators, binding scope, and parameter policy, and retains decorator validation for every other managed method. Intrinsic compilation currently requires concrete non-inherited classes with statically named members; ordinary dependencies use constructor DI. Bun jobs, schedules, and commands are consumers; these contracts contain no platform-specific semantics.
 
 Every managed/invocable method has two distinct parameter coordinate systems:
 
@@ -1139,7 +1143,7 @@ Milestone 10 uses one `RuntimeRegistry` contract with deterministic `classes`, `
 
 Generated runtime references preserve the public import identity used by application source. A package re-export such as `InternalToken as PublicToken` therefore generates an import of `PublicToken` from that package, including equivalent default and namespace-member forms, rather than importing a non-public internal declaration name.
 
-`generateBunwireArtifacts()` writes the physical registry/client modules and `.bunwire/virtual-modules.d.ts` through one analysis. The declaration file describes both virtual modules with the exact application-specific client parameter and result types; applications include `.bunwire/**/*.ts` in their TypeScript project. The Vite plugin maintains these artifacts, watches config/bootstrap/source roots and files, and invalidates both virtual modules after relevant development changes. It does not rewrite byte-identical output or react to its own generated files. Physical modules remain the manual/non-Vite integration path.
+`generateBunwireArtifacts()` writes the physical registry/client modules and `.bunwire/virtual-modules.d.ts` through one analysis. Page-enabled applications also receive a generated page manifest and `virtual:bunwire/pages`, whose lazy component catalog comes from a separate configured frontend root. The Vite plugin watches backend and page inputs, preserves byte-identical artifacts, invalidates the relevant virtual modules for HMR, and emits exact production page assets/version metadata without adding adapter-specific compiler branches. Physical modules remain the manual/non-Vite integration path.
 
 ---
 
@@ -1247,7 +1251,9 @@ A full adapter owns the normal host bootstrap. A manual adapter variant may inst
 
 Core's initial adapter API represents this contract with `Adapter<Context>`. Each concrete adapter class declares its own static compiler descriptor, created through `defineAdapterCompilerDescriptor()`, so class/method/injector definitions and other source-independent compiler metadata can be resolved from the adapter class rather than from arbitrary instance configuration. Every contributed decorator/injector definition names its stable public module export through `compilerSymbol: { moduleSpecifier, exportName }`; those exports must be resolvable from the consuming project. The adapter constructor contributes runtime Providers, parameter resolvers, validation hooks, and runtime registry consumers through the base class. `Application.withAdapter()` accepts one primary adapter instance in v1, attaches the same already-created Application, and registers all contributions through application-scoped canonical registries. Reusing an ID or compiler symbol with a conflicting descriptor is rejected; adapter contribution APIs cannot replace Core's authoritative class-kind capabilities.
 
-`defineRuntimeRegistry()` is the shared generated/prebuilt registry boundary. It carries managed class entries, indexed constructor dependencies, generated Providers, complete managed-method plans, and—after the middleware redesign—canonical managed middleware definitions and attachments. Every exposed method must have own managed-method decorator metadata whose kind matches the plan's canonical registered method kind. Registry consumers connect validated metadata to host transports after Provider registration. Dispatch still enters through `Application.invokeManagedMethod()`, so Provider boot, one invocation scope, adapter-selected middleware, caller validation, and resolvers retain deterministic order. This is compiled runtime metadata, not runtime source discovery, parameter inference, alias expansion, group expansion, or runtime filesystem matching.
+`defineRuntimeRegistry()` is the shared generated/prebuilt registry boundary. It carries managed class entries, indexed constructor dependencies, generated Providers, complete managed-method plans, canonical managed middleware definitions/attachments, and optional platform-neutral schedule records. Every exposed method must have own managed-method decorator metadata—or an adapter-declared canonical intrinsic method—whose kind matches the plan's canonical registered method kind. Core validates schedule identity and generated target membership but leaves cron, timezone, execution, and locking to the consuming host. Registry consumers connect validated metadata to host transports after Provider registration. Dispatch still enters through `Application.invokeManagedMethod()`, so Provider boot, one invocation scope, adapter-selected middleware, caller validation, and resolvers retain deterministic order. This is compiled runtime metadata, not runtime source discovery, parameter inference, alias expansion, group expansion, or runtime filesystem matching.
+
+`Application.withSchedule(callback)` is a compile-only composition boundary parallel to `withMiddlewares()`. Core exposes the platform-neutral typed job/task and cadence builder contracts, enforces configuring/once-only usage, and deliberately never executes or retains the callback. Vite statically analyzes the direct fluent block through one generic adapter schedule handler and emits `RuntimeScheduleDefinition` records. This lets Bun own scheduled-task, cron, queue, and lock semantics without placing Bun branches in Core or Vite.
 
 Adapter preparation receives any explicit manual context but otherwise may create the real native host objects. The prepared context is stored under `APPLICATION_CONTEXT` before adapter/application Provider registration. Validation hooks then run, Providers register, registry consumers connect methods, and the adapter completes host start before the Application becomes running. Typed native-object callbacks receive the exact adapter-owned native object and do not introduce a Core wrapper.
 
@@ -1453,6 +1459,8 @@ deleteUser() {}
 
 Core owns middleware identity, DI, canonical attachments, parameters, generic chain execution, and deterministic ordering. Vite compiles definitions, aliases, groups, controller mappings, and local attachments into the authoritative generated registry. Adapters own context, path/transport filtering, native integration, and the terminal continuation.
 
+An adapter compiler descriptor may also contribute canonical external middleware definitions through public compiler symbols. Vite resolves those exact symbols, merges their aliases with application middleware, rejects collisions or counterfeit identities, and emits ordinary Core middleware definitions. This is the platform-neutral mechanism used by Bun's built-in `csrf` alias; Vite does not contain a Bun-specific middleware branch.
+
 Middleware functions are not part of the release API. `@Use()` accepts canonical managed middleware classes or compiler-resolved alias strings, and generated plans contain only immutable attachments. Adapter runtimes select and execute those attachments without platform branches in Core or generic Vite analysis.
 
 ---
@@ -1493,7 +1501,11 @@ Generated registries contain immutable event definitions, listener definitions, 
 
 `EventDispatcher` is bound by the Application before Provider registration, so an explicit Provider may replace it for tests. Direct dispatch resolves the exact runtime constructor object, creates one invocation scope, and invokes every listener plan sequentially with the same event instance. Provider `boot()` runs once for that event invocation. A listener failure propagates unchanged and stops the remaining listeners; a registered event with zero listeners succeeds. Nested dispatch creates another invocation scope, concurrent dispatches do not share iteration state, and Core imposes no logical cycle prohibition.
 
+An adapter may contribute an optional `eventListenerDelivery` interceptor. Core supplies the exact canonical listener, event instance and existing event invocation, plus a single-use direct-delivery continuation. The interceptor may await another delivery mechanism instead of continuing, but Core still owns event validation, listener order, Provider boot and failure propagation. A started direct continuation is awaited even when the interceptor omitted `await`, and distinct interception/direct errors are preserved together. Continuations cannot be reused or invoked after interception returns. Explicit replacement `EventDispatcher` bindings bypass this default-dispatcher extension. Platform queue policies, serialization and background execution remain adapter responsibilities.
+
 Core owns direct dispatch. A future runtime package may consume these canonical definitions for optional queue integration, but it must not create a parallel event identity or dispatcher. Queues, priorities, fan-out concurrency, continue-after-error, serialization, and string/alias dispatch are not part of this system.
+
+The dispatch invocation is parented by the application root, not by the caller's request/invocation container. Listener bindings are application-singletons by default. To consume invocation-local constructor dependencies, a Provider may bind both the dependency and the listener locally during `boot(context)` (for example, `context.container.singleton(MyListener)`). That local binding shadows the root listener without altering its default lifetime. Bun uses this same contract: request/session/HTTP context is not implicitly propagated into direct event dispatch, and callers should await dispatch rather than expect detached work to be drained at shutdown.
 
 ---
 
@@ -1872,6 +1884,7 @@ The following are release-defining rules.
 37. **Direct event dispatch is ordered, sequential, fail-fast, and owned by Core.**
 38. **A registered event with zero listeners is valid.**
 39. **Runtime packages may extend Core events with integrations but must not create parallel event systems.**
+40. **Declarative schedule configuration is compile-only Core composition metadata; runtime cron, execution scopes, queue dispatch, and locking belong to the host package.**
 
 ---
 

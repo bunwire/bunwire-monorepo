@@ -32,6 +32,7 @@ export interface ResolverParameterPlan<Data = unknown> extends IndexedMethodPara
   readonly source: "resolver";
   readonly resolverId: ParameterResolverId;
   readonly data?: Data;
+  readonly token?: RuntimeToken;
 }
 
 export interface ContextParameterPlan extends IndexedMethodParameter {
@@ -178,6 +179,13 @@ function validateManagedMethodPlanStructure(plan: ManagedMethodPlan): void {
         if (!isNamespacedIdentifier(parameter.resolverId)) {
           throw new ManagedMethodPlanError(
             `Managed method "${String(plan.method)}" resolver parameter at method index ${parameter.methodIndex} must declare a namespaced resolver ID.`,
+          );
+        }
+        if (parameter.token !== undefined
+          && !isToken(parameter.token)
+          && !isClassToken(parameter.token)) {
+          throw new ManagedMethodPlanError(
+            `Managed method "${String(plan.method)}" resolver parameter at method index ${parameter.methodIndex} must declare a valid runtime token when present.`,
           );
         }
         break;

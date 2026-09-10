@@ -12,6 +12,15 @@ import {
 } from "@bunwire/core";
 import type { BunRequest, Server } from "bun";
 import type { BunExecutionScope } from "./execution-scopes.js";
+import type { BunHttpExceptionHandler, BunHttpMode } from "./exceptions.js";
+import type { BunHttpResponseResolver } from "./response.js";
+import type { BunCookieJar } from "./cookies.js";
+import type { BunCsrfContext, BunCsrfOptions } from "./csrf.js";
+import type { BunSessionOptions, Session } from "./sessions.js";
+import type { BunAuthContext, BunAuthenticationOptions } from "./auth.js";
+import type { BunAuthorizationContext, BunAuthorizationOptions } from "./authorization.js";
+import type { BunOAuthContext } from "./oauth.js";
+import type { BunPageOptions } from "./pages.js";
 
 export const BUN_HTTP_METHODS = Object.freeze([
   "GET",
@@ -38,21 +47,35 @@ export interface BunHttpRouteContext {
   readonly params: Readonly<Record<string, string>>;
 }
 
-export interface BunHttpContext {
+export interface BunHttpContext<Principal = unknown> {
   readonly request: BunHttpRequest;
   readonly server: BunHttpServer;
   readonly route: BunHttpRouteContext;
   readonly scope: BunExecutionScope;
+  readonly cookies: BunCookieJar;
+  readonly session?: Session;
+  readonly csrf?: BunCsrfContext;
+  readonly auth?: BunAuthContext<Principal>;
+  readonly authorization?: BunAuthorizationContext<Principal>;
+  readonly oauth?: BunOAuthContext<Principal>;
 }
 
 export type BunHttpServerCallback = (
   server: BunHttpServer,
 ) => void | Promise<void>;
 
-export interface BunHttpServerOptions {
+export interface BunHttpServerOptions<Principal = unknown> {
   readonly hostname?: string;
   readonly port?: number;
   readonly onServer?: BunHttpServerCallback;
+  readonly mode?: BunHttpMode;
+  readonly responseResolvers?: readonly BunHttpResponseResolver[];
+  readonly exceptionHandler?: BunHttpExceptionHandler;
+  readonly sessions?: BunSessionOptions;
+  readonly csrf?: BunCsrfOptions;
+  readonly auth?: BunAuthenticationOptions<Principal>;
+  readonly authorization?: BunAuthorizationOptions<Principal>;
+  readonly pages?: BunPageOptions<Principal>;
 }
 
 export const BUN_HTTP_CONTEXT: Token<BunHttpContext> =

@@ -7,12 +7,18 @@ import {
   INJECT_DECORATOR_ID,
   LISTENER_KIND,
   MIDDLEWARE_KIND,
+  Middleware,
   Use,
   type CompilerSymbolReference,
   type ManagedClassKind,
   type ManagedMethodKind,
+  type ManagedClassCompilationHandlerData,
+  type ManagedClassAttachmentDecoratorDefinition,
+  type ApplicationScheduleCompilationHandlerData,
+  type DefineRuntimeScheduleOptions,
   type MiddlewareClassMetadata,
   type ParameterResolverId,
+  isNamespacedIdentifier,
 } from "@bunwire/core";
 import ts from "typescript";
 import type { DiscoveredCompilerExtensions } from "./extensions.js";
@@ -24,6 +30,7 @@ import {
   analyzeMiddlewarePolicySyntax,
   type MiddlewarePolicySyntax,
 } from "./middleware-policy-analysis.js";
+import { analyzeSchedulePolicySyntax } from "./schedule-policy-analysis.js";
 import { canonicalCompilerPath } from "./path-identity.js";
 
 export interface BunwireProgramOptions {
@@ -88,8 +95,9 @@ export interface AnalyzedResolverParameter {
   readonly source: "resolver";
   readonly methodIndex: number;
   readonly resolverId: ParameterResolverId;
-  readonly injectorId: string;
+  readonly injectorId?: string;
   readonly data: unknown;
+  readonly token?: CompilerRuntimeReference;
   readonly location: BunwireSourceLocation;
 }
 
@@ -99,6 +107,7 @@ export type AnalyzedMethodParameter =
   | AnalyzedResolverParameter;
 
 export interface AnalyzedManagedMethod {
+  readonly intrinsicKindSymbol?: CompilerSymbolReference;
   readonly name: string;
   readonly kind: ManagedMethodKind;
   readonly decoratorId: string;
@@ -118,6 +127,8 @@ export interface AnalyzedMiddlewareAttachment {
 }
 
 export interface AnalyzedManagedClass {
+  readonly attachments?: readonly AnalyzedManagedClassAttachment[];
+  readonly scope?: "singleton" | "transient";
   readonly name: string;
   readonly kind: ManagedClassKind;
   readonly decoratorId: string;
@@ -129,6 +140,12 @@ export interface AnalyzedManagedClass {
   readonly methods: readonly AnalyzedManagedMethod[];
   readonly event: AnalyzedEventClass | undefined;
   readonly listener: AnalyzedListenerClass | undefined;
+}
+
+export interface AnalyzedManagedClassAttachment {
+  readonly definition: ManagedClassAttachmentDecoratorDefinition<any, any>;
+  readonly data: unknown;
+  readonly location: BunwireSourceLocation;
 }
 
 export interface AnalyzedEventClass {
@@ -145,7 +162,9 @@ export interface AnalyzedListenerClass {
 export interface BunwireCompilerAnalysis {
   readonly context: BunwireProgramContext;
   readonly classes: readonly AnalyzedManagedClass[];
+  readonly schedules: readonly AnalyzedScheduleDefinition[];
 }
+export interface AnalyzedScheduleDefinition extends Omit<DefineRuntimeScheduleOptions, "target"> { readonly target: CompilerRuntimeReference }
 
 interface DecoratorMatch<Definition> {
   readonly decorator: ts.Decorator;
@@ -183,6 +202,24 @@ interface ConstructorAnalysisResult {
 interface MiddlewareClassAnalysis {
   readonly data: MiddlewareClassMetadata;
   readonly aliasNode: ts.Node | undefined;
+}
+
+interface ManagedClassBaseContractHandlerData {
+  readonly type: "bunwire.managed-class-base-contract";
+  readonly classKindIds: readonly string[];
+  readonly baseClass: CompilerSymbolReference;
+}
+
+interface ManagedClassParameterResolverHandlerData {
+  readonly type: "bunwire.managed-class-parameter-resolver";
+  readonly classKindIds: readonly string[];
+  readonly resolverId: ParameterResolverId;
+}
+
+interface ManagedClassCompilerBehaviors {
+  readonly baseContractByKindId: ReadonlyMap<string, ts.Symbol>;
+  readonly baseContracts: readonly { readonly kindId: string; readonly symbol: ts.Symbol }[];
+  readonly resolverByKindId: ReadonlyMap<string, ParameterResolverId>;
 }
 
 const MIDDLEWARE_METADATA_KEYS = Object.freeze([
@@ -433,6 +470,11 @@ function evaluateDecoratorValue(expression: ts.Expression): unknown {
   if (ts.isNumericLiteral(value)) {
     return Number(value.text);
   }
+  if (ts.isPrefixUnaryExpression(value)
+    && value.operator === ts.SyntaxKind.MinusToken
+    && ts.isNumericLiteral(unwrapExpression(value.operand))) {
+    return -Number((unwrapExpression(value.operand) as ts.NumericLiteral).text);
+  }
   if (value.kind === ts.SyntaxKind.TrueKeyword) {
     return true;
   }
@@ -491,6 +533,110 @@ function decoratorData(
       { location: locationOf(match.decorator), cause },
     );
   }
+}
+
+function isObject(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function managedClassCompilerBehaviors(
+  context: BunwireProgramContext,
+  projectRoot: string,
+  extensions: DiscoveredCompilerExtensions,
+): ManagedClassCompilerBehaviors {
+  const registeredKinds = new Set<string>(extensions.adapter.classKinds.map((kind) => kind.id));
+  const baseContractByKindId = new Map<string, ts.Symbol>();
+  const resolverByKindId = new Map<string, ParameterResolverId>();
+  const baseContracts: { readonly kindId: string; readonly symbol: ts.Symbol }[] = [];
+
+  for (const handler of extensions.metadataHandlers) {
+    if (!isObject(handler.data)) continue;
+    if (handler.data.type === "bunwire.managed-class-base-contract") {
+      const data = handler.data as Partial<ManagedClassBaseContractHandlerData>;
+      if (!Array.isArray(data.classKindIds)
+        || !isObject(data.baseClass)
+        || typeof data.baseClass.moduleSpecifier !== "string"
+        || typeof data.baseClass.exportName !== "string") {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `Managed-class base-contract handler "${handler.id}" is malformed.`,
+        );
+      }
+      const symbol = resolveModuleExportSymbol(
+        context,
+        projectRoot,
+        data.baseClass as CompilerSymbolReference,
+        `Managed-class base-contract handler "${handler.id}"`,
+      );
+      for (const kindId of data.classKindIds) {
+        if (typeof kindId !== "string" || !registeredKinds.has(kindId)) {
+          throw new BunwireCompilerError(
+            "REGISTRY_GENERATION_INVALID",
+            `Managed-class base-contract handler "${handler.id}" references unregistered class kind "${String(kindId)}".`,
+          );
+        }
+        if (baseContractByKindId.has(kindId)) {
+          throw new BunwireCompilerError(
+            "REGISTRY_GENERATION_INVALID",
+            `Managed class kind "${kindId}" is mapped by more than one base-contract handler.`,
+          );
+        }
+        baseContractByKindId.set(kindId, symbol);
+        baseContracts.push({ kindId, symbol });
+      }
+    }
+    if (handler.data.type === "bunwire.managed-class-parameter-resolver") {
+      const data = handler.data as Partial<ManagedClassParameterResolverHandlerData>;
+      if (!Array.isArray(data.classKindIds) || !isNamespacedIdentifier(data.resolverId)) {
+        throw new BunwireCompilerError(
+          "REGISTRY_GENERATION_INVALID",
+          `Managed-class parameter-resolver handler "${handler.id}" is malformed.`,
+        );
+      }
+      for (const kindId of data.classKindIds) {
+        if (typeof kindId !== "string" || !registeredKinds.has(kindId)) {
+          throw new BunwireCompilerError(
+            "REGISTRY_GENERATION_INVALID",
+            `Managed-class parameter-resolver handler "${handler.id}" references unregistered class kind "${String(kindId)}".`,
+          );
+        }
+        if (resolverByKindId.has(kindId)) {
+          throw new BunwireCompilerError(
+            "REGISTRY_GENERATION_INVALID",
+            `Managed class kind "${kindId}" is mapped by more than one parameter resolver.`,
+          );
+        }
+        resolverByKindId.set(kindId, data.resolverId as ParameterResolverId);
+      }
+    }
+  }
+  return Object.freeze({
+    baseContractByKindId,
+    baseContracts: Object.freeze(baseContracts),
+    resolverByKindId,
+  });
+}
+
+function classSatisfiesBaseContract(
+  checker: ts.TypeChecker,
+  candidate: ts.Symbol,
+  base: ts.Symbol,
+): boolean {
+  const expected = canonicalSymbol(checker, base);
+  const visited = new Set<ts.Type>();
+  const visit = (type: ts.Type): boolean => {
+    if (visited.has(type)) return false;
+    visited.add(type);
+    if ((type.flags & ts.TypeFlags.Object) === 0) return false;
+    const bases = checker.getBaseTypes(type as ts.InterfaceType) ?? [];
+    for (const baseType of bases) {
+      const symbol = baseType.aliasSymbol ?? baseType.getSymbol();
+      if (symbol && canonicalSymbol(checker, symbol) === expected) return true;
+      if (visit(baseType)) return true;
+    }
+    return false;
+  };
+  return visit(checker.getDeclaredTypeOfSymbol(candidate));
 }
 
 function readCompilerOptions(options: BunwireProgramOptions): ts.CompilerOptions {
@@ -596,10 +742,15 @@ function compilerSymbolRootNames(options: BunwireAnalysisOptions): readonly stri
   const containingFile = path.join(options.projectRoot, "__bunwire_compiler__.ts");
   const definitions: readonly CompilerDefinition[] = [
     ...options.extensions.classDecorators,
+    ...(options.extensions.classAttachments ?? []),
     ...options.extensions.methodDecorators,
     ...options.extensions.parameterInjectors,
     Inject.definition,
     Use.definition,
+    ...options.extensions.middlewareDefinitions.map((definition) => ({
+      id: `middleware:${definition.compilerSymbol.moduleSpecifier}:${definition.compilerSymbol.exportName}`,
+      compilerSymbol: definition.compilerSymbol,
+    })),
   ];
   const roots = new Set<string>();
   for (const definition of definitions) {
@@ -612,6 +763,21 @@ function compilerSymbolRootNames(options: BunwireAnalysisOptions): readonly stri
     if (resolved) {
       roots.add(resolved.resolvedFileName);
     }
+  }
+  for (const handler of options.extensions.metadataHandlers) {
+    if (!isObject(handler.data)
+      || handler.data.type !== "bunwire.managed-class-base-contract"
+      || !isObject(handler.data.baseClass)
+      || typeof handler.data.baseClass.moduleSpecifier !== "string") {
+      continue;
+    }
+    const resolved = ts.resolveModuleName(
+      handler.data.baseClass.moduleSpecifier,
+      containingFile,
+      compilerOptions,
+      ts.sys,
+    ).resolvedModule;
+    if (resolved) roots.add(resolved.resolvedFileName);
   }
   return [...roots];
 }
@@ -1351,6 +1517,7 @@ function analyzeMethodParameters(
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
   intrinsicInjectables: ReadonlySet<ts.Symbol>,
+  classBehaviors: ManagedClassCompilerBehaviors,
 ): readonly AnalyzedMethodParameter[] {
   let argumentIndex = 0;
   const parameters: AnalyzedMethodParameter[] = [];
@@ -1389,6 +1556,39 @@ function analyzeMethodParameters(
     }
     const symbol = symbolFromTypeNode(checker, parameter.type);
     const managed = symbol ? managedBySymbol.get(symbol) : undefined;
+    const managedResolver = managed
+      ? classBehaviors.resolverByKindId.get(managed.kind.id)
+      : undefined;
+    if (symbol && managedResolver) {
+      if (parameterOptional(parameter) || parameter.dotDotDotToken) {
+        fail(
+          "MANAGED_METHOD_INVALID",
+          `Managed class parameter ${methodIndex} "${parameter.name.getText()}" cannot be optional or rest when supplied by resolver "${managedResolver}".`,
+          parameter,
+        );
+      }
+      parameters.push(Object.freeze({
+        source: "resolver",
+        methodIndex,
+        resolverId: managedResolver,
+        data: undefined,
+        token: runtimeReference(checker, parameter.type as ts.TypeNode, symbol),
+        location: locationOf(parameter),
+      }));
+      return;
+    }
+    if (symbol && !managed) {
+      const missingKind = classBehaviors.baseContracts.find((contract) => (
+        classSatisfiesBaseContract(checker, symbol, contract.symbol)
+      ));
+      if (missingKind) {
+        fail(
+          "MANAGED_METHOD_INVALID",
+          `Managed method parameter ${methodIndex} "${parameter.name.getText()}" extends a registered base contract for class kind "${missingKind.kindId}" but is missing its canonical managed-class decorator.`,
+          parameter,
+        );
+      }
+    }
     if (symbol && (managed?.kind.injectable || intrinsicInjectables.has(symbol))) {
       parameters.push(Object.freeze({
         source: "container",
@@ -1419,6 +1619,47 @@ function middlewareRuntimeReference(
   const name = declaration.name as ts.Identifier;
   const symbol = checker.getSymbolAtLocation(name) as ts.Symbol;
   return runtimeReference(checker, name, symbol);
+}
+
+interface ContributedMiddlewareDefinition {
+  readonly symbol: ts.Symbol;
+  readonly target: CompilerRuntimeReference;
+  readonly data: MiddlewareClassMetadata;
+}
+
+function contributedMiddlewareDefinitions(
+  context: BunwireProgramContext,
+  projectRoot: string,
+  extensions: DiscoveredCompilerExtensions,
+): readonly ContributedMiddlewareDefinition[] {
+  const definitions: ContributedMiddlewareDefinition[] = [];
+  for (const raw of extensions.middlewareDefinitions) {
+      const reference = raw.compilerSymbol;
+      const symbol = resolveModuleExportSymbol(context, projectRoot, reference, "Compiler middleware definition");
+      const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
+      if (!declaration) throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", `Middleware contribution "${reference.exportName}" has no declaration.`);
+      const data = raw.data;
+      definitions.push(Object.freeze({
+        symbol,
+        target: Object.freeze({
+          expression: reference.exportName,
+          symbolName: symbol.name,
+          exportName: reference.exportName,
+          moduleSpecifier: reference.moduleSpecifier,
+          location: locationOf(declaration),
+          declaration: locationOf(declaration),
+        }),
+        data: Object.freeze({
+          scope: "transient" as const,
+          ...(typeof data.alias === "string" ? { alias: data.alias } : {}),
+          ...(data.include ? { include: Object.freeze([...data.include]) } : {}),
+          ...(data.exclude ? { exclude: Object.freeze([...data.exclude]) } : {}),
+          ...(data.only ? { only: Object.freeze([...data.only]) } : {}),
+          ...(data.except ? { except: Object.freeze([...data.except]) } : {}),
+        }),
+      }));
+  }
+  return Object.freeze(definitions);
 }
 
 function parseMiddlewareAliasReference(
@@ -1455,8 +1696,8 @@ function analyzeUseEntries(
   uses: readonly DecoratorMatch<typeof Use.definition>[],
   ownerLabel: string,
   checker: ts.TypeChecker,
-  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
-  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
+  middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
   middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]> = new Map(),
 ): readonly AnalyzedMiddlewareAttachment[] {
   const entries: AnalyzedMiddlewareAttachment[] = [];
@@ -1477,7 +1718,7 @@ function analyzeUseEntries(
         if (target) {
           entries.push(Object.freeze({
             source: "attachment" as const,
-            target: middlewareRuntimeReference(target, checker),
+            target,
             parameters: parsed.parameters,
             location: locationOf(expression),
           }));
@@ -1523,7 +1764,7 @@ function analyzeUseEntries(
       if (middlewareTarget) {
         entries.push(Object.freeze({
           source: "attachment" as const,
-          target: middlewareRuntimeReference(middlewareTarget, checker),
+          target: middlewareTarget,
           parameters: Object.freeze([]),
           location: locationOf(expression),
         }));
@@ -1558,8 +1799,8 @@ type PolicyReference = AnalyzedMiddlewareAttachment | {
 function policyReference(
   expression: ts.Expression,
   checker: ts.TypeChecker,
-  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
-  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
+  middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
   groupNames: { readonly has: (name: string) => boolean },
 ): PolicyReference {
   const value = unwrapExpression(expression);
@@ -1569,7 +1810,7 @@ function policyReference(
     if (target) {
       return Object.freeze({
         source: "attachment" as const,
-        target: middlewareRuntimeReference(target, checker),
+        target,
         parameters: parsed.parameters,
         location: locationOf(value),
       });
@@ -1608,7 +1849,7 @@ function policyReference(
   }
   return Object.freeze({
     source: "attachment" as const,
-    target: middlewareRuntimeReference(target, checker),
+    target,
     parameters: Object.freeze([]),
     location: locationOf(value),
   });
@@ -1617,8 +1858,8 @@ function policyReference(
 function resolveMiddlewarePolicy(
   syntax: MiddlewarePolicySyntax,
   checker: ts.TypeChecker,
-  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
-  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
+  middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
 ): ResolvedMiddlewarePolicy {
   const groupSyntax = new Map(syntax.groups.map((group) => [group.name, group]));
   for (const group of syntax.groups) {
@@ -1771,10 +2012,11 @@ function analyzeManagedMethods(
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
   useDefinitions: ResolvedCompilerDefinitions<typeof Use.definition>,
-  middlewareBySymbol: ReadonlyMap<ts.Symbol, ts.ClassDeclaration>,
-  middlewareAliases: ReadonlyMap<string, ts.ClassDeclaration>,
+  middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
+  middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
   middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]>,
   intrinsicInjectables: ReadonlySet<ts.Symbol>,
+  classBehaviors: ManagedClassCompilerBehaviors,
 ): readonly AnalyzedManagedMethod[] {
   const methods: AnalyzedManagedMethod[] = [];
   for (const member of declaration.members) {
@@ -1868,6 +2110,7 @@ function analyzeManagedMethods(
       injectorDefinitions,
       injectDefinitions,
       intrinsicInjectables,
+      classBehaviors,
     );
     const middleware = analyzeUseEntries(
       uses,
@@ -1948,7 +2191,52 @@ function validateConstructorCycles(
 export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireCompilerAnalysis {
   const context = createBunwireProgramInternal(options, compilerSymbolRootNames(options));
   const checker = context.checker;
+  const compilationHandlers = new Map<string, ManagedClassCompilationHandlerData>();
+  for (const handler of options.extensions.metadataHandlers) {
+    if (!isObject(handler.data) || handler.data.type !== "bunwire.managed-class-compilation") continue;
+    const data = handler.data as unknown as ManagedClassCompilationHandlerData;
+    if (!Array.isArray(data.classKindIds) || !Array.isArray(data.properties)
+      || !data.properties.every((key) => typeof key === "string" && key.length > 0)
+      || new Set(data.properties).size !== data.properties.length
+      || !Array.isArray(data.intrinsicMethods) || typeof data.compileMetadata !== "function"
+      || !["singleton", "transient"].includes(data.scope)) {
+      throw new BunwireCompilerError("MANAGED_METHOD_INVALID", `Malformed class compilation handler "${handler.id}".`);
+    }
+    for (const kindId of data.classKindIds) {
+      if (compilationHandlers.has(kindId) || !options.extensions.classDecorators.some((entry) => entry.kind.id === kindId)) {
+        throw new BunwireCompilerError("MANAGED_METHOD_INVALID", `Duplicate or unregistered class compilation kind "${kindId}".`);
+      }
+      const names = new Set<string>();
+      for (const method of data.intrinsicMethods) {
+        const resolverPolicy = typeof method?.parameters === "object" && method.parameters !== null
+          ? method.parameters as { readonly resolverIds?: unknown }
+          : undefined;
+        if (!method || typeof method.name !== "string" || !method.name || names.has(method.name)
+          || (method.parameters !== "payload-only" && method.parameters !== "none"
+            && (!resolverPolicy || !Array.isArray(resolverPolicy.resolverIds) || resolverPolicy.resolverIds.length === 0
+              || resolverPolicy.resolverIds.some((id) => typeof id !== "string" || !id.includes("."))
+              || new Set(resolverPolicy.resolverIds).size !== resolverPolicy.resolverIds.length
+              || ("validateParameters" in resolverPolicy && resolverPolicy.validateParameters !== undefined && typeof resolverPolicy.validateParameters !== "function")))
+          || !options.extensions.adapter.methodKinds.includes(method.kind)
+          || !method.kind.allowedOn.some((id: string) => id === kindId)) {
+          throw new BunwireCompilerError("MANAGED_METHOD_INVALID", `Invalid intrinsic method in "${handler.id}".`);
+        }
+        names.add(method.name);
+        resolveModuleExportSymbol(context, options.projectRoot, method.compilerSymbol, `Intrinsic method kind ${method.kind.id}`);
+      }
+      compilationHandlers.set(kindId, data);
+    }
+  }
   const policySyntax = analyzeMiddlewarePolicySyntax(context.program, options.bootstrapPath);
+  const scheduleSyntax = analyzeSchedulePolicySyntax(context.program, options.bootstrapPath);
+  const scheduleHandlers = options.extensions.metadataHandlers.filter((entry) => isObject(entry.data) && entry.data.type === "bunwire.application-schedule");
+  if (scheduleHandlers.length > 1) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "Only one Application schedule compiler handler may be contributed.");
+  const scheduleHandler = scheduleHandlers[0]?.data as ApplicationScheduleCompilationHandlerData | undefined;
+  if (scheduleSyntax.configured && !scheduleHandler) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "withSchedule() requires an adapter schedule compiler contribution.");
+  if (scheduleHandler && (!Array.isArray(scheduleHandler.jobClassKindIds) || !Array.isArray(scheduleHandler.taskClassKindIds)
+    || typeof scheduleHandler.compile !== "function" || typeof scheduleHandler.decorated !== "function")) {
+    throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "The adapter schedule compiler contribution is malformed.");
+  }
   const occupiedSymbols = new Map<ts.Symbol, CompilerDefinition>();
   const eventDispatcherSymbol = resolveModuleExportSymbol(
     context,
@@ -1957,6 +2245,11 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     "Core EventDispatcher",
   );
   const intrinsicInjectables = new Set<ts.Symbol>([eventDispatcherSymbol]);
+  const classBehaviors = managedClassCompilerBehaviors(
+    context,
+    options.projectRoot,
+    options.extensions,
+  );
   const classDefinitions = resolveCompilerDefinitions(
     context,
     options.projectRoot,
@@ -1971,6 +2264,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     "Managed method decorator",
     occupiedSymbols,
   );
+  const attachmentDefinitions = resolveCompilerDefinitions(context, options.projectRoot, options.extensions.classAttachments ?? [], "Managed class attachment", occupiedSymbols);
   const injectorDefinitions = resolveCompilerDefinitions(
     context,
     options.projectRoot,
@@ -1992,12 +2286,46 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     "Core middleware decorator",
     occupiedSymbols,
   );
+  const contributedMiddleware = contributedMiddlewareDefinitions(
+    context,
+    options.projectRoot,
+    options.extensions,
+  );
   const declarations = classDeclarations(context);
+  const attachmentsByClass = new Map<ts.ClassDeclaration, readonly AnalyzedManagedClassAttachment[]>();
+  const validateAttachmentPlacement = (node: ts.Node): void => {
+    if (!ts.isClassDeclaration(node) && matchDecorators(node, checker, attachmentDefinitions).length) fail("CLASS_ATTACHMENT_INVALID", "Managed class attachments may only decorate managed classes.", node);
+    ts.forEachChild(node, validateAttachmentPlacement);
+  };
+  if (attachmentDefinitions.byId.size) for (const file of context.sourceFiles) validateAttachmentPlacement(file);
   const discovered = new Map<ts.ClassDeclaration, DecoratorMatch<any>>();
   const managedBySymbol = new Map<ts.Symbol, { readonly kind: ManagedClassKind; readonly declaration: ts.ClassDeclaration }>();
 
   for (const declaration of declarations) {
     const decorators = matchDecorators(declaration, checker, classDefinitions);
+    const attachments = matchDecorators(declaration, checker, attachmentDefinitions);
+    if (attachments.length && decorators.length !== 1) fail("CLASS_ATTACHMENT_INVALID", "Class attachments require exactly one canonical managed-class decorator.", declaration);
+    const attachmentIds = new Set<string>();
+    for (const attachment of attachments) {
+      if (attachmentIds.has(attachment.id)) fail("CLASS_ATTACHMENT_INVALID", `Duplicate class attachment "${attachment.id}".`, attachment.decorator);
+      attachmentIds.add(attachment.id);
+      if (!attachment.call || !attachment.definition.allowedOn.includes(decorators[0]!.definition.kind)) fail("CLASS_ATTACHMENT_INVALID", `Class attachment "${attachment.id}" is not allowed on this class kind or requires factory syntax.`, attachment.decorator);
+    }
+    const visitedBases = new Set<ts.ClassDeclaration>();
+    const rejectInheritedAttachments = (target: ts.ClassDeclaration): void => {
+      if (visitedBases.has(target)) return; visitedBases.add(target);
+      for (const clause of target.heritageClauses ?? []) {
+        if (clause.token !== ts.SyntaxKind.ExtendsKeyword) continue;
+        for (const type of clause.types) {
+          const base = symbolAtExpression(checker, type.expression)?.declarations?.find(ts.isClassDeclaration);
+          if (!base) continue;
+          if (matchDecorators(base, checker, attachmentDefinitions).length) fail("CLASS_ATTACHMENT_INVALID", "Managed class attachments cannot be inherited.", declaration);
+          rejectInheritedAttachments(base);
+        }
+      }
+    };
+    if (attachmentDefinitions.byId.size) rejectInheritedAttachments(declaration);
+    attachmentsByClass.set(declaration, Object.freeze(attachments.map((match) => Object.freeze({ definition: match.definition, data: decoratorData(match), location: locationOf(match.decorator) }))));
     if (decorators.length === 0) {
       continue;
     }
@@ -2023,6 +2351,14 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     const canonical = canonicalSymbol(checker, symbol);
     discovered.set(declaration, match);
     managedBySymbol.set(canonical, { kind: match.definition.kind, declaration });
+    const baseContract = classBehaviors.baseContractByKindId.get(match.definition.kind.id);
+    if (baseContract && !classSatisfiesBaseContract(checker, canonical, baseContract)) {
+      fail(
+        "MANAGED_CLASS_INVALID",
+        `Managed class "${declaration.name.text}" must extend the canonical base contract declared for class kind "${match.definition.kind.id}".`,
+        declaration,
+      );
+    }
   }
 
   const middlewareByDeclaration = new Map<ts.ClassDeclaration, MiddlewareClassAnalysis>();
@@ -2085,14 +2421,27 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     }
   }
 
-  const middlewareTargetsBySymbol = new Map<ts.Symbol, ts.ClassDeclaration>();
+  const middlewareTargetsBySymbol = new Map<ts.Symbol, CompilerRuntimeReference>();
   for (const declaration of middlewareByDeclaration.keys()) {
     const symbol = checker.getSymbolAtLocation(declaration.name as ts.Identifier) as ts.Symbol;
-    middlewareTargetsBySymbol.set(canonicalSymbol(checker, symbol), declaration);
+    middlewareTargetsBySymbol.set(canonicalSymbol(checker, symbol), middlewareRuntimeReference(declaration, checker));
   }
-  const middlewareTargetsByAlias = new Map<string, ts.ClassDeclaration>(
-    [...middlewareAliases].map(([alias, entry]) => [alias, entry.declaration]),
+  const middlewareTargetsByAlias = new Map<string, CompilerRuntimeReference>(
+    [...middlewareAliases].map(([alias, entry]) => [alias, middlewareRuntimeReference(entry.declaration, checker)]),
   );
+  for (const contribution of contributedMiddleware) {
+    const canonical = canonicalSymbol(checker, contribution.symbol);
+    if (middlewareTargetsBySymbol.has(canonical)) {
+      throw new BunwireCompilerError("MIDDLEWARE_METADATA_INVALID", `Contributed middleware "${contribution.target.exportName}" duplicates a discovered middleware identity.`);
+    }
+    middlewareTargetsBySymbol.set(canonical, contribution.target);
+    if (contribution.data.alias) {
+      if (middlewareTargetsByAlias.has(contribution.data.alias)) {
+        throw new BunwireCompilerError("MIDDLEWARE_METADATA_INVALID", `Middleware alias ${JSON.stringify(contribution.data.alias)} collides with a contributed middleware alias.`);
+      }
+      middlewareTargetsByAlias.set(contribution.data.alias, contribution.target);
+    }
+  }
   const middlewarePolicy = resolveMiddlewarePolicy(
     policySyntax,
     checker,
@@ -2121,6 +2470,21 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
   validateConstructorCycles(constructorsBySymbol, managedBySymbol);
 
   const classes: AnalyzedManagedClass[] = [];
+  for (const contribution of contributedMiddleware) {
+    classes.push(Object.freeze({
+      name: contribution.target.exportName,
+      kind: MIDDLEWARE_KIND,
+      decoratorId: Middleware.definition.id,
+      data: contribution.data,
+      target: contribution.target,
+      location: contribution.target.location,
+      constructor: Object.freeze({ parameterCount: 0, dependencies: Object.freeze([]) }),
+      middleware: Object.freeze([]),
+      methods: Object.freeze([]),
+      event: undefined,
+      listener: undefined,
+    }));
+  }
   for (const declaration of declarations) {
     const match = discovered.get(declaration);
     const ownerKind = match?.definition.kind as ManagedClassKind | undefined;
@@ -2155,12 +2519,88 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       middlewareTargetsByAlias,
       middlewarePolicy.groups,
       intrinsicInjectables,
+      classBehaviors,
     );
     if (!match || !declaration.name) {
       continue;
     }
     const symbol = checker.getSymbolAtLocation(declaration.name) as ts.Symbol;
+    const compilation = compilationHandlers.get(ownerKind!.id);
+    let compiledData: unknown;
+    const intrinsicMethods: AnalyzedManagedMethod[] = [];
+    if (compilation) {
+      // Inherited policy/handlers would otherwise disagree with the generated own-class record.
+      if (declaration.heritageClauses?.some((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword)
+        || declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AbstractKeyword)) {
+        fail("MANAGED_METHOD_INVALID", "Compiled intrinsic managed classes must be concrete and declare their own policy and handlers (no inheritance).", declaration);
+      }
+      const properties: Record<string, unknown> = {};
+      const rejectPolicyAssignments = (node: ts.Node): void => {
+        if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+          const left = node.left;
+          if ((ts.isPropertyAccessExpression(left) || ts.isElementAccessExpression(left)) && left.expression.kind === ts.SyntaxKind.ThisKeyword) {
+            const key = ts.isPropertyAccessExpression(left) ? left.name.text : left.argumentExpression && ts.isStringLiteralLike(left.argumentExpression) ? left.argumentExpression.text : undefined;
+            if (key === undefined || compilation.properties.includes(key)) fail("DECORATOR_ARGUMENT_INVALID", "Compiled policy must use literal properties, not constructor assignments.", node);
+          }
+        }
+        ts.forEachChild(node, rejectPolicyAssignments);
+      };
+      for (const member of declaration.members) {
+        if (ts.isConstructorDeclaration(member)) rejectPolicyAssignments(member);
+        if (member.name && ts.isComputedPropertyName(member.name)) fail("DECORATOR_ARGUMENT_INVALID", "Intrinsic managed classes cannot use computed member names.", member);
+        const key = member.name && (ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name)) ? member.name.text : undefined;
+        if (!key || !compilation.properties.includes(key)) continue;
+        if (Object.hasOwn(properties, key) || !ts.isPropertyDeclaration(member) || !member.initializer
+          || !member.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ProtectedKeyword)
+          || member.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword)) {
+          fail("DECORATOR_ARGUMENT_INVALID", `Metadata field "${key}" requires one protected instance property with a literal initializer.`, member);
+        }
+        properties[key] = evaluateDecoratorValue(member.initializer);
+      }
+      try { compiledData = compilation.compileMetadata(decoratorData(match), Object.freeze(properties)); }
+      catch (cause) { throw new BunwireCompilerError("DECORATOR_ARGUMENT_INVALID", `Invalid class metadata: ${cause instanceof Error ? cause.message : String(cause)}`, { location: locationOf(declaration), cause }); }
+      for (const intrinsic of compilation.intrinsicMethods) {
+        const candidates = declaration.members.filter((member) => member.name && (ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name)) && member.name.text === intrinsic.name);
+        const member = candidates[0];
+        if (candidates.length !== 1 || !member || !ts.isMethodDeclaration(member) || !member.body
+          || member.modifiers?.some((modifier) => [ts.SyntaxKind.StaticKeyword, ts.SyntaxKind.PrivateKeyword, ts.SyntaxKind.ProtectedKeyword, ts.SyntaxKind.AbstractKeyword].includes(modifier.kind))
+          || methods.some((method) => method.name === intrinsic.name)) {
+          fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" must be an own public non-overloaded concrete instance method without a managed-method decorator.`, declaration);
+        }
+        const parameters = analyzeMethodParameters(member, checker, managedBySymbol, injectorDefinitions, injectDefinitions, intrinsicInjectables, classBehaviors);
+        if (intrinsic.parameters === "none" && parameters.length > 0) fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" accepts no parameters; use constructor DI.`, member);
+        if (intrinsic.parameters === "payload-only" && parameters.some((parameter) => parameter.source !== "transport")) {
+          fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" accepts payload-only parameters; use constructor DI for framework dependencies.`, member);
+        }
+        const resolverIds = typeof intrinsic.parameters === "object" ? intrinsic.parameters.resolverIds : undefined;
+        if (resolverIds && parameters.some((parameter) => (
+          parameter.source !== "resolver" || !resolverIds.includes(parameter.resolverId)
+        ))) {
+          fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" accepts only its declared framework parameter resolvers; use constructor DI for dependencies.`, member);
+        }
+        if (typeof intrinsic.parameters === "object" && intrinsic.parameters.validateParameters) {
+          try {
+            intrinsic.parameters.validateParameters(parameters.map((parameter) => {
+              if (parameter.source !== "resolver") throw new TypeError("Intrinsic parameter is not resolver-backed.");
+              return Object.freeze({ methodIndex: parameter.methodIndex, resolverId: parameter.resolverId, data: parameter.data });
+            }));
+          } catch (cause) {
+            fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" parameter plan is invalid: ${cause instanceof Error ? cause.message : String(cause)}`, member);
+          }
+        }
+        const caller = parameters.filter((parameter): parameter is AnalyzedTransportParameter => parameter.source === "transport");
+        intrinsicMethods.push(Object.freeze({
+          name: intrinsic.name, kind: intrinsic.kind, decoratorId: "", intrinsicKindSymbol: intrinsic.compilerSymbol,
+          data: undefined, location: locationOf(member), parameters,
+          minimumCallerArguments: caller.reduce((highest, parameter) => parameter.optional ? highest : Math.max(highest, parameter.argumentIndex + 1), 0),
+          maximumCallerArguments: caller.some((parameter) => parameter.rest) ? null : caller.length,
+          middleware: Object.freeze([]),
+        }));
+      }
+    }
     classes.push(Object.freeze({
+      ...(compilation ? { scope: compilation.scope } : {}),
+      ...(attachmentsByClass.get(declaration)?.length ? { attachments: attachmentsByClass.get(declaration)! } : {}),
       name: declaration.name.text,
       kind: match.definition.kind,
       decoratorId: match.id,
@@ -2169,12 +2609,12 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
           ? Object.freeze({ type: "event" as const })
           : match.definition.kind === LISTENER_KIND
             ? Object.freeze({ type: "listener" as const })
-            : decoratorData(match)),
+            : compilation ? compiledData : decoratorData(match)),
       target: runtimeReference(checker, declaration.name, symbol),
       location: locationOf(declaration),
       constructor: constructorsByDeclaration.get(declaration)?.plan,
       middleware,
-      methods,
+      methods: Object.freeze([...methods, ...intrinsicMethods]),
       event: eventsByDeclaration.get(declaration),
       listener: listenersByDeclaration.get(declaration),
     }));
@@ -2213,5 +2653,48 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       ]),
     }))),
   }));
-  return Object.freeze({ context, classes: Object.freeze(normalizedClasses) });
+  const schedules: AnalyzedScheduleDefinition[] = [];
+  if (scheduleHandler) {
+    const allowedJobs = new Set(scheduleHandler.jobClassKindIds); const allowedTasks = new Set(scheduleHandler.taskClassKindIds);
+    for (const kindId of [...allowedJobs, ...allowedTasks]) if (!options.extensions.classKinds.some((kind) => kind.id === kindId)) {
+      throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Schedule compiler contribution references unregistered class kind "${kindId}".`);
+    }
+    const generatedId = (entry: AnalyzedManagedClass, suffix: string): string => {
+      const relative = path.relative(options.projectRoot, entry.target.declaration.filePath).replaceAll("\\", "/");
+      return `${relative}#${entry.target.exportName}${suffix}`;
+    };
+    for (const entry of normalizedClasses) {
+      if (!allowedTasks.has(entry.kind.id)) continue;
+      let definition: Omit<DefineRuntimeScheduleOptions, "target"> | undefined;
+      try { definition = scheduleHandler.decorated(Object.freeze({ targetName: entry.name, targetData: entry.data, generatedId: generatedId(entry, "") })); }
+      catch (cause) { if (cause instanceof BunwireCompilerError) throw cause; throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Invalid decorated schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`, { location: entry.location, cause }); }
+      if (definition) schedules.push(Object.freeze({ ...definition, target: entry.target }));
+    }
+    for (const [index, syntax] of scheduleSyntax.entries.entries()) {
+      const symbol = symbolAtExpression(checker, syntax.target);
+      const managed = symbol && managedBySymbol.get(canonicalSymbol(checker, symbol));
+      const entry = managed && normalizedClasses.find((candidate) => canonicalCompilerPath(candidate.location.filePath) === canonicalCompilerPath(managed.declaration.getSourceFile().fileName)
+        && candidate.name === managed.declaration.name?.text);
+      const allowed = syntax.execution === "job" ? allowedJobs : allowedTasks;
+      if (!entry || !allowed.has(entry.kind.id)) fail("SCHEDULE_POLICY_INVALID", `schedule.${syntax.execution === "job" ? "job" : "task"}() must reference a generated class of an allowed canonical kind.`, syntax.target);
+      const intrinsic = entry.methods.length === 1 ? entry.methods[0] : undefined;
+      if (!intrinsic || (syntax.execution === "direct" && syntax.arguments.length > 0)
+        || (syntax.execution === "job" && (syntax.arguments.length < intrinsic.minimumCallerArguments || (intrinsic.maximumCallerArguments !== null && syntax.arguments.length > intrinsic.maximumCallerArguments)))) {
+        fail("SCHEDULE_POLICY_INVALID", `Scheduled ${syntax.execution} arguments do not satisfy the target handle contract.`, syntax.node);
+      }
+      try {
+        const definition = scheduleHandler.compile(Object.freeze({ execution: syntax.execution, targetName: entry.name, targetData: entry.data,
+          arguments: Object.freeze(syntax.arguments.map(evaluateDecoratorValue)),
+          calls: Object.freeze(syntax.calls.map((call) => Object.freeze({ name: call.name, arguments: Object.freeze(call.arguments.map(evaluateDecoratorValue)) }))),
+          generatedId: generatedId(entry, `:${index + 1}`) }));
+        schedules.push(Object.freeze({ ...definition, target: entry.target }));
+      } catch (cause) { if (cause instanceof BunwireCompilerError) throw cause; throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Invalid central schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`, { location: locationOf(syntax.node), cause }); }
+    }
+  }
+  const ids = new Set<string>();
+  for (const schedule of schedules) {
+    if (ids.has(schedule.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Duplicate generated schedule identity "${schedule.id}".`);
+    ids.add(schedule.id);
+  }
+  return Object.freeze({ context, classes: Object.freeze(normalizedClasses), schedules: Object.freeze(schedules) });
 }

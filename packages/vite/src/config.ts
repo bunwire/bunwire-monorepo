@@ -15,6 +15,21 @@ const configFileNames = Object.freeze([
 export interface BunwireConfig {
   readonly source: string | readonly string[];
   readonly bootstrap: string;
+  readonly pages?: BunwirePagesConfig;
+}
+
+export interface BunwirePagesConfig {
+  readonly root: string;
+  readonly entry: string;
+  readonly devServer?: string;
+  readonly extensions?: readonly string[];
+}
+
+export interface ResolvedBunwirePagesConfig {
+  readonly root: string;
+  readonly entry: string;
+  readonly devServer: string;
+  readonly extensions: readonly string[];
 }
 
 export interface ResolvedBunwireConfig {
@@ -22,6 +37,7 @@ export interface ResolvedBunwireConfig {
   readonly configFile: string;
   readonly sourceRoots: readonly string[];
   readonly bootstrap: string;
+  readonly pages?: ResolvedBunwirePagesConfig;
 }
 
 export interface LoadBunwireConfigOptions {
@@ -59,10 +75,31 @@ export function defineBunwireConfig(config: BunwireConfig): Readonly<BunwireConf
     assertNonEmptyRelativePath(source, "source");
   }
   assertNonEmptyRelativePath(config.bootstrap, "bootstrap");
+  if (config.pages !== undefined) validatePagesConfig(config.pages);
   return Object.freeze({
     source: Array.isArray(config.source) ? Object.freeze(sources) : sources[0] as string,
     bootstrap: config.bootstrap,
+    ...(config.pages ? { pages: Object.freeze({
+      ...config.pages,
+      ...(config.pages.extensions ? { extensions: Object.freeze([...config.pages.extensions]) } : {}),
+    }) } : {}),
   });
+}
+
+function validatePagesConfig(value: BunwirePagesConfig): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new BunwireCompilerError("CONFIG_INVALID", 'Bunwire config field "pages" must be an object.');
+  assertNonEmptyRelativePath(value.root, "pages.root");
+  assertNonEmptyRelativePath(value.entry, "pages.entry");
+  if (value.devServer !== undefined) {
+    let url: URL;
+    try { url = new URL(value.devServer); } catch { throw new BunwireCompilerError("CONFIG_INVALID", 'Bunwire config field "pages.devServer" must be an HTTP(S) origin.'); }
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.pathname !== "/" || url.search || url.hash) throw new BunwireCompilerError("CONFIG_INVALID", 'Bunwire config field "pages.devServer" must be an HTTP(S) origin.');
+  }
+  if (value.extensions !== undefined && (!Array.isArray(value.extensions) || value.extensions.length === 0
+    || value.extensions.some((extension) => typeof extension !== "string" || !/^\.[A-Za-z0-9]+$/.test(extension))
+    || new Set(value.extensions).size !== value.extensions.length)) {
+    throw new BunwireCompilerError("CONFIG_INVALID", 'Bunwire config field "pages.extensions" must contain unique dot-prefixed extensions.');
+  }
 }
 
 function unwrapExpression(expression: ts.Expression): ts.Expression {
@@ -109,6 +146,27 @@ function readSource(expression: ts.Expression, filePath: string): string | reado
     return value.elements.map((element) => readString(element, "source", filePath));
   }
   return readString(value, "source", filePath);
+}
+
+function readPages(expression: ts.Expression, filePath: string): BunwirePagesConfig {
+  const value = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(value)) throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire config field "pages" in "${filePath}" must be an object literal.`, { filePath });
+  const fields: Record<string, string | readonly string[]> = {};
+  for (const property of value.properties) {
+    if (!ts.isPropertyAssignment(property)) throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config in "${filePath}" may only contain explicit property assignments.`, { filePath });
+    const name = propertyNameText(property.name);
+    if (!name || !["root", "entry", "devServer", "extensions"].includes(name)) throw new BunwireCompilerError("CONFIG_INVALID", `Unknown Bunwire pages config field "${name ?? property.name.getText()}" in "${filePath}".`, { filePath });
+    if (fields[name] !== undefined) throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config field "${name}" is declared more than once in "${filePath}".`, { filePath });
+    if (name === "extensions") {
+      const array = unwrapExpression(property.initializer);
+      if (!ts.isArrayLiteralExpression(array)) throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config field "extensions" in "${filePath}" must be an array of string literals.`, { filePath });
+      fields[name] = array.elements.map((entry) => readString(entry, "pages.extensions", filePath));
+    } else fields[name] = readString(property.initializer, `pages.${name}`, filePath);
+  }
+  if (typeof fields.root !== "string" || typeof fields.entry !== "string") throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config in "${filePath}" must declare root and entry.`, { filePath });
+  return { root: fields.root, entry: fields.entry,
+    ...(typeof fields.devServer === "string" ? { devServer: fields.devServer } : {}),
+    ...(Array.isArray(fields.extensions) ? { extensions: fields.extensions } : {}) };
 }
 
 function parseConfigSource(sourceText: string, filePath: string): Readonly<BunwireConfig> {
@@ -172,20 +230,21 @@ function parseConfigSource(sourceText: string, filePath: string): Readonly<Bunwi
 
   let source: string | readonly string[] | undefined;
   let bootstrap: string | undefined;
+  let pages: BunwirePagesConfig | undefined;
   const seen = new Set<string>();
   for (const property of expression.properties) {
     if (!ts.isPropertyAssignment(property)) {
       throw new BunwireCompilerError(
         "CONFIG_INVALID",
-        `Bunwire config "${filePath}" may only contain explicit source/bootstrap property assignments.`,
+        `Bunwire config "${filePath}" may only contain explicit source/bootstrap/pages property assignments.`,
         { filePath },
       );
     }
     const name = propertyNameText(property.name);
-    if (name !== "source" && name !== "bootstrap") {
+    if (name !== "source" && name !== "bootstrap" && name !== "pages") {
       throw new BunwireCompilerError(
         "CONFIG_INVALID",
-        `Unknown Bunwire config field "${name ?? property.name.getText(sourceFile)}" in "${filePath}". Milestone 7 supports "source" and "bootstrap".`,
+        `Unknown Bunwire config field "${name ?? property.name.getText(sourceFile)}" in "${filePath}". Supported fields are "source", "bootstrap", and "pages".`,
         { filePath },
       );
     }
@@ -199,9 +258,9 @@ function parseConfigSource(sourceText: string, filePath: string): Readonly<Bunwi
     seen.add(name);
     if (name === "source") {
       source = readSource(property.initializer, filePath);
-    } else {
+    } else if (name === "bootstrap") {
       bootstrap = readString(property.initializer, "bootstrap", filePath);
-    }
+    } else pages = readPages(property.initializer, filePath);
   }
   if (source === undefined || bootstrap === undefined) {
     throw new BunwireCompilerError(
@@ -210,7 +269,7 @@ function parseConfigSource(sourceText: string, filePath: string): Readonly<Bunwi
       { filePath },
     );
   }
-  return defineBunwireConfig({ source, bootstrap });
+  return defineBunwireConfig({ source, bootstrap, ...(pages ? { pages } : {}) });
 }
 
 function isWithin(root: string, target: string): boolean {
@@ -352,10 +411,39 @@ export async function loadBunwireConfig(
   }
 
   const sourceRoots = [...new Set(resolvedSourceRoots)].sort();
+  let pages: ResolvedBunwirePagesConfig | undefined;
+  if (parsed.pages) {
+    const pagesRoot = await resolveContainedPath(root, parsed.pages.root, "Pages root");
+    await assertExistingPath(pagesRoot, "directory", "SOURCE_ROOT_NOT_FOUND", "Bunwire pages root");
+    const pagesEntry = await resolveContainedPath(root, parsed.pages.entry, "Pages entry");
+    await assertExistingPath(pagesEntry, "file", "BOOTSTRAP_NOT_FOUND", "Bunwire pages entry");
+    const canonicalPagesRoot = await realpath(pagesRoot);
+    const canonicalPagesEntry = await realpath(pagesEntry);
+    if (!isWithin(root, canonicalPagesRoot)) {
+      throw new BunwireCompilerError(
+        "CONFIG_PATH_OUTSIDE_ROOT",
+        `Bunwire pages root "${pagesRoot}" resolves outside project root through a filesystem link.`,
+        { filePath: pagesRoot },
+      );
+    }
+    if (!isWithin(root, canonicalPagesEntry)) {
+      throw new BunwireCompilerError(
+        "CONFIG_PATH_OUTSIDE_ROOT",
+        `Bunwire pages entry "${pagesEntry}" resolves outside project root through a filesystem link.`,
+        { filePath: pagesEntry },
+      );
+    }
+    pages = Object.freeze({
+      root: canonicalPagesRoot, entry: canonicalPagesEntry,
+      devServer: parsed.pages.devServer ?? "http://localhost:5173",
+      extensions: Object.freeze([...(parsed.pages.extensions ?? [".tsx", ".ts", ".jsx", ".js"])]),
+    });
+  }
   return Object.freeze({
     root,
     configFile,
     sourceRoots: Object.freeze(sourceRoots),
     bootstrap,
+    ...(pages ? { pages } : {}),
   });
 }

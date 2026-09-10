@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/core" },
+    { "path": "./packages/validation" },
     { "path": "./packages/bun" },
     { "path": "./packages/vite" },
     { "path": "./packages/electrobun" },

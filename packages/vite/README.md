@@ -12,10 +12,14 @@ import { defineBunwireConfig } from "@bunwire/vite";
 export default defineBunwireConfig({
   source: "./src/bun",
   bootstrap: "./src/bun/bootstrap.ts",
+  pages: {
+    root: "./src/pages",
+    entry: "./src/client.tsx",
+  },
 });
 ```
 
-Milestone 7 accepts literal project-root-relative `source` and `bootstrap` paths. `source` may also be an array. Config loading is declarative: the loader parses this object rather than importing and executing the config module. Missing, malformed, ambiguous, absolute, and project-escaping paths produce typed `BunwireCompilerError` diagnostics.
+`source`, `bootstrap`, and optional page root/entry paths are literal and project-root-relative. `source` may also be an array. Page configuration accepts an HTTP(S) development origin and unique dot-prefixed extensions. Config loading is declarative: the loader parses this object rather than importing and executing the config module. Missing, malformed, ambiguous, absolute, and project-escaping paths produce typed `BunwireCompilerError` diagnostics.
 
 ## Discovery
 
@@ -55,9 +59,15 @@ Compiler runtime references retain the source expression, resolved exported symb
 
 ## Generated registry module
 
-`generateRuntimeRegistryModule()` converts the completed analysis into deterministic TypeScript containing class metadata, constructor dependencies, Providers, managed-method plans, resolver IDs, adapter metadata, and attachment-only middleware arrays. Every entry is emitted with `defineMiddlewareAttachment()` and contains a canonical class import plus immutable parameters; functions, aliases, groups, mappings, and patterns never reach the method pipeline at runtime. Imports and records are sorted independently of filesystem enumeration order, and `BUNWIRE_REGISTRY_HASH` identifies the byte-stable generated body.
+Supplementary adapter class decorators use Core's generic `classAttachments` compiler contributions. Vite resolves their exact canonical symbols (including re-exports), accepts literal factory metadata on declared allowed managed kinds, and rejects duplicate, misplaced, inherited or counterfeit attachments. It emits frozen `defineManagedClassAttachment()` sidecar records without replacing canonical owning class/Event/Listener entries. `ManagedClassIdentityHandlerData` (`bunwire.managed-class-identity`) can validate a shared identity namespace across selected class kinds and supplementary metadata; callbacks receive compiler data only. An unrelated fake-adapter fixture verifies these extension points without platform-specific names or branches.
+
+`generateRuntimeRegistryModule()` converts the completed analysis into deterministic TypeScript containing class metadata, constructor dependencies, Providers, managed-method plans, resolver IDs, adapter metadata, attachment-only middleware arrays, and optional platform-neutral schedule records. Middleware entries use `defineMiddlewareAttachment()` with a canonical class import plus immutable parameters; schedule entries use `defineRuntimeSchedule()` with a canonical managed target and static data. Functions, aliases, groups, mappings, and source syntax never reach runtime. Imports and records are sorted independently of filesystem enumeration order, and `BUNWIRE_REGISTRY_HASH` identifies the byte-stable generated body.
 
 The optional direct `Application.withMiddlewares((registry) => { ... })` block is parsed from the same exported `defineApp()` chain used for adapter discovery. It is a static compiler DSL: the callback must be synchronous, direct, and contain only literal `registry.use()`, `registry.group()`, and `registry.controllers()` calls. Analysis never imports the bootstrap or invokes the callback.
+
+`Application.withSchedule((schedule) => { ... })` follows the same compile-only rule. A generic adapter metadata handler declares allowed job/task class kinds and interprets the analyzed fluent calls; Vite contains no Bun cron or queue branches. Targets must resolve to canonical generated classes, job arguments and cadence/modifier inputs must be deterministic literals, caller arity is checked against the generated intrinsic `handle()` plan, and duplicate schedule IDs fail compilation. Server-only scheduled methods carry the generic no-caller-contract marker, so they do not appear in `virtual:bunwire/client`.
+
+Intrinsic managed methods may also declare an exact resolver-ID allowlist. Vite then accepts only canonical parameter injectors resolving through that list and emits their immutable metadata in the normal managed-method plan. Bun commands use this generic contract for arguments/options/flags; Vite contains no CLI parsing or Bun command-name branches.
 
 Groups are collected before expansion, so forward and nested references are valid; duplicate names, alias collisions, parameterized groups, unknown references, and complete direct/indirect cycles fail with source-located diagnostics. Controller mappings use case-sensitive configured-source-root-relative POSIX paths with segment `*` and cross-segment `**`. Invalid, traversing, absolute, backslash, and unmatched patterns fail compilation.
 
@@ -73,8 +83,8 @@ Each analyzed managed method carries its final pipeline in global → matching C
 
 ## Generated artifacts and development lifecycle
 
-`generateBunwireArtifacts()` is the shared manual/non-Vite generation boundary. By default it writes `.bunwire/registry.ts`, `.bunwire/client.ts`, and `.bunwire/virtual-modules.d.ts`; custom paths may be supplied with `generatedModulePath`, `generatedClientModulePath`, and `generatedDeclarationsPath`. It returns the registry/client hashes, resolved output paths, and only the paths whose bytes changed. Existing files are not rewritten when output is identical.
+`generateBunwireArtifacts()` is the shared manual/non-Vite generation boundary. By default it writes `.bunwire/registry.ts`, `.bunwire/client.ts`, and `.bunwire/virtual-modules.d.ts`; page-enabled applications also receive `.bunwire/pages.ts`. Custom output paths are supported. It returns the generated hashes, resolved output paths, and only the paths whose bytes changed. Existing files are not rewritten when output is identical.
 
-The declaration artifact gives editors and `tsc` exact application-specific types for `virtual:bunwire/registry` and `virtual:bunwire/client`. Include `.bunwire/**/*.ts` in the application's TypeScript project. Physical registry/client files remain the supported manual or non-Vite escape hatch; Vite-facing application code should use the virtual imports.
+The declaration artifact gives editors and `tsc` exact application-specific types for `virtual:bunwire/registry`, `virtual:bunwire/client`, and configured `virtual:bunwire/pages`. The page module maps stable root-relative component names to lazy imports. Include `.bunwire/**/*.ts` in the application's TypeScript project. Physical generated files remain the manual/non-Vite escape hatch.
 
-The Vite plugin generates these artifacts at build start, watches the Bunwire config, bootstrap, configured source roots, and discovered source files, and ignores its own outputs. Relevant edits, additions, removals, renames, and config changes invalidate cached analysis, recompute watched roots, regenerate changed artifacts, and invalidate both virtual modules in Vite's module graph. Invalid changed source surfaces the typed compiler diagnostic instead of serving stale metadata.
+The Vite plugin generates these artifacts at build start, watches the Bunwire config, bootstrap, source roots, page root/entry, and discovered files, and ignores its own outputs. Page edits and additions invalidate `virtual:bunwire/pages` for development HMR. Production builds emit `bunwire-pages.json` and replace the server page artifact with the exact hashed entry, CSS, asset list, and deterministic version. Generated asset roots are relative to the application root, so start the built host with the application directory as its working directory. Invalid changed source surfaces the typed compiler diagnostic instead of serving stale metadata.

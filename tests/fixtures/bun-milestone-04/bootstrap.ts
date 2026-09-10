@@ -7,10 +7,10 @@ export default defineApp()
   .withMiddlewares((middleware) => {
     middleware.group("global-stack", ["base", AuditMiddleware]);
     middleware.use("global-stack");
-    middleware.group("base", ["auth"]);
+    middleware.group("base", ["fixture-auth"]);
     middleware.group("local-stack", ["audit:local-group"]);
     middleware.controllers({
       "controllers/**": "trace",
-      "controllers/admin.ts": ["auth:mapped", "trace"],
+      "controllers/admin.ts": ["fixture-auth:mapped", "trace"],
     });
   });

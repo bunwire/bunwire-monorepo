@@ -5,12 +5,26 @@
   "type": "module",
   "scripts": {
     "generate": "node generate.mjs",
-    "build": "pnpm generate && tsc -b",
+    "build": "pnpm generate && vite build && tsc -b",
+    "dev:pages": "vite",
+    "worker": "bun dist/worker/main.js",
+    "worker:demo": "bun dist/worker/main.js --demo",
+    "scheduler": "bun dist/scheduler/main.js",
+    "scheduler:demo": "bun dist/scheduler/main.js --demo",
+    "command": "bun dist/command/main.js",
+    "command:demo": "bun dist/command/main.js greet Bunwire --count=2 --excited",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
     "@bunwire/bun": "workspace:*",
     "@bunwire/core": "workspace:*",
-    "@bunwire/vite": "workspace:*"
+    "@bunwire/vite": "workspace:*",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "vite": "7.3.6"
   }
 }

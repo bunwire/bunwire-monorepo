@@ -8,7 +8,7 @@ const allowlist = JSON.parse(await readFile(
   path.join(repositoryRoot, "tests/fixtures/milestone-13-public-exports.json"),
   "utf8",
 ));
-const packageNames = ["core", "vite", "electrobun", "bun"];
+const packageNames = ["core", "vite", "electrobun", "bun", "validation"];
 
 for (const packageName of packageNames) {
   const packageRoot = path.join(repositoryRoot, "packages", packageName);
@@ -38,6 +38,24 @@ for (const packageName of packageNames) {
     .sort();
   if (JSON.stringify(declarationExports) !== JSON.stringify(allowlist[packageName].declarations)) {
     throw new Error(`Built declaration exports for @bunwire/${packageName} differ from the committed release allowlist.\nExpected: ${JSON.stringify(allowlist[packageName].declarations)}\nReceived: ${JSON.stringify(declarationExports)}`);
+  }
+}
+
+for (const [subpath, allowlistKey] of [["client", "bunClient"], ["react", "bunReact"]]) {
+  const runtimePath = path.join(repositoryRoot, "packages/bun/dist", `${subpath}.js`);
+  const declarationPath = path.join(repositoryRoot, "packages/bun/dist", `${subpath}.d.ts`);
+  const runtime = await import(`${pathToFileURL(runtimePath).href}?audit=${Date.now()}`);
+  const runtimeExports = Object.keys(runtime).sort();
+  if (JSON.stringify(runtimeExports) !== JSON.stringify(allowlist[allowlistKey].runtime)) {
+    throw new Error(`Built runtime exports for @bunwire/bun/${subpath} differ from the committed release allowlist.`);
+  }
+  const program = ts.createProgram({ rootNames: [declarationPath], options: { module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, skipLibCheck: true } });
+  const sourceFile = program.getSourceFile(declarationPath);
+  const moduleSymbol = sourceFile && program.getTypeChecker().getSymbolAtLocation(sourceFile);
+  if (!sourceFile || !moduleSymbol) throw new Error(`Unable to inspect declarations for @bunwire/bun/${subpath}.`);
+  const declarationExports = program.getTypeChecker().getExportsOfModule(moduleSymbol).map((symbol) => symbol.name).sort();
+  if (JSON.stringify(declarationExports) !== JSON.stringify(allowlist[allowlistKey].declarations)) {
+    throw new Error(`Built declaration exports for @bunwire/bun/${subpath} differ from the committed release allowlist.`);
   }
 }
 

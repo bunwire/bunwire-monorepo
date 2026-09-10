@@ -1,4 +1,5 @@
 import type { BunwireCompilerAnalysis } from "./compiler-analysis.js";
+import type { ManagedClassIdentityHandlerData } from "@bunwire/core";
 import { BunwireCompilerError } from "./diagnostics.js";
 import type { DiscoveredCompilerExtensions } from "./extensions.js";
 
@@ -65,6 +66,33 @@ export function validateManagedMethodIdentities(
   analysis: BunwireCompilerAnalysis,
   extensions: DiscoveredCompilerExtensions,
 ): void {
+  for (const contribution of extensions.metadataHandlers) {
+    if (!isObject(contribution.data) || contribution.data.type !== "bunwire.managed-class-identity") continue;
+    const handler = contribution.data as unknown as ManagedClassIdentityHandlerData;
+    if (!Array.isArray(handler.classKindIds) || !handler.classKindIds.length || new Set(handler.classKindIds).size !== handler.classKindIds.length
+      || handler.classKindIds.some((id) => !extensions.classKinds.some((kind) => kind.id === id)) || typeof handler.resolveIdentity !== "function"
+      || (handler.reservedIdentities !== undefined && (!Array.isArray(handler.reservedIdentities)
+        || handler.reservedIdentities.some((identity) => typeof identity !== "string" || !identity)
+        || new Set(handler.reservedIdentities).size !== handler.reservedIdentities.length))) {
+      throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", `Malformed managed-class identity handler "${contribution.id}".`);
+    }
+    const identities = new Map<string, string>();
+    for (const owner of analysis.classes) {
+      if (!handler.classKindIds.includes(owner.kind.id)) continue;
+      let identity: string | undefined;
+      try { identity = handler.resolveIdentity(Object.freeze({ kindId: owner.kind.id, name: owner.name, data: owner.data,
+        attachments: Object.freeze((owner.attachments ?? []).map((entry) => Object.freeze({ definitionId: entry.definition.id, data: entry.data }))) })); }
+      catch (cause) { throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", `Class identity for "${owner.name}" is invalid: ${cause instanceof Error ? cause.message : String(cause)}`, { cause, location: owner.location }); }
+      if (identity === undefined) continue;
+      if (typeof identity !== "string" || !identity) throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", `Class identity for "${owner.name}" must be a nonempty string or undefined.`, { location: owner.location });
+      if (handler.reservedIdentities?.includes(identity)) {
+        throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", `Managed class "${owner.name}" uses reserved identity "${identity}".`, { location: owner.location });
+      }
+      const previous = identities.get(identity);
+      if (previous) throw new BunwireCompilerError("REGISTRY_GENERATION_INVALID", `Managed classes "${previous}" and "${owner.name}" have duplicate identity "${identity}".`, { location: owner.location });
+      identities.set(identity, owner.name);
+    }
+  }
   for (const handler of readHandlers(extensions)) {
     const kinds = new Set(handler.methodKindIds);
     const identities = new Map<string, string>();

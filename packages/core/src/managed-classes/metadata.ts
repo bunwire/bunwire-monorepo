@@ -1,4 +1,5 @@
 import type { ClassDecoratorId, ClassKindId } from "./identifiers.js";
+import { assertClassAttachmentPlacement } from "./class-attachment.js";
 
 export type ManagedClassTarget<Instance = object> = abstract new (...args: any[]) => Instance;
 
@@ -31,6 +32,7 @@ export function attachManagedClassMetadata(
   target: ManagedClassTarget,
   metadata: ManagedClassMetadata,
 ): void {
+  assertClassAttachmentPlacement(target, metadata.kindId);
   const existing = getManagedClassMetadata(target);
   if (existing) {
     throw new Error(

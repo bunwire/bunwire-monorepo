@@ -4,5 +4,5 @@ import { defineApp } from "@bunwire/core";
 export default defineApp()
   .withAdapter(new BunAdapter())
   .withMiddlewares((middleware) => {
-    middleware.group("auth", ["audit"]);
+    middleware.group("fixture-auth", ["audit"]);
   });

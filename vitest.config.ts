@@ -12,8 +12,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@bunwire/bun/client": fileURLToPath(new URL("./packages/bun/src/client.ts", import.meta.url)),
+      "@bunwire/bun/react": fileURLToPath(new URL("./packages/bun/src/react.ts", import.meta.url)),
       "@bunwire/bun": fileURLToPath(new URL("./packages/bun/src/index.ts", import.meta.url)),
       "@bunwire/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
+      "@bunwire/validation": fileURLToPath(new URL("./packages/validation/src/index.ts", import.meta.url)),
       "@bunwire/vite": fileURLToPath(new URL("./packages/vite/src/index.ts", import.meta.url)),
       "@bunwire/electrobun": fileURLToPath(new URL("./packages/electrobun/src/index.ts", import.meta.url)),
       "electrobun/bun": fileURLToPath(new URL("./tests/fixtures/milestone-11-electrobun/fake-native.ts", import.meta.url)),

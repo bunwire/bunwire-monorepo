@@ -10,7 +10,12 @@
   },
   "homepage": "https://github.com/bunwire/bunwire-monorepo#readme",
   "bugs": "https://github.com/bunwire/bunwire-monorepo/issues",
-  "keywords": ["bunwire", "bun", "application-framework", "typescript"],
+  "keywords": [
+    "bunwire",
+    "bun",
+    "application-framework",
+    "typescript"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,9 +23,23 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js"
     }
   },
-  "files": ["dist/**/*.js", "dist/**/*.d.ts", "dist/**/*.map", "README.md", "LICENSE"],
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.map",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -30,9 +49,23 @@
     "test": "vitest run --config ../../vitest.config.ts tests/bun"
   },
   "dependencies": {
-    "@bunwire/core": "workspace:^"
+    "@bunwire/core": "workspace:^",
+    "@bunwire/validation": "workspace:^",
+    "oauth4webapi": "3.8.7"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0",
+    "react-dom": "^18.3.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
   },
   "devDependencies": {
-    "@types/bun": "1.4.0"
+    "@types/bun": "1.4.0",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
   }
 }

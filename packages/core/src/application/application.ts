@@ -1,6 +1,7 @@
 import { Container } from "../container/container.js";
 import { normalizeConstructorMetadata } from "../container/metadata.js";
 import { Adapter, type AdapterHostContext } from "../adapters/adapter.js";
+import { managedClassCompilationHandlers, type ManagedClassCompilationHandlerData } from "../adapters/compiler-descriptor.js";
 import {
   defineRuntimeRegistry,
   type RuntimeRegistry,
@@ -9,6 +10,7 @@ import {
 import { MIDDLEWARE_KIND, PROVIDER_KIND } from "../managed-classes/built-ins.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { getManagedClassMetadata } from "../managed-classes/metadata.js";
+import { validateClassAttachmentRegistry } from "../managed-classes/class-attachment.js";
 import { InvocationEngine, type InvocationResult } from "../managed-methods/invocation-engine.js";
 import { getManagedMethodMetadata } from "../managed-methods/method-decorator.js";
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
@@ -30,6 +32,8 @@ import {
   createDefaultEventDispatcher,
 } from "../events/dispatcher.js";
 import type { MiddlewarePolicyConfiguration } from "../middleware/policy.js";
+import type { ApplicationScheduleConfiguration } from "./schedule.js";
+import { defineRuntimeSchedule } from "./schedule.js";
 import { ApplicationStateError } from "./errors.js";
 import {
   APPLICATION_CONTEXT,
@@ -67,6 +71,7 @@ export class Application<ApplicationContext = unknown> {
   #adapter: Adapter<any> | undefined;
   #runtimeRegistry: RuntimeRegistry = defineRuntimeRegistry();
   #hasMiddlewarePolicy = false;
+  #hasSchedule = false;
   #startPromise: Promise<void> | undefined;
   #stopPromise: Promise<void> | undefined;
   #adapterStopPromise: Promise<void> | undefined;
@@ -112,6 +117,15 @@ export class Application<ApplicationContext = unknown> {
       );
     }
     this.#hasMiddlewarePolicy = true;
+    return this;
+  }
+
+  /** Compile-only declarative schedule policy; generated records are the runtime authority. */
+  withSchedule(configuration: ApplicationScheduleConfiguration): this {
+    this.assertConfiguring("withSchedule()");
+    if (typeof configuration !== "function") throw new TypeError("Application.withSchedule() requires a configuration callback.");
+    if (this.#hasSchedule) throw new ApplicationStateError("Application.withSchedule() may be configured at most once.");
+    this.#hasSchedule = true;
     return this;
   }
 
@@ -299,7 +313,24 @@ export class Application<ApplicationContext = unknown> {
             }
             await this.runInvocation(async (context) => {
               for (const listener of listeners) {
-                await this.#invocationEngine.invoke(listener.handle, context, [event]);
+                const intercept = adapterRuntime?.eventListenerDelivery;
+                if (!intercept) { await this.#invocationEngine.invoke(listener.handle, context, [event]); continue; }
+                let active = true; let called = false; let pending: Promise<void> | undefined;
+                const errors: unknown[] = [];
+                try {
+                  await intercept(Object.freeze({ listener, event, invocation: context }), () => {
+                    if (!active || called) return Promise.reject(new ApplicationStateError("Event listener delivery continuation may only be called once during its interceptor."));
+                    called = true;
+                    pending = this.#invocationEngine.invoke(listener.handle, context, [event]).then(() => undefined);
+                    void pending.catch(() => undefined);
+                    return pending;
+                  });
+                } catch (error) { errors.push(error); }
+                finally { active = false; }
+                // Keep started direct delivery inside this event invocation even if an interceptor omits await.
+                try { await pending; } catch (error) { if (!errors.includes(error)) errors.push(error); }
+                if (errors.length === 1) throw errors[0];
+                if (errors.length > 1) throw new AggregateError(errors, "Event listener interceptor and direct delivery failed.");
               }
             });
           },
@@ -534,12 +565,16 @@ export class Application<ApplicationContext = unknown> {
   }
 
   private validateRuntimeRegistry(registry: RuntimeRegistry): void {
+    const compiler = this.#adapter ? Adapter.compilerDescriptor(this.#adapter) : undefined;
+    const classPolicies = compiler ? managedClassCompilationHandlers(compiler) : new Map<string, ManagedClassCompilationHandlerData>();
       if (!registry
         || !Array.isArray(registry.classes)
         || !Array.isArray(registry.providers)
         || !Array.isArray(registry.methods)
         || !Array.isArray(registry.events)
-        || !Array.isArray(registry.eventAliases)) {
+        || (registry.classAttachments !== undefined && !Array.isArray(registry.classAttachments))
+          || !Array.isArray(registry.eventAliases)
+          || (registry.schedules !== undefined && !Array.isArray(registry.schedules))) {
       throw new TypeError("Runtime registry is malformed; use defineRuntimeRegistry().");
     }
     const targets = new Set<Function>();
@@ -579,9 +614,28 @@ export class Application<ApplicationContext = unknown> {
         target: entry.target,
         dependencies: entry.dependencies,
       });
+      const policy = classPolicies.get(entry.kind.id);
+      if (policy) {
+        if (entry.scope !== policy.scope || !compiler?.classDecorators.some((decorator) => decorator.kind === entry.kind && decorator.id === metadata.decoratorId)) {
+          throw new TypeError("Intrinsic managed classes require canonical decorator identity and compiled binding scope.");
+        }
+        for (const method of policy.intrinsicMethods) {
+          if (!registry.methods.some((plan) => plan.target === entry.target && plan.kind === method.kind && plan.method === method.name)) {
+            throw new TypeError(`Intrinsic managed class "${entry.target.name}" is missing required method "${method.name}".`);
+          }
+        }
+      }
       if (entry.kind === MIDDLEWARE_KIND) {
         validateMiddlewareDefinition(entry);
       }
+    }
+    validateClassAttachmentRegistry(registry.classes, registry.classAttachments ?? [], compiler?.classAttachments ?? []);
+    const scheduleIds = new Set<string>();
+    for (const schedule of registry.schedules ?? []) {
+      defineRuntimeSchedule(schedule);
+      if (!targets.has(schedule.target)) throw new TypeError(`Runtime schedule "${schedule.id}" references an unregistered managed class.`);
+      if (scheduleIds.has(schedule.id)) throw new TypeError(`Runtime registry contains duplicate schedule identity "${schedule.id}".`);
+      scheduleIds.add(schedule.id);
     }
     const providerTargets = new Set<Function>();
     for (const ProviderClass of registry.providers) {
@@ -611,12 +665,23 @@ export class Application<ApplicationContext = unknown> {
         );
       }
       const metadata = getManagedMethodMetadata(plan.target.prototype, plan.method);
-      if (!metadata) {
+      const intrinsic = classPolicies.get(plan.ownerKind.id)?.intrinsicMethods.find((method: { name: string; kind: ManagedMethodKind }) => method.kind === plan.kind && method.name === plan.method);
+      let invalidIntrinsicParameters = false;
+      if (intrinsic) {
+        const parameterPolicy = intrinsic.parameters;
+        invalidIntrinsicParameters = parameterPolicy === "none" ? plan.parameters.length > 0
+          : parameterPolicy === "payload-only" ? plan.parameters.some((parameter: ManagedMethodPlan["parameters"][number]) => parameter.source !== "transport")
+            : plan.parameters.some((parameter: ManagedMethodPlan["parameters"][number]) => parameter.source !== "resolver" || !parameterPolicy.resolverIds.includes(parameter.resolverId));
+      }
+      if (intrinsic && (typeof Object.getOwnPropertyDescriptor(plan.target.prototype, plan.method)?.value !== "function" || invalidIntrinsicParameters)) {
+        throw new TypeError("Intrinsic managed methods do not satisfy their canonical parameter policy.");
+      }
+      if (!metadata && !intrinsic) {
         throw new TypeError(
           `Runtime registry managed method "${plan.target.name}.${String(plan.method)}" must have own managed-method decorator metadata.`,
         );
       }
-      if (metadata.kind !== plan.kind) {
+      if (metadata && metadata.kind !== plan.kind) {
         throw new TypeError(
           `Runtime registry managed method "${plan.target.name}.${String(plan.method)}" decorator kind "${metadata.kind.id}" does not match its canonical plan kind "${plan.kind.id}".`,
         );

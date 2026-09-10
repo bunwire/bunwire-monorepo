@@ -62,15 +62,35 @@ describe("Bun Milestone 3 — real native HTTP process", () => {
       expect(index.status).toBe(200);
       await expect(index.json()).resolves.toEqual({ method: "GET", name: "bunwire" });
 
+      const event = await fetch(`${origin}/api/events/example`, { method: "POST" });
+      expect(event.status).toBe(200);
+      await expect(event.json()).resolves.toEqual({ id: "example", deliveries: 1 });
+
       const [first, second] = await Promise.all([
-        fetch(`${origin}/api/echo/one`, { method: "POST" }),
-        fetch(`${origin}/api/echo/two`, { method: "POST" }),
+        fetch(`${origin}/api/echo/one`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "first" }),
+        }),
+        fetch(`${origin}/api/echo/two`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "second" }),
+        }),
       ]);
       const firstBody = await first.json() as Record<string, unknown>;
       const secondBody = await second.json() as Record<string, unknown>;
-      expect(firstBody).toMatchObject({ id: "one", method: "POST", url: `${origin}/api/echo/one` });
-      expect(secondBody).toMatchObject({ id: "two", method: "POST" });
+      expect(firstBody).toMatchObject({ id: "one", message: "first", normalizedBy: "bunwire-di" });
+      expect(secondBody).toMatchObject({ id: "two", message: "second", normalizedBy: "bunwire-di" });
       expect(firstBody.scopeId).not.toBe(secondBody.scopeId);
+
+      for (const deliveries of [1, 2]) {
+        const response = await fetch(`${origin}/api/jobs/native-job`, { method: "POST" });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          deliveries, receipt: { id: expect.any(String), job: "example.record-action", queue: "audit" },
+        });
+      }
 
       const notAllowed = await fetch(`${origin}/api`, { method: "POST" });
       expect(notAllowed.status).toBe(405);

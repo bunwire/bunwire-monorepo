@@ -3,7 +3,7 @@ import type { BunMiddlewareContext } from "@bunwire/bun";
 
 @Middleware()
 export class AuthMiddleware {
-  protected alias = "auth";
+  protected alias = "fixture-auth";
   protected include = ["/api/**"];
   protected only = ["GET"];
   handle(_context: BunMiddlewareContext, next: () => Promise<unknown>) { return next(); }

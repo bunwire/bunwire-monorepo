@@ -59,7 +59,11 @@ describe("Bun Milestone 4 — real native HTTP middleware", () => {
       expect(get.headers.get("x-bunwire-method")).toBe("GET");
       expect(get.headers.get("x-bunwire-path")).toBe("/api");
 
-      const post = await fetch(`${origin}/api/echo/value`, { method: "POST" });
+      const post = await fetch(`${origin}/api/echo/value`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "middleware" }),
+      });
       expect(post.status).toBe(200);
       expect(post.headers.get("x-bunwire-method")).toBe("POST");
       expect(post.headers.get("x-bunwire-path")).toBe("/api/echo/value");

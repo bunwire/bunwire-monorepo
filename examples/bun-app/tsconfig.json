@@ -7,7 +7,7 @@
     "experimentalDecorators": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*.ts", ".bunwire/**/*.ts"],
+  "include": ["src/**/*.ts", ".bunwire/**/*.ts", "worker/**/*.ts", "worker/.bunwire/**/*.ts", "scheduler/**/*.ts", "scheduler/.bunwire/**/*.ts", "command/**/*.ts", "command/.bunwire/**/*.ts"],
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/bun" },

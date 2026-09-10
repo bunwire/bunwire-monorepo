@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: None — `@bunwire/bun` Milestone 4 is complete
+Current milestone: `@bunwire/bun` Milestone 14 — Commands and Bunwire CLI Runtime (complete).
 
 Overall status:
 
@@ -32,6 +32,16 @@ Overall status:
 - `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
 - `@bunwire/bun` Milestone 3: Complete — [details](../packages/bun/progress/milestone-03.md)
 - `@bunwire/bun` Milestone 4: Complete — [details](../packages/bun/progress/milestone-04.md)
+- `@bunwire/bun` Milestone 5: Complete — [details](../packages/bun/progress/milestone-05.md)
+- `@bunwire/bun` Milestone 6: Complete — [details](../packages/bun/progress/milestone-06.md)
+- `@bunwire/bun` Milestone 7: Complete — [details](../packages/bun/progress/milestone-07.md)
+- `@bunwire/bun` Milestone 8: Complete — [details](../packages/bun/progress/milestone-08.md)
+- `@bunwire/bun` Milestone 9: Complete — [details](../packages/bun/progress/milestone-09.md)
+- `@bunwire/bun` Milestone 10: Complete — [details](../packages/bun/progress/milestone-10.md)
+- `@bunwire/bun` Milestone 11: Complete — [details](../packages/bun/progress/milestone-11.md)
+- `@bunwire/bun` Milestone 12: Complete — [details](../packages/bun/progress/milestone-12.md)
+- `@bunwire/bun` Milestone 13: Complete — [details](../packages/bun/progress/milestone-13.md)
+- `@bunwire/bun` Milestone 14: Complete — [details](../packages/bun/progress/milestone-14.md)
 
 ## Implemented
 
@@ -64,16 +74,26 @@ Overall status:
 - `@bunwire/bun` Milestone 2 adds public Bun execution scopes, isolated contextual bindings, per-scope service caching, nested WebSocket scope identity, deterministic explicit disposal, active-run shutdown coordination, and global-context architecture enforcement.
 - `@bunwire/bun` Milestone 3 adds Core Controller-based HTTP decorators, compiler-validated generated native routes, explicit frozen HTTP context, request-scope inheritance into Core invocation, deterministic 404/405/500 behavior, and graceful `Bun.serve()` lifecycle integration.
 - `@bunwire/bun` Milestone 4 adds generated Core middleware execution around Bun HTTP Controllers with immutable native context, actual-path/method filters, DI, deterministic policy ordering, parameters, short-circuiting, and concurrent request isolation.
+- `@bunwire/bun` Milestone 5 adds centralized native/JSON/void/redirect response resolution, ordered extension resolvers, deterministic HTTP exceptions, explicit production/development exposure, and replaceable reporting/rendering.
+- `@bunwire/bun` Milestone 6 adds the validation workspace package plus canonical registered Form Requests with DI, deterministic HTTP input aggregation, preparation, authorization, async validation, exact compiler identities, and request isolation.
+- `@bunwire/bun` Milestone 7 adds signed server-side sessions, native cookie integration, flash/old input, same-session serialization, and generated CSRF middleware with central 419 handling.
+- `@bunwire/bun` Milestone 8 adds generic session and bearer authentication, session-backed OAuth 2.0 Authorization Code + PKCE integration, explicit abilities and policies, eager request security contexts, and generated `auth`, `guest`, and `can` middleware.
+- `@bunwire/bun` Milestone 9 adds versioned server-driven pages, framework-neutral browser navigation, a React renderer, generated Vite page manifests, development HMR, exact production assets, and page-aware validation flash.
+- `@bunwire/bun` Milestone 10 verifies Core event/listener integration through Bun compilation, generated DI, sequential direct dispatch, isolated invocation bindings, test replacement, and an awaited HTTP-to-event example without a duplicate Bun event system.
+- `@bunwire/bun` Milestone 11 adds generic intrinsic-method/literal-class compilation contracts, canonical transient jobs, typed explicit dispatch, strict versioned serialization, sync/memory drivers, lease fencing, and Core-coordinated queue shutdown.
+- `@bunwire/bun` Milestone 12 adds automatic workers, cooperative timeouts, retries/backoff, renewable leases, failed-job management, and queued Core listeners with typed codecs and generic compiler attachments/delivery interception. Native process/recovery tests and runnable examples verify the lifecycle without duplicate Core concepts.
+- `@bunwire/bun` Milestone 13 adds Core-owned compile-only schedule declarations, generic compiler generation, Bun-owned direct tasks and queue dispatch, explicit cron/timezone behavior, renewable lock-provider contracts, a runnable scheduler role, and graceful active-work shutdown.
+- `@bunwire/bun` Milestone 14 adds canonical managed commands, generated argument/option/flag plans, isolated command scopes, deterministic CLI IO/errors/exit codes, registry-backed operational commands, and on-demand HTTP/worker/schedule activation.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- No milestone is currently in progress.
+- `@bunwire/bun` Milestone 14 is complete; no package milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- `@bunwire/bun` Milestone 5 — Response Resolution and Exception Pipeline.
+- `@bunwire/bun` Milestone 15 — Bun WebSockets.
 
 ## Blockers
 
@@ -107,3 +127,12 @@ Overall status:
 - [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
 - [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)
 - [`@bunwire/bun` Milestone 4](../packages/bun/progress/milestone-04.md)
+- [`@bunwire/bun` Milestone 5](../packages/bun/progress/milestone-05.md)
+- [`@bunwire/bun` Milestone 6](../packages/bun/progress/milestone-06.md)
+- [`@bunwire/bun` Milestone 7](../packages/bun/progress/milestone-07.md)
+- [`@bunwire/bun` Milestone 8](../packages/bun/progress/milestone-08.md)
+- [`@bunwire/bun` Milestone 9](../packages/bun/progress/milestone-09.md)
+- [`@bunwire/bun` Milestone 10](../packages/bun/progress/milestone-10.md)
+- [`@bunwire/bun` Milestone 11](../packages/bun/progress/milestone-11.md)
+- [`@bunwire/bun` Milestone 12](../packages/bun/progress/milestone-12.md)
+- [`@bunwire/bun` Milestone 13](../packages/bun/progress/milestone-13.md)

@@ -11,8 +11,11 @@
     "experimentalDecorators": true,
     "noEmit": true,
     "paths": {
+      "@bunwire/bun/client": ["packages/bun/src/client.ts"],
+      "@bunwire/bun/react": ["packages/bun/src/react.ts"],
       "@bunwire/bun": ["packages/bun/src/index.ts"],
       "@bunwire/core": ["packages/core/src/index.ts"],
+      "@bunwire/validation": ["packages/validation/src/index.ts"],
       "@bunwire/vite": ["packages/vite/src/index.ts"],
       "@bunwire/electrobun": ["packages/electrobun/src/index.ts"],
       "@bunwire/test-analysis-extensions": ["tests/fixtures/milestone-8-analysis/extensions.ts"],

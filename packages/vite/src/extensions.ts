@@ -15,9 +15,11 @@ import {
   Service,
   assertAdapterCompilerDescriptor,
   type AdapterCompilerDescriptor,
+  type AdapterCompilerMiddlewareDefinition,
   type CompilerSymbolReference,
   type CompilerMetadataHandlerDescriptor,
   type ManagedClassDecoratorDefinition,
+  type ManagedClassAttachmentDecoratorDefinition,
   type ManagedClassKind,
   type ManagedMethodDecoratorDefinition,
   type ManagedMethodKind,
@@ -26,12 +28,14 @@ import {
 import { BunwireCompilerError } from "./diagnostics.js";
 
 export interface DiscoveredCompilerExtensions {
+  readonly classAttachments?: readonly ManagedClassAttachmentDecoratorDefinition<any, any>[];
   readonly adapter: AdapterCompilerDescriptor;
   readonly classKinds: readonly ManagedClassKind[];
   readonly classDecorators: readonly ManagedClassDecoratorDefinition<any, any>[];
   readonly methodKinds: readonly ManagedMethodKind[];
   readonly methodDecorators: readonly ManagedMethodDecoratorDefinition<any, any>[];
   readonly parameterInjectors: readonly ParameterInjectorDefinition<any, any>[];
+  readonly middlewareDefinitions: readonly AdapterCompilerMiddlewareDefinition[];
   readonly metadataHandlers: readonly CompilerMetadataHandlerDescriptor[];
 }
 
@@ -83,6 +87,7 @@ export function aggregateCompilerExtensions(
   ]);
   const methodKinds = new ManagedMethodKindRegistry();
   const classDecorators = new Map<string, ManagedClassDecoratorDefinition<any, any>>();
+  const classAttachments = new Map<string, ManagedClassAttachmentDecoratorDefinition<any, any>>();
   const methodDecorators = new Map<string, ManagedMethodDecoratorDefinition<any, any>>();
   const parameterInjectors = new Map<string, ParameterInjectorDefinition<any, any>>();
   const metadataHandlers = new Map<string, CompilerMetadataHandlerDescriptor>();
@@ -169,6 +174,13 @@ export function aggregateCompilerExtensions(
     registerIdentity(methodDecorators, definition, "Managed method-decorator");
     registerCompilerSymbol(definition);
   }
+  for (const definition of adapter.classAttachments ?? []) {
+    for (const kind of definition.allowedOn) {
+      if (classKinds.get(kind.id) !== kind) throw new BunwireCompilerError("EXTENSION_CONFLICT", `Class attachment "${definition.id}" references a noncanonical class kind "${kind.id}".`);
+    }
+    if (classDecorators.has(definition.id) || methodDecorators.has(definition.id)) throw new BunwireCompilerError("EXTENSION_CONFLICT", `Class attachment ID "${definition.id}" conflicts with another decorator.`);
+    registerIdentity(classAttachments, definition, "Managed class-attachment"); registerCompilerSymbol(definition);
+  }
   for (const definition of adapter.parameterInjectors) {
     registerIdentity(parameterInjectors, definition, "Parameter-injector");
     registerCompilerSymbol(definition);
@@ -195,9 +207,11 @@ export function aggregateCompilerExtensions(
     adapter,
     classKinds: Object.freeze(registeredClassKinds.sort(compareIds)),
     classDecorators: Object.freeze([...classDecorators.values()].sort(compareIds)),
+    classAttachments: Object.freeze([...classAttachments.values()].sort(compareIds)),
     methodKinds: Object.freeze([...adapter.methodKinds].sort(compareIds)),
     methodDecorators: Object.freeze([...methodDecorators.values()].sort(compareIds)),
     parameterInjectors: Object.freeze([...parameterInjectors.values()].sort(compareIds)),
+    middlewareDefinitions: Object.freeze([...(adapter.middlewareDefinitions ?? [])]),
     metadataHandlers: Object.freeze([...metadataHandlers.values()].sort(compareIds)),
   });
 }

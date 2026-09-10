@@ -169,7 +169,7 @@ class ...
 @Listener(Event)
 class ...
 
-@Job()
+@Job({ id: "billing.generate-invoice" })
 class ...
 
 @Schedule(...)
@@ -683,7 +683,7 @@ The responsibilities are deliberately separated:
 FormRequest
 → HTTP request facilities
 → request validation lifecycle
-→ uses/extents ValidationRequest
+→ composes ValidationRequest without duplicating validation behavior
 
 @bunwire/validation
 → validation execution
@@ -698,7 +698,7 @@ The validation package already makes `all()` return the complete original input 
 
 # 14. Form Request lifecycle
 
-A registered Form Request may eventually support lifecycle hooks conceptually similar to Laravel:
+A registered Form Request supports these lifecycle hooks and APIs:
 
 ```text
 prepareForValidation()
@@ -709,7 +709,7 @@ attributes()
 validated()
 ```
 
-The exact final API will be designed during implementation planning.
+`prepareForValidation()` may call protected `merge()` while preparation is active. `authorize()` defaults to `true`; Bun runtime invocation always uses `validateAsync()` so synchronous and asynchronous rules compose.
 
 The runtime flow is approximately:
 
@@ -743,7 +743,7 @@ Async validation is already supported by `@bunwire/validation`.
 
 # 15. Request input sources
 
-Form Request input needs deterministic source semantics.
+Form Request input has deterministic source semantics.
 
 Potential sources include:
 
@@ -756,7 +756,7 @@ multipart fields
 uploaded files
 ```
 
-The Bun HTTP layer should expose those sources individually and define exactly what becomes Form Request validation input.
+The Bun HTTP layer exposes frozen `sources.route`, `sources.query`, `sources.body`, and `sources.files` views. The merged input used by `all()`, `get()`, and validation applies `query < body < route` precedence. Preparation-time `merge()` is the explicit final override.
 
 For example, the framework must decide what happens if:
 
@@ -766,9 +766,11 @@ query id = 2
 body id = 3
 ```
 
-This precedence must never be accidental.
+The example therefore resolves `id` to `1`. Repeated query/form keys become frozen arrays in encounter order; single values remain scalar. JSON requires an object root, urlencoded and multipart bodies retain literal keys, and malformed supported bodies produce `400 Bad Request`.
 
 Uploaded `File` objects must also be treated as first-class request values so validation rules can operate on them.
+
+Request parsing uses a clone, leaving the exact native request exposed by `BunHttpContext` untouched. Multipart files remain in the body input and are also filtered into `sources.files`.
 
 ---
 
@@ -777,6 +779,8 @@ Uploaded `File` objects must also be treated as first-class request values so va
 Controllers should not all be required to manually construct low-level `Response` objects.
 
 The Bun package needs a central result-normalization system.
+
+`@bunwire/bun` provides one canonical response boundary. Native `Response` values pass through unchanged, `undefined` produces `204 No Content`, and strictly JSON-compatible values produce JSON responses. Redirects use the explicit `redirect()` result helper. Application-defined response resolvers are configured in declaration order through `BunAdapter` HTTP options so later page, file, and streaming result types do not add checks to Controller dispatch.
 
 Controller results may eventually include:
 
@@ -809,11 +813,15 @@ return new Response(...);
 
 must always remain valid.
 
+Controller terminal values are normalized before middleware unwinds, allowing after-middleware to observe a native response. A final normalization pass handles middleware short circuits and replacements through the same boundary.
+
 ---
 
 # 17. Exception handling
 
 The Bun runtime needs a unified exception pipeline.
+
+The public `BunHttpExceptionHandler` owns `report(error, context)` and `render(error, context)`. Applications may replace it explicitly in `BunAdapter` HTTP options. Reporting failures are observational and cannot replace the request error; renderer failures fall back to an invariant minimal 500.
 
 Examples include:
 
@@ -844,6 +852,8 @@ Response
 
 Bun's server-level error handling remains the final runtime boundary, but Bunwire should provide the application-level semantics above it.
 
+The default handler renders known Bun HTTP exceptions deterministically, including 404, 405 with `Allow`, validation 422, unauthenticated 401, authorization 403, and CSRF mismatch 419. Unexpected errors are hidden by default. Only explicit HTTP development mode includes their details; runtime behavior does not depend on `NODE_ENV`.
+
 ---
 
 # 18. Sessions
@@ -860,7 +870,7 @@ old form input
 server-driven page state
 ```
 
-The session subsystem should have a store contract rather than depending on an ORM.
+The session subsystem has a store contract rather than depending on an ORM. Bun HTTP applications opt in with `http.sessions`; the browser receives only an HMAC-signed opaque ID while state remains server-side. The built-in memory store is intended for development and tests, and custom stores implement the same `read`/`write`/`destroy` boundary.
 
 Conceptually:
 
@@ -884,13 +894,17 @@ custom services
 
 without Bunwire introducing an SQL abstraction.
 
+The request scope exposes a `Session`, `BunCookieJar`, and CSRF context. Session IDs may be regenerated while preserving state, invalidated into a new empty session, or destroyed with an expired response cookie. Flash values survive exactly the following request, and old input uses explicit session APIs. Requests sharing a verified session ID serialize through commit so concurrent mutations are not lost.
+
+Session cookies default to `Secure`, `HttpOnly`, `SameSite=Lax`, and `Path=/`; local plain-HTTP applications must explicitly disable `Secure`. Session values use Bunwire's finite, acyclic serializable-value contract.
+
 ---
 
 # 19. CSRF
 
 CSRF protection belongs primarily to the HTTP lifecycle.
 
-The system should consist of:
+The system consists of:
 
 ```text
 CSRF manager/service
@@ -899,6 +913,8 @@ built-in CSRF middleware
 ```
 
 The middleware handles request verification and lifecycle integration.
+
+The canonical `csrf` alias is contributed through the generic adapter compiler middleware contract and can be attached with Core `@Use()` or middleware policy. `GET`, `HEAD`, and `OPTIONS` are exempt. Unsafe requests accept `X-CSRF-TOKEN` or `_token` from urlencoded/multipart form data, never query parameters. Failures use the central 419 exception path, and session regeneration/invalidation rotates the token.
 
 Bunwire should use suitable Bun-native security primitives rather than implementing unnecessary low-level cryptography itself.
 
@@ -918,7 +934,7 @@ configuration
 
 # 20. Authentication
 
-Authentication is a subsystem, not merely middleware.
+Authentication is a subsystem, not merely middleware. Milestone 8 implements it with an application-scoped `AuthManager`, request-scoped `BunAuthContext`, and exact named guards.
 
 The architecture should approximately contain:
 
@@ -931,10 +947,11 @@ token/bearer authentication
 AuthenticateMiddleware
 ```
 
-The current request context should be able to expose authentication state conceptually like:
+The configured default guard resolves before HTTP middleware. The request context therefore exposes synchronous state:
 
 ```ts
-context.auth.user
+context.auth.principal
+context.auth.user // alias of principal
 context.auth.check()
 context.auth.guest()
 ```
@@ -943,7 +960,9 @@ Bunwire should not impose an application `User` model.
 
 The authenticated principal is application-defined.
 
-The authentication system must therefore work with arbitrary application user/domain representations.
+The authentication system works with arbitrary application user/domain representations. Session guards persist only an application-defined serializable key, resolve a fresh principal for each later request, and regenerate the session on login/logout. Bearer guards parse the native Authorization header. Named guard selection never silently falls through to another guard.
+
+The canonical generated middleware aliases are `auth` and `guest`. Each accepts at most one guard parameter, for example `@Use("auth:bearer")`. Session-backed guards require configured sessions; bearer-only applications do not.
 
 ---
 
@@ -965,7 +984,7 @@ application principal
 auth/session
 ```
 
-Bunwire may provide:
+Bunwire provides:
 
 ```text
 provider configuration
@@ -976,7 +995,7 @@ session integration
 authentication integration
 ```
 
-while relying on appropriate existing protocol/security libraries and Bun/runtime primitives where possible.
+The application owns initiation/callback routes and external-identity mapping. Bunwire stores up to eight concurrent one-time flows in the server-side session, expires them after ten minutes by default, and always uses state plus S256 PKCE. `createOAuth2Provider()` delegates callback validation and token exchange to `oauth4webapi`; provider presets and OIDC validation remain later work.
 
 Bunwire should not unnecessarily reinvent OAuth/OIDC cryptographic internals.
 
@@ -984,7 +1003,7 @@ Bunwire should not unnecessarily reinvent OAuth/OIDC cryptographic internals.
 
 # 22. Authorization
 
-Authorization is also a subsystem rather than only middleware.
+Authorization is also a subsystem rather than only middleware. Milestone 8 uses explicit runtime registration rather than managed policy classes or runtime discovery.
 
 Conceptually:
 
@@ -1006,25 +1025,25 @@ services
 application code
 ```
 
-Possible APIs may eventually include:
+Global abilities and named policies are configured on the Bun HTTP adapter. A named policy may resolve its same-named route parameter into any application resource before evaluation. Both direct request/service calls and generated middleware delegate to one `AuthorizationManager`:
 
 ```ts
 @Use("can:update,user")
 ```
 
-or:
-
-```ts
-@Authorize("update", "user")
-```
-
-but both should delegate to the same authorization engine.
+`can:ability` checks a global ability; `can:ability,policy` requires the matching `:policy` route parameter. `context.authorization.can()` returns a boolean and `authorize()` throws the canonical 403 exception. Form Request `authorize()` can call the same request-scoped context and still runs before validation.
 
 Authorization must remain independent from any ORM or model framework.
 
 ---
 
 # 23. Pages / server-driven frontend
+
+Milestone 9 formalizes this protocol as version 1. `page(component, props)` is resolved through the central Bun response boundary. `X-Bunwire-Page: true` selects JSON navigation responses; initial requests receive a safe HTML shell with JSON escaped inside a non-executable element. Production payloads include the generated asset version, and stale GET navigations receive `409` with `X-Bunwire-Location`. Development omits version enforcement so Vite HMR remains active.
+
+Shared props are async and request-aware. Framework validation/old-input state is merged first, configured resolvers run in declaration order, and Controller props win. Page-aware validation failures with sessions redirect back using `303` and framework-owned one-request state; Form Requests explicitly select safe old-input fields through `flashInput()`.
+
+The navigation/history core is browser-safe at `@bunwire/bun/client`. React is the first renderer through `@bunwire/bun/react`, which provides `createBunwireReactApp()`, `Link`, and `usePage()`. The payload itself remains renderer-neutral; SSR, partial reloads, and deferred props are additive future work.
 
 `@bunwire/bun` should support the server-driven page flow proven in the existing Bun experiment.
 
@@ -1218,6 +1237,10 @@ listener C
 
 with ordered sequential execution and fail-fast error propagation. Registered events with zero listeners are valid, and nested dispatch is supported by Core.
 
+Bun applications inject `EventDispatcher` from `@bunwire/core` directly into Controllers or Services and await `dispatch(event)`. No Bun wrapper or extra adapter event option is required. Each dispatch gets one root-parented Core invocation and one Provider `boot()` pass, independent of the HTTP request scope. Listeners retain application-singleton defaults; explicit invocation-local listener and dependency bindings in Provider `boot()` enable local state without changing those defaults. Test Providers may replace the application-owned dispatcher with a recording implementation. Bun does not install another dispatcher after Provider registration.
+
+There is no Bun `event` execution-scope kind, automatic HTTP/session-context inheritance, or detached-dispatch shutdown tracking. Carry needed domain data explicitly in the event and await direct work. Queued listener execution remains a later integration.
+
 ---
 
 # 28. Queued listeners
@@ -1259,7 +1282,7 @@ Jobs are explicitly executable units of background work.
 Example:
 
 ```ts
-@Job()
+@Job({ id: "billing.generate-invoice" })
 export class GenerateInvoice {
   constructor(
     private readonly invoices: InvoiceService,
@@ -1271,7 +1294,7 @@ export class GenerateInvoice {
 }
 ```
 
-A job is compiler-discovered and receives canonical registry identity.
+A job is compiler-discovered and receives its explicit stable decorator ID as canonical queue identity. Its own public non-overloaded `handle()` is an intrinsic managed method, with payload-only parameters and constructor DI. Jobs are transient and execute in separate root-parented `queue-job` scopes. Milestone 11's literal policy compiler rejects inheritance, computed members, and constructor-assigned defaults; no job instance is created during compilation.
 
 Dispatching it should not persist arbitrary class-name strings.
 
@@ -1304,7 +1327,7 @@ handle(...)
 Job defaults may live on the class itself:
 
 ```ts
-@Job()
+@Job({ id: "billing.generate-invoice" })
 export class GenerateInvoice {
   protected queue = "documents";
   protected tries = 5;
@@ -1318,9 +1341,11 @@ export class GenerateInvoice {
 Dispatch-time configuration can override invocation-specific behavior:
 
 ```ts
-dispatch(GenerateInvoice, invoice.id)
+await queue.job(GenerateInvoice, invoice.id)
   .onQueue("priority")
-  .delay("5m");
+  .delay(300_000)
+  .tries(3)
+  .dispatch();
 ```
 
 This keeps the distinction:
@@ -1333,11 +1358,13 @@ job dispatch attachment/options
 queued execution
 ```
 
+Inject `QueueManager` with Core `@Inject(BUN_QUEUE_MANAGER)`. Builders are immutable and non-thenable; only `dispatch()` submits. Repeated calls on the same builder share one promise/receipt. Submission snapshots payload and resolved policy. Defaults are queue `default`, tries `1`, no timeout and empty backoff. Delay/backoff/timeout use integer milliseconds (timeout positive); tries is a positive integer. Receipts contain `{ id, job, queue }`, not handler results.
+
 ---
 
 # 31. Queue system
 
-The initial Bun package owns the entire queue system.
+The Bun package owns the queue system, introduced incrementally in Milestones 11–12.
 
 That includes:
 
@@ -1376,6 +1403,10 @@ Bunwire should not create an SQL abstraction merely to support a database-backed
 
 A driver may directly use the tool it needs.
 
+Milestone 11 requires explicit `BunAdapter({ queues: { driver, serializer? } })` configuration. Without it, the Application may start but dispatch fails clearly. The adapter binds `BUN_QUEUE_MANAGER` before Provider registration and initializes the driver after generated-registry delivery, before HTTP startup. One driver instance belongs to one Application lifecycle.
+
+`SyncQueueDriver` deserializes and awaits one execution through Core invocation, with transient constructor DI and automatic job-scope disposal. It rejects delay/reservation operations, enforces cooperative timeout, and never retries or automatically stores failures. `MemoryQueueDriver` is a process-local, non-durable queue; automatic consumption belongs to the worker-role adapter rather than the driver. Shutdown rejects new submissions, stops HTTP/reservations, waits for accepted attempts, disposes scopes, closes driver/store resources, and removes signal handlers last. Startup rollback closes partially initialized resources.
+
 ---
 
 # 32. Queue delivery semantics
@@ -1407,6 +1438,8 @@ delay
 
 rather than leaving those behaviors driver-specific.
 
+The driver contract is `initialize`, `push`, `reserve(queue, leaseMilliseconds)`, `acknowledge`, `release(reservation, delayMilliseconds?)`, `fail`, and `close`, with explicit delay/reservation capabilities. Workers additionally require `capabilities.renewal` and `renew(reservation, leaseMilliseconds)`. Memory reservations select available work by availability then insertion order. Each reservation increments attempts and returns a unique lease with reservation/expiry timestamps. Renewal preserves its token/attempts and never shortens expiry. Expired work can be redelivered; stale leases cannot renew, acknowledge, release, or fail it. Release retains attempts. Fail removes reservable work after terminal persistence. Closing memory queues drops remaining work; built-in durable drivers remain deferred.
+
 ---
 
 # 33. Job serialization
@@ -1417,9 +1450,12 @@ Conceptually:
 
 ```ts
 {
+  version: 1,
   id,
   job: canonicalJobId,
   payload,
+  serializer: { id: "bun.json", version: 1 },
+  policy: { tries, timeout, backoff },
   attempts,
   queue,
   availableAt,
@@ -1432,6 +1468,8 @@ The framework must explicitly define how job arguments are serialized.
 It should not silently assume every object returned by Prisma or arbitrary application library can be persisted safely.
 
 A serializer contract should exist from the beginning so future serialization formats do not require redesigning the queue API.
+
+`JobSerializer` supplies `id`, positive integer `version`, `serialize(argumentTuple): string`, and `deserialize(payload): readonly unknown[]`. Envelopes snapshot version, canonical ID, payload, serializer identity, policy, attempts (initially zero), queue, and Unix-millisecond times. The default `JsonJobSerializer` rejects undefined entries, sparse arrays, functions/symbols/bigint, accessors, non-enumerable properties, cycles, native/class instances, non-finite numbers, unsafe integers, and negative zero rather than silently losing data. Omitted trailing optional parameters are supported. Runtime execution rejects unknown job IDs and incompatible serializer versions.
 
 ---
 
@@ -1458,12 +1496,18 @@ resolve canonical job
         ↓
 execute
         ↓
-ack / release / fail
-        ↓
 dispose scope
+        ↓
+ack / release / persist terminal failure then fail
 ```
 
 Workers require graceful shutdown behavior and must stop reserving new work before application termination.
+
+Milestone 12 starts a worker automatically after Core reaches running. Configure `queues.worker` with queue names (default `["default"]`), concurrency (`1`), poll interval (`250ms`), and lease duration (`30000ms`). Worker-role Applications require an explicit delay/reservation/renewal-capable driver; other roles remain dispatch-only. The frozen `BUN_JOB_CONTEXT` exposes the envelope, scope and cooperative AbortSignal before Provider boot and constructor DI.
+
+Timeout covers decoding and Core invocation, waits actual settlement before scope disposal, and detects synchronous overruns; it cannot force-kill arbitrary JavaScript. Retry respects attempts/tries and clamps backoff to the last entry. Fatal/invalid failures terminate immediately. Lease renewal continues through disposal and failed-record persistence and is quiesced before settlement. Lost leases prohibit stale settlement and request shutdown. Normal stop finishes active attempts, releases late reservations and closes resources; entrypoints observe `BUN_QUEUE_WORKER.done` and always await `app.stop()` in `finally`.
+
+Bun `@Queue({ id, queue?, tries?, timeout?, backoff? })` supplements canonical Core `@Listener()` in either order. Generic compiler class attachments retain existing event/listener records and validate one shared job/listener ID namespace. Core's generic delivery interceptor enqueues at the ordered encounter, awaits submission, preserves direct dispatch behavior and leaves explicit dispatcher replacements untouched. Configured typed synchronous `QueueEventCodec` instances serialize explicit payloads and reconstruct the exact canonical event class, including private state. The existing v1 envelope carries the listener ID and codec identity/version. Each attempt invokes only the selected generated listener handle with transient DI, no redispatch or inherited caller context.
 
 ---
 
@@ -1480,11 +1524,13 @@ queue:flush
 
 The exact CLI syntax can be finalized later, but failure persistence and retry semantics must exist in the architecture from the beginning.
 
+`FailedJobStore` is configured through `queues.failedJobs`, defaulting to non-durable `MemoryFailedJobStore`. It initializes/closes with the Application and saves idempotently by envelope ID before terminal removal, preserving envelope, failure time/reason and safe error details. Save failure leaves external backend work unacknowledged and fails worker shutdown. `QueueManager.listFailed/getFailed/retryFailed/forgetFailed/flushFailed` expose management without a CLI. Retry submits a fresh immediately available ID with attempts reset, retaining the original record until explicitly removed. No distributed transaction or built-in durable store is implied.
+
 ---
 
 # 36. Scheduling
 
-Scheduled work initially belongs entirely to `@bunwire/bun`.
+Scheduling is split across the existing package boundaries. Core owns the platform-neutral, compile-only `Application.withSchedule()` declaration surface and generated runtime schedule records. Vite analyzes those declarations. `@bunwire/bun` owns scheduled-task identity, cron/timezone interpretation, execution, queue dispatch, locks, and scheduler-host lifecycle.
 
 A scheduled class might look like:
 
@@ -1501,27 +1547,29 @@ export class CleanupExpiredSessions {
 }
 ```
 
-The compiler discovers scheduled tasks and emits their registry information.
+`@Schedule()` requires an exported DI-managed class with its own parameterless `handle()` method. The compiler emits its constructor plan, managed `handle()` plan, and immutable schedule record. Each occurrence resolves a fresh task inside an isolated `scheduled-task` execution scope. `BUN_SCHEDULE_CONTEXT` supplies the resolved definition, scheduled/start times, timezone, and current scope through explicit constructor injection.
 
-The runtime does not scan decorators at startup.
+The runtime consumes only the generated registry; it does not scan decorators or the source tree at startup.
 
 ---
 
 # 37. Central scheduling
 
-Applications should also be able to schedule existing work centrally.
-
-Conceptually:
+Applications can schedule existing work centrally in the composition root:
 
 ```ts
-app.withSchedule(schedule => {
-  schedule
-    .job(GenerateDailyReport)
-    .dailyAt("04:00");
-});
+export default defineApp()
+  .withAdapter(new BunAdapter({ role: "scheduler", queues: { driver } }))
+  .withSchedule(schedule => {
+    schedule.job(GenerateDailyReport, "daily")
+      .dailyAt("04:00")
+      .timezone("Africa/Lagos")
+      .withoutOverlapping()
+      .id("reports.daily");
+  });
 ```
 
-This is particularly useful because an existing `@Job()` can be scheduled without creating an otherwise unnecessary wrapper class.
+Like `withMiddlewares()`, Core type-checks `withSchedule()` but never executes or retains its callback. Vite accepts compiler-safe static JSON job arguments and emits the schedule. This lets an existing `@Job({ id })` be scheduled without an unnecessary wrapper class. `schedule.task(TaskClass)` can also centrally schedule a canonical `@Schedule()` class that has no decorator cadence.
 
 Conceptually:
 
@@ -1541,57 +1589,46 @@ when queued execution is desired.
 
 # 38. Scheduler features
 
-The architecture should leave room for useful scheduling semantics such as:
+The `scheduler` runtime role starts no HTTP server or queue worker. It evaluates the current minute once after Core reaches `running`, then evaluates each new absolute minute once. Missed minutes are skipped rather than replayed. Cron expressions use five fields (minute, hour, day, month, weekday), supporting wildcards, lists, ranges, steps, numeric values, month/weekday names, Sunday as `0` or `7`, and standard day-of-month/day-of-week OR semantics. Seconds and macros are rejected. UTC is the default; the adapter may select another default IANA timezone and individual schedules may override it. A nonexistent local minute during a DST jump does not run; repeated local minutes during a fallback are distinct absolute minutes and may each run.
 
-```text
-cron expressions
-daily/hourly conveniences
-timezone
-without overlapping
-single-server execution
-conditional execution
-before/after hooks
-success/failure hooks
-```
+Cadences include `cron()`, `everyMinute()`, `hourlyAt()`, and `dailyAt()`. User task failures are reported and the loop continues by default; `failurePolicy: "stop"` instead fails scheduler completion and requests Core shutdown. Scheduler infrastructure failures are always fatal.
 
-Not all need to ship immediately.
+`withoutOverlapping()` uses a renewable fenced lease for the schedule identity. `onOneServer()` uses a lease for the schedule identity and scheduled minute, requires an explicit stable ID, and is rejected unless the configured `ScheduleLockProvider` declares distributed capability. Combined policies acquire overlap then single-server locks and release them in reverse order. The built-in `MemoryScheduleLockProvider` is process-local and therefore supports overlap prevention only, not a distributed single-server guarantee.
 
-However, distributed locking must be possible later.
-
-The scheduler should therefore have a lock-provider abstraction from the beginning rather than baking locking into one storage technology.
+On `app.stop()`, new ticks stop, active scheduled work settles, leases are released, queued work drains, execution scopes dispose, and the lock provider closes. Provider instances belong to one Application lifecycle and are not reusable across Applications. Conditional execution and before/after/success hooks remain future extensions rather than hidden Milestone 13 behavior.
 
 ---
 
 # 39. Commands and CLI
 
-The Bun package should eventually provide managed application commands.
+Milestone 14 provides managed application commands through the `command` runtime role.
 
 Example:
 
 ```ts
-@Command("users:cleanup")
+@Command({ name: "users:cleanup", description: "Remove inactive users." })
 export class CleanupUsers {
   constructor(
     private readonly users: UserService,
   ) {}
 
-  async handle() {}
+  async handle(
+    @Argument("team") team: string,
+    @Option({ name: "days", alias: "d", type: "integer", default: 30 }) days: number,
+    @Flag({ name: "force", alias: "f" }) force: boolean,
+  ) {}
 }
 ```
 
-Future argument/option facilities may support patterns such as:
+Command classes are compiler-discovered, canonically named, transient, and constructor-DI managed. Their intrinsic `handle()` plan accepts only generated `@Argument`, `@Option`, and `@Flag` resolver parameters; dependencies belong in the constructor. Command names share one namespace with framework commands, whose names are reserved.
 
-```text
-arguments
-options
-boolean flags
-interactive output
-exit status
-```
+Arguments and options support explicit string, finite-number, and safe-integer coercion, required/default values, literal choices, descriptions, and one-character aliases. Flags are false when absent. Parsing accepts long options with a separate or `=` value, short aliases, and `--`; unknown/duplicate options, combined short forms, missing/extra values, and invalid coercion fail as usage errors.
 
-Application and framework commands can then coexist.
+`runBunCli(app, registry)` is the normal entrypoint boundary. It uses `Bun.argv.slice(2)`, starts the Core Application, runs one isolated `command` scope, always awaits `app.stop()`, and returns an exit code for assignment to `process.exitCode`. It never calls `process.exit()`. The frozen `BUN_COMMAND_CONTEXT` exposes parsed values, raw arguments, injectable line-oriented IO, cancellation signal, and scope. `BunCommandRuntime.run()` remains the embedded/test escape hatch.
 
-Framework commands may eventually include:
+Success is `0`; a handler may explicitly return any integer through `255`. Usage errors return `2`; startup, execution, or cleanup failures return `1`. Cleanup completes before the runner returns and simultaneous failures remain aggregated and deterministically rendered.
+
+Framework commands are:
 
 ```text
 serve
@@ -1599,13 +1636,14 @@ routes:list
 queue:work
 queue:failed
 queue:retry
+queue:forget
 schedule:run
 schedule:list
 events:list
 jobs:list
 ```
 
-The generated compiler registry makes many introspection commands straightforward.
+`serve` and `queue:work` are long-running until Core shutdown. The command role accepts their HTTP/worker configuration but starts no feature host until selected. `schedule:run` executes work due in the current minute once without starting the scheduler loop. All listing commands consume the generated registry; no runtime source scanning or constructor-name discovery is used.
 
 ---
 
@@ -2092,7 +2130,7 @@ export class RecordRegistration {
 Job:
 
 ```ts
-@Job()
+@Job({ id: "notifications.send-welcome-email" })
 export class SendWelcomeEmail {
   protected queue = "emails";
   protected tries = 3;

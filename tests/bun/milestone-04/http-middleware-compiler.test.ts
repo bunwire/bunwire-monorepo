@@ -96,7 +96,7 @@ describe("Bun Milestone 4 — generated HTTP middleware policy", () => {
     expect(() => analyzeWithoutBootstrap([path.join(fixtureRoot, "invalid-duplicate-alias.ts")]))
       .toThrow(/middleware alias.*duplicate/i);
     expect(() => analyze(path.join(fixtureRoot, "invalid-ambiguity-bootstrap.ts")))
-      .toThrow(/group.*auth.*collides with a middleware alias/i);
+      .toThrow(/group.*fixture-auth.*collides with a middleware alias/i);
     expect(() => analyze(path.join(fixtureRoot, "invalid-cycle-bootstrap.ts")))
       .toThrow(/group cycle/i);
     expect(() => analyze(path.join(fixtureRoot, "invalid-unresolved-bootstrap.ts")))

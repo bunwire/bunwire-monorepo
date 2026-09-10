@@ -1,4 +1,5 @@
 import type { Application } from "../application/application.js";
+import { defineManagedClassAttachment, type ManagedClassAttachment } from "../managed-classes/class-attachment.js";
 import type { ManagedInvocationOptions } from "../application/invocation-context.js";
 import type { Container } from "../container/container.js";
 import type { Constructable } from "../container/tokens.js";
@@ -15,6 +16,7 @@ import type {
   EventAliasDefinition,
   EventDefinition,
 } from "../events/definitions.js";
+import { defineRuntimeSchedule, type RuntimeScheduleDefinition } from "../application/schedule.js";
 
 export interface ManagedClassRegistryEntry<Data = unknown> {
   readonly kind: ManagedClassKind;
@@ -25,11 +27,13 @@ export interface ManagedClassRegistryEntry<Data = unknown> {
 }
 
 export interface RuntimeRegistry {
+  readonly classAttachments?: readonly ManagedClassAttachment[];
   readonly classes: readonly ManagedClassRegistryEntry[];
   readonly providers: readonly Constructable<object>[];
   readonly methods: readonly ManagedMethodPlan[];
   readonly events: readonly EventDefinition[];
   readonly eventAliases: readonly EventAliasDefinition[];
+  readonly schedules?: readonly RuntimeScheduleDefinition[];
 }
 
 export type ManagedClassRegistryEntryInput<Data = unknown> = Omit<
@@ -41,15 +45,18 @@ export type ManagedClassRegistryEntryInput<Data = unknown> = Omit<
 };
 
 export interface DefineRuntimeRegistryOptions {
+  readonly classAttachments?: readonly ManagedClassAttachment[];
   readonly classes?: readonly ManagedClassRegistryEntryInput[];
   readonly providers?: readonly Constructable<object>[];
   readonly methods?: readonly ManagedMethodPlan[];
   readonly events?: readonly EventDefinition[];
   readonly eventAliases?: readonly EventAliasDefinition[];
+  readonly schedules?: readonly RuntimeScheduleDefinition[];
 }
 
 export function defineRuntimeRegistry(options: DefineRuntimeRegistryOptions = {}): RuntimeRegistry {
   return Object.freeze({
+    classAttachments: Object.freeze((options.classAttachments ?? []).map(defineManagedClassAttachment)),
     classes: Object.freeze((options.classes ?? []).map((entry) => (
       Object.isFrozen(entry)
         ? entry as ManagedClassRegistryEntry
@@ -63,6 +70,7 @@ export function defineRuntimeRegistry(options: DefineRuntimeRegistryOptions = {}
     methods: Object.freeze([...(options.methods ?? [])]),
     events: Object.freeze([...(options.events ?? [])]),
     eventAliases: Object.freeze([...(options.eventAliases ?? [])]),
+    schedules: Object.freeze((options.schedules ?? []).map(defineRuntimeSchedule)),
   });
 }
 

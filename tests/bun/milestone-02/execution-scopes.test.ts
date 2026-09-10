@@ -283,7 +283,7 @@ describe("Bun Milestone 2 — execution scopes", () => {
     const activeStarted = deferred();
     const disposed: string[] = [];
     const app = defineApp()
-      .withAdapter(new BunAdapter({ role: "worker" }))
+      .withAdapter(new BunAdapter({ role: "command" }))
       .withRuntimeRegistry(defineRuntimeRegistry());
     await app.start();
     const manager = app.rootContainer.get(BUN_EXECUTION_SCOPE_MANAGER);
@@ -324,7 +324,7 @@ describe("Bun Milestone 2 — execution scopes", () => {
     const RESOURCE = createToken<object>("test.bun.stop-failure");
     const cleanupError = new Error("scope cleanup failed");
     const app = defineApp()
-      .withAdapter(new BunAdapter({ role: "worker" }))
+      .withAdapter(new BunAdapter({ role: "command" }))
       .withRuntimeRegistry(defineRuntimeRegistry());
     await app.start();
     app.rootContainer

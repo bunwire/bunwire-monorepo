@@ -454,9 +454,11 @@ Support at minimum:
 
 - native `Response`
 - JSON-compatible controller return values
-- `undefined`/void semantics
+- `undefined`/void as `204 No Content`
 - explicit redirect response abstraction/helper
 - extensible response-resolver mechanism for later page/file/stream responses
+
+JSON-compatible values include primitives and `null` as well as arrays and plain objects. Unsupported or cyclic values fail deterministically.
 
 Do not scatter result-type checks through controller dispatch.
 
@@ -490,6 +492,8 @@ Requirements:
 - middleware unwind/finally behavior remains correct on exceptions
 - production/development exposure rules are explicit
 - exception pipeline is replaceable/extensible by applications later
+
+Milestone 5 configuration is explicit at the composition root through `BunAdapter` HTTP options. HTTP mode defaults to production and does not infer behavior from `NODE_ENV`; ordered application response resolvers and one replacement exception handler are accepted there.
 
 ## Tests
 
@@ -541,7 +545,7 @@ Implement `@Request()`, `FormRequest`, request compiler registry entries, input 
 
 ### FormRequest
 
-`FormRequest` should build on `@bunwire/validation`'s `ValidationRequest` rather than reimplement validation.
+`FormRequest` composes `@bunwire/validation`'s `ValidationRequest` rather than reimplementing validation. Composition preserves DI-friendly Bun construction while leaving the validation package's input-bound constructor contract unchanged.
 
 Preserve:
 
@@ -799,6 +803,10 @@ Authorization must not depend on ORM models.
 
 If policy/authorization classes are managed Bunwire concepts, give them canonical decorator identities and generated-registry relationships rather than runtime scans.
 
+Milestone 8 uses explicit named runtime policies rather than managed policy classes. The built-in `auth`, `guest`, and `can` middleware classes are contributed through the generic adapter compiler middleware contract.
+
+The default authentication guard resolves before HTTP middleware so current-principal reads are synchronous. Session guards persist an application-defined serializable key, bearer guards are exact named strategies, and OAuth uses one-time session state plus S256 PKCE through `oauth4webapi`. Applications retain ownership of OAuth routes, identity mapping, and principal models.
+
 ## Tests
 
 ### Automated
@@ -842,6 +850,10 @@ Page responses, initial HTML shell, navigation payloads, shared props, flash/val
 ## Requirements
 
 ### Page Protocol
+
+Milestone 9 uses `X-Bunwire-Page`, `X-Bunwire-Version`, and `X-Bunwire-Location` with protocol version 1. Initial payloads are escaped JSON inside a non-executable HTML element; navigation payloads are JSON. Production version mismatches force a full reload, while development omits version enforcement for HMR.
+
+React is the first renderer through `@bunwire/bun/react`, backed by the framework-neutral `@bunwire/bun/client`. Vite discovers stable component names from a configured page root and emits a lazy virtual module plus server-consumable development/production manifests. Shared props merge shallowly before Controller props. Page validation redirects flash errors and explicitly selected old input through framework-owned session state.
 
 Define a versionable page payload containing at least:
 
@@ -991,6 +1003,8 @@ Do not require a dynamic EventEmitter registry for compiler-known listeners.
 
 Use Core's replaceable application-owned dispatcher surface so event dispatch can be faked/recorded in tests without global monkey-patching.
 
+Milestone 10 preserves Core's root-parented invocation boundary and application-singleton listener defaults. A Provider may explicitly shadow listener and dependency bindings in the event invocation container during `boot()`. Bun does not infer HTTP context propagation, add an event execution-scope kind, or track detached dispatches for shutdown. Callers await direct dispatch; queue policy remains deferred.
+
 ## Tests
 
 ### Compiler/Integration
@@ -1026,17 +1040,19 @@ Implement canonical managed jobs and the queue contract/payload model before add
 
 ## Scope
 
-`@Job()`, generated job registry, queue manager/driver API, job definition defaults, dispatch options, serialization, delayed availability, and sync/memory drivers.
+`@Job({ id })`, generated job registry, queue manager/driver API, job definition defaults, dispatch options, serialization, delayed availability, and sync/memory drivers.
 
 ## Requirements
 
 ### Jobs
 
-- canonical `@Job()` decorator
+- canonical `@Job({ id })` decorator with an explicit stable literal ID
 - job class registry
 - canonical stable job identity in queue payloads
 - DI-managed job instances
 - explicit `handle(...)` contract or managed invocation definition
+- own public non-overloaded payload-only `handle(...)`, generated through generic intrinsic-method compiler contracts; constructor DI, transient instances
+- concrete non-inherited classes with static member names and literal protected defaults; no instance construction during compilation
 - class-level defaults such as:
   - queue
   - tries
@@ -1054,6 +1070,8 @@ Support invocation-specific options such as:
 - retry override where appropriate
 
 Preserve distinction between job definition and dispatch attachment.
+
+Use an explicit configured `QueueDriver` and `queue.job(JobClass, ...args).onQueue(name).delay(milliseconds).tries(count).dispatch()`. Builders are immutable/non-thenable and share repeated dispatch's promise/receipt; snapshots happen at submission. The adapter binds `BUN_QUEUE_MANAGER` before Providers, initializes drivers after registry consumption and drains accepted work before scope/driver cleanup. No worker loop starts in this milestone.
 
 ### Queue Contract
 
@@ -1172,10 +1190,14 @@ deserialize
   ↓
 execute
   ↓
-ack / release / fail
-  ↓
 dispose scope
+  ↓
+ack / release / persist terminal record then fail
 ```
+
+The worker role requires an explicit reservation/delay/renewal-capable driver and starts automatically only after Core is running. `queues.worker` configures unique queue names (default `["default"]`), bounded concurrency (default `1`), polling (`250ms`) and leases (`30000ms`). Other roles remain dispatch-only. The adapter binds `BUN_QUEUE_WORKER` before Providers; its `done` promise is observed by worker entrypoints, which always await `app.stop()` in `finally`.
+
+Every attempt has a frozen `BUN_JOB_CONTEXT` containing its envelope, `queue-job` scope and cooperative AbortSignal, available to Provider boot and constructor DI. Scope disposal precedes settlement. Renewable leases retain their fencing token through invocation, disposal and failed-record persistence; outstanding renewals are quiesced before ack/release/fail. Lost leases prevent stale settlement and request Core shutdown.
 
 ### Retry
 
@@ -1191,6 +1213,8 @@ Respect:
 
 Define timeout semantics clearly.
 
+Timeout covers payload decoding and the actual Core invocation (including Provider boot and constructor DI), not scope disposal. It aborts cooperatively and waits for real handler settlement before cleanup/retry; elapsed time detects synchronous overruns. Ignoring cancellation can delay shutdown. Sync dispatch uses the same attempt boundary but never retries or automatically stores terminal failures.
+
 Use safe abort/process primitives where applicable.
 
 Do not pretend arbitrary JavaScript can always be force-killed without consequences.
@@ -1204,6 +1228,8 @@ Reservation expiry/recovery must support at-least-once delivery.
 ### Failed Jobs
 
 Define failed-job store abstraction and default development/test implementation.
+
+`FailedJobStore` defaults to non-durable `MemoryFailedJobStore`, with Application-owned initialize/close and idempotent envelope-ID writes. Store safe envelope/error/reason/time snapshots before removing terminal queue work; save failure leaves work unacknowledged for backend recovery and stops the worker. `QueueManager.listFailed/getFailed/retryFailed/forgetFailed/flushFailed` expose management. Retry uses a new immediately available ID and resets attempts while retaining the original record until explicitly removed. No distributed transaction or built-in durable driver is promised.
 
 Persist enough information to inspect/retry.
 
@@ -1223,11 +1249,17 @@ On shutdown:
 - dispose job scope
 - close driver/store resources
 
+Normal shutdown finishes already-active attempts without aborting them solely for shutdown, maintains renewal, and releases late reservations without executing them. Configured timeouts still apply. Cleanup attempts every owned resource and removes signal handlers last; infrastructure failures reject worker completion and flow through Core's failed-shutdown behavior without a worker/stop wait cycle.
+
 ### Queued Listeners
 
 Allow listener execution to be delegated to queue infrastructure.
 
 Queued listeners must use canonical listener/event identities and queue serialization rules rather than a parallel background mechanism.
+
+Use Bun's supplementary `@Queue({ id, queue?, tries?, timeout?, backoff? })` on Core `@Listener(EventClass)`, supporting either order. Generated class-attachment sidecars retain exact Core Event/Listener records. Generic class identity validation enforces one stable namespace across jobs and queued listeners. Core's optional per-listener delivery interceptor preserves direct validation/order/Provider boot and enqueues at the ordered encounter; submission failure stops later listeners and explicit dispatcher replacement remains untouched.
+
+Configure one typed synchronous `QueueEventCodec<Event, Payload>` for every queued event using `defineQueueEventCodec()`, with stable id, positive version, exact canonical Event constructor, encode and decode. Serialize codec identity/version and encoded data in the existing v1 envelope argument tuple; decode must reconstruct the exact event class, including constructor/private state, rather than hydrating prototypes. Background execution invokes only the selected generated listener handle in a fresh job scope with transient listener DI, never redispatches/fans out, and inherits no caller request/session/event-invocation bindings.
 
 ## Tests
 
@@ -1311,22 +1343,22 @@ app.withSchedule(schedule => {
 });
 ```
 
-Final fluent method names may differ, but support:
+The canonical fluent surface is `cron()`, `everyMinute()`, `hourlyAt()`, `dailyAt()`, `timezone()`, `withoutOverlapping()`, `onOneServer()`, `lockFor()`, and `id()`. It supports:
 
 - cron expression
 - common cadence helpers
-- scheduling an existing `@Job()`
+- scheduling an existing `@Job({ id })`
 - direct managed scheduled task
 
 ### Time Semantics
 
 Define:
 
-- timezone handling
-- missed-run behavior
-- startup behavior
-- duplicate tick prevention
-- clock precision expected by the scheduler
+- UTC and per-schedule IANA timezone handling, with an adapter-level default
+- skipped rather than replayed missed minutes
+- one current-minute evaluation after Core reaches `running`
+- one evaluation for every later absolute minute, including distinct repeated local minutes during a DST fallback
+- minute precision and an injectable test clock
 
 ### Overlap and Distributed Safety
 
@@ -1337,7 +1369,7 @@ Architecture must permit later/current support for:
 - without overlapping
 - single-server execution
 
-Provide a local/in-memory implementation for tests and single-process use.
+Provide a renewable fenced local/in-memory implementation for tests and single-process overlap prevention. `onOneServer()` requires a provider that explicitly declares distributed capability; the memory provider must not make that claim.
 
 Do not require Redis/SQL.
 
@@ -1414,7 +1446,7 @@ Provide a clean model for:
 - validation/coercion where appropriate
 - help/usage text
 
-Exact decorator vs descriptor syntax should be chosen consistently with Bunwire managed-method planning.
+The canonical syntax is `@Argument()`, `@Option()`, and `@Flag()` on `handle()` parameters. Their explicit schemas compile into generic resolver plans; constructor DI remains the dependency boundary.
 
 ### Framework Commands
 

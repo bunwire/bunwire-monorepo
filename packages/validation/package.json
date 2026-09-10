@@ -1,0 +1,22 @@
+{
+  "name": "@bunwire/validation",
+  "version": "0.1.0",
+  "description": "A small, framework-independent TypeScript validation library.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bunwire/bunwire-monorepo.git",
+    "directory": "packages/validation"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist/**/*.js", "dist/**/*.d.ts", "dist/**/*.map", "README.md", "LICENSE"],
+  "publishConfig": { "access": "public" },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run --config ../../vitest.config.ts tests/validation"
+  }
+}

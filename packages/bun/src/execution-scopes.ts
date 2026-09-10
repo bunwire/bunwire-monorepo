@@ -371,7 +371,9 @@ export class BunExecutionScopeManager {
     let executionError: unknown;
     let hasExecutionError = false;
     try {
-      await options.configure?.(scope);
+      // Without asynchronous setup, admit the handler before returning to its caller.
+      // This lets an accepted job enter Core's invocation boundary before a subsequent stop.
+      if (options.configure) await options.configure(scope);
       result = await handler(scope);
     } catch (error) {
       executionError = error;
@@ -408,6 +410,11 @@ export class BunExecutionScopeManager {
       this.#disposePromise = this.performDispose();
     }
     return this.#disposePromise;
+  }
+
+  /** @internal Adapter admission boundary; cleanup waits for host/submission draining. */
+  beginShutdown(): void {
+    if (this.#state === "active") this.#state = "closing";
   }
 
   scopeDisposed(scope: BunExecutionScope): void {

@@ -13,6 +13,7 @@ export {
 export {
   createClassDecoratorId,
   createClassKindId,
+  isNamespacedIdentifier,
   type ClassDecoratorId,
   type ClassKindId,
   type NamespacedIdentifier,
@@ -155,6 +156,19 @@ export {
 } from "./application/application.js";
 export { ApplicationStateError } from "./application/errors.js";
 export {
+  defineRuntimeSchedule,
+  type ApplicationScheduleConfiguration,
+  type ApplicationScheduleRegistry,
+  type ConfiguredScheduleBuilder,
+  type DefineRuntimeScheduleOptions,
+  type RuntimeScheduleDefinition,
+  type ScheduleCadenceBuilder,
+  type ScheduleExecution,
+  type ScheduleOverlap,
+  type ScheduleTarget,
+  type ScheduleTargetArguments,
+} from "./application/schedule.js";
+export {
   APPLICATION_CONTEXT,
   INVOCATION_CONTEXT,
   type InvocationContext,
@@ -247,7 +261,11 @@ export {
   defineAdapterCompilerDescriptor,
   defineCompilerMetadataHandler,
   type AdapterCompilerDescriptor,
+  type AdapterCompilerMiddlewareDefinition,
   type CompilerMetadataHandlerDescriptor,
+  type ManagedClassCompilationHandlerData,
+  type ManagedClassIdentityHandlerData,
+  type ApplicationScheduleCompilationHandlerData,
   type DefineAdapterCompilerDescriptorOptions,
   type DefineCompilerMetadataHandlerOptions,
 } from "./adapters/compiler-descriptor.js";
@@ -257,10 +275,21 @@ export {
   type AdapterHostContext,
   type AdapterPreparationContext,
   type AdapterRuntimeDefinition,
+  type EventListenerDeliveryContext,
+  type EventListenerDeliveryInterceptor,
   type AdapterValidationHookDefinition,
   type DefineAdapterValidationHookOptions,
   type NativeObjectConfigurationCallback,
 } from "./adapters/adapter.js";
+export {
+  defineManagedClassAttachmentDecorator,
+  defineManagedClassAttachment,
+  getManagedClassAttachments,
+  type ManagedClassAttachment,
+  type ManagedClassAttachmentDecorator,
+  type ManagedClassAttachmentDecoratorDefinition,
+  type DefineManagedClassAttachmentDecoratorOptions,
+} from "./managed-classes/class-attachment.js";
 export {
   defineRuntimeRegistry,
   defineRuntimeRegistryConsumer,

@@ -5,8 +5,10 @@ Bunwire is a TypeScript application kernel and compiler for managed classes, dep
 ## Packages
 
 - `@bunwire/core` — Application lifecycle, bindings, tokens, managed classes and methods, middleware, canonical events/listeners, runtime registries, and adapter extension contracts.
-- `@bunwire/vite` — bounded source discovery, TypeScript analysis, generated registries/clients, physical artifacts, and `virtual:bunwire/*` Vite modules.
+- `@bunwire/vite` — bounded source/page discovery, TypeScript analysis, generated registries/clients/page manifests, physical artifacts, and `virtual:bunwire/*` Vite modules.
 - `@bunwire/electrobun` — Electrobun startup, RPC dispatch, managed decorators/injectors, middleware context, and generated-client transport integration.
+- `@bunwire/bun` — Bun host roles, execution scopes, native HTTP Controllers, middleware, Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, queues/jobs/workers, queued listeners, and compiler-backed scheduling.
+- `@bunwire/validation` — framework-independent synchronous/asynchronous validation, rules, structured errors, and validated projections.
 
 ## Install
 
@@ -17,7 +19,7 @@ pnpm add -D @bunwire/vite vite
 
 Define the bounded build graph in `bunwire.config.ts`, export an unstarted Application from `bootstrap.ts`, and start that Application from the host entrypoint. Vite applications consume `virtual:bunwire/registry` and `virtual:bunwire/client`; manual or non-Vite builds generate the equivalent `.bunwire` physical artifacts.
 
-See the [architecture](docs/README.md), [Electrobun example](examples/electrobun-app/README.md), [Vite/compiler guide](packages/vite/README.md), and [0.1.0 release readiness record](docs/RELEASE.md).
+See the [architecture](docs/README.md), [Bun example](examples/bun-app/README.md), [Electrobun example](examples/electrobun-app/README.md), [Vite/compiler guide](packages/vite/README.md), and [0.1.0 release readiness record](docs/RELEASE.md).
 
 ## Development
 

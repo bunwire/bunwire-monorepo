@@ -21,12 +21,41 @@ import {
 } from "./http.js";
 import type { BunExecutionScopeManager } from "./execution-scopes.js";
 import {
+  BunDefaultHttpExceptionHandler,
+  BunMethodNotAllowedException,
+  BunNotFoundException,
+  bunInternalServerError,
+  createBunHttpExceptionContext,
+  handleBunHttpException,
+  type BunHttpExceptionHandler,
+  type BunHttpMode,
+} from "./exceptions.js";
+import {
   createBunMiddlewareContext,
   createBunMiddlewareDefinitions,
   selectBunMiddleware,
   type BunMiddlewareRuntimeDefinition,
 } from "./middleware.js";
+import { BUN_COOKIES, BunCookieJar } from "./cookies.js";
+import { BUN_CSRF_CONTEXT, type CsrfManager } from "./csrf.js";
+import { BUN_SESSION, type SessionManager } from "./sessions.js";
+import {
+  BUN_AUTH_CONTEXT,
+  BUN_AUTH_INITIALIZE,
+  type AuthManager,
+} from "./auth.js";
+import {
+  BUN_AUTHORIZATION_CONTEXT,
+  type AuthorizationManager,
+} from "./authorization.js";
+import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
 import type { BunRuntimeContext } from "./runtime.js";
+import { BunPageResult, type BunPageManager } from "./pages.js";
+import {
+  resolveBunHttpResponse,
+  type BunHttpResponseResolver,
+} from "./response.js";
+import { prepareBunFormRequestInput } from "./request-runtime.js";
 
 type NativeRouteHandler = (
   request: BunHttpRequest,
@@ -39,6 +68,12 @@ interface CompiledHttpRoute {
   readonly method: BunHttpMethod;
   readonly path: string;
   readonly plan: ManagedMethodPlan;
+}
+
+interface BunHttpPipeline {
+  readonly mode: BunHttpMode;
+  readonly responseResolvers: readonly BunHttpResponseResolver[];
+  readonly exceptionHandler: BunHttpExceptionHandler;
 }
 
 export interface BunHttpRuntimeState {
@@ -116,17 +151,6 @@ export function consumeBunHttpRegistry(
   }
 }
 
-function textResponse(body: string, status: number, headers?: HeadersInit): Response {
-  return new Response(body, {
-    status,
-    ...(headers === undefined ? {} : { headers }),
-  });
-}
-
-function internalServerError(): Response {
-  return textResponse("Internal Server Error", 500);
-}
-
 function requestParams(request: BunHttpRequest): Readonly<Record<string, string>> {
   const params = typeof request.params === "object" && request.params !== null
     ? request.params
@@ -141,50 +165,112 @@ async function invokeRoute(
   manager: BunExecutionScopeManager,
   invocation: RuntimeRegistryConsumerContext<BunRuntimeContext>,
   state: BunHttpRuntimeState,
+  pipeline: BunHttpPipeline,
+  sessions?: SessionManager,
+  csrfManager?: CsrfManager,
+  authManager?: AuthManager,
+  authorizationManager?: AuthorizationManager,
+  oauthManager?: OAuthManager,
+  pageManager?: BunPageManager,
 ): Promise<Response> {
+  let httpContext: BunHttpContext | undefined;
   try {
-    const result = await manager.run("http-request", async (scope) => {
-      const context: BunHttpContext = Object.freeze({
-        request,
-        server,
-        route: Object.freeze({
-          method: route.method,
-          path: route.path,
-          params: requestParams(request),
-        }),
-        scope,
-      });
-      scope.value(BUN_HTTP_CONTEXT, context);
-      const pathname = new URL(request.url).pathname;
-      const attachments = selectBunMiddleware(
-        route.plan,
-        state.middlewareDefinitions,
-        pathname,
-        route.method,
-      );
-      return invocation.invoke<unknown>(route.plan, [], {
-        parentContainer: scope.container,
-        around: (managedInvocation, next) => executeMiddlewareChain({
-          invocation: managedInvocation,
-          attachments,
-          createContext: (attachment) => createBunMiddlewareContext(
-            context,
-            pathname,
-            attachment,
-          ),
-          terminal: next,
-        }),
-      });
+    return await manager.run("http-request", async (scope) => {
+      const cookies = new BunCookieJar(request, sessions ? [sessions.cookieName] : []);
+      const lease = sessions ? await sessions.open(cookies) : undefined;
+      let response: Response;
+      try {
+        const csrf = lease && csrfManager ? csrfManager.context(lease.session) : undefined;
+        let context!: BunHttpContext;
+        const auth = authManager?.createContext(() => context);
+        const authorization = authorizationManager?.createContext(() => context, auth);
+        const oauth = auth && lease && oauthManager
+          ? oauthManager.createContext(() => context, auth, lease.session)
+          : undefined;
+        context = Object.freeze({
+          request,
+          server,
+          route: Object.freeze({
+            method: route.method,
+            path: route.path,
+            params: requestParams(request),
+          }),
+          scope,
+          cookies,
+          ...(lease ? { session: lease.session } : {}),
+          ...(csrf ? { csrf } : {}),
+          ...(auth ? { auth } : {}),
+          ...(authorization ? { authorization } : {}),
+          ...(oauth ? { oauth } : {}),
+        });
+        httpContext = context;
+        scope.value(BUN_HTTP_CONTEXT, context);
+        scope.value(BUN_COOKIES, cookies);
+        if (lease) scope.value(BUN_SESSION, lease.session);
+        if (csrf) scope.value(BUN_CSRF_CONTEXT, csrf);
+        if (auth) scope.value(BUN_AUTH_CONTEXT, auth);
+        if (authorization) scope.value(BUN_AUTHORIZATION_CONTEXT, authorization);
+        if (oauth) scope.value(BUN_OAUTH_CONTEXT, oauth);
+        if (auth) await auth[BUN_AUTH_INITIALIZE]();
+        prepareBunFormRequestInput(context);
+        const pathname = new URL(request.url).pathname;
+        const attachments = selectBunMiddleware(
+          route.plan,
+          state.middlewareDefinitions,
+          pathname,
+          route.method,
+        );
+        const result = await invocation.invoke<unknown>(route.plan, [], {
+          parentContainer: scope.container,
+          around: (managedInvocation, next) => executeMiddlewareChain({
+            invocation: managedInvocation,
+            attachments,
+            createContext: (attachment) => createBunMiddlewareContext(
+              context,
+              pathname,
+              attachment,
+            ),
+            terminal: async () => resolveBunHttpResponse(
+              await next(),
+              context,
+              pipeline.responseResolvers,
+            ),
+          }),
+        });
+        response = await resolveBunHttpResponse(result, context, pipeline.responseResolvers);
+        if (pageManager) response = pageManager.finalize(response, context);
+      } catch (error) {
+        response = httpContext ? pageManager?.handleException(error, httpContext) ?? await handleBunHttpException(
+          error,
+          createBunHttpExceptionContext(request, server, pipeline.mode, httpContext),
+          pipeline.exceptionHandler,
+        ) : await handleBunHttpException(
+          error,
+          createBunHttpExceptionContext(request, server, pipeline.mode),
+          pipeline.exceptionHandler,
+        );
+      }
+      return lease ? await lease.commit(response) : cookies.apply(response);
     });
-    return result instanceof Response ? result : internalServerError();
-  } catch {
-    return internalServerError();
+  } catch (error) {
+    return handleBunHttpException(
+      error,
+      createBunHttpExceptionContext(request, server, pipeline.mode, httpContext),
+      pipeline.exceptionHandler,
+    );
   }
 }
 
 function nativeRoutes(
   state: BunHttpRuntimeState,
   manager: BunExecutionScopeManager,
+  pipeline: BunHttpPipeline,
+  sessions?: SessionManager,
+  csrfManager?: CsrfManager,
+  authManager?: AuthManager,
+  authorizationManager?: AuthorizationManager,
+  oauthManager?: OAuthManager,
+  pageManager?: BunPageManager,
 ): Record<string, NativeRouteMethods> {
   const invocation = state.invocation;
   if (!invocation) {
@@ -193,13 +279,19 @@ function nativeRoutes(
   const routes: Record<string, NativeRouteMethods> = {};
   for (const [path, compiledMethods] of state.routes) {
     const allow = BUN_HTTP_METHODS.filter((method) => compiledMethods.has(method));
-    const allowHeader = allow.join(", ");
     const methods: NativeRouteMethods = {};
     for (const method of BUN_HTTP_METHODS) {
       const route = compiledMethods.get(method);
       methods[method] = route
-        ? (request, server) => invokeRoute(route, request, server, manager, invocation, state)
-        : () => textResponse("Method Not Allowed", 405, { Allow: allowHeader });
+        ? (request, server) => invokeRoute(
+            route, request, server, manager, invocation, state, pipeline,
+            sessions, csrfManager, authManager, authorizationManager, oauthManager, pageManager,
+          )
+        : (request, server) => handleBunHttpException(
+            new BunMethodNotAllowedException(allow),
+            createBunHttpExceptionContext(request, server, pipeline.mode),
+            pipeline.exceptionHandler,
+          );
     }
     routes[path] = methods;
   }
@@ -210,12 +302,38 @@ export async function startBunHttpServer(
   state: BunHttpRuntimeState,
   manager: BunExecutionScopeManager,
   options: BunHttpServerOptions,
+  sessions?: SessionManager,
+  csrfManager?: CsrfManager,
+  authManager?: AuthManager,
+  authorizationManager?: AuthorizationManager,
+  oauthManager?: OAuthManager,
+  pageManager?: BunPageManager,
 ): Promise<void> {
+  const pipeline: BunHttpPipeline = Object.freeze({
+    mode: options.mode ?? "production",
+    responseResolvers: Object.freeze([
+      ...(pageManager ? [{
+        resolve: (value: unknown, context: BunHttpContext) => value instanceof BunPageResult
+          ? pageManager.resolve(value, context)
+          : undefined,
+      }] : []),
+      ...(options.responseResolvers ?? []),
+    ]),
+    exceptionHandler: options.exceptionHandler ?? new BunDefaultHttpExceptionHandler(),
+  });
   const server = Bun.serve({
     ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
     ...(options.port === undefined ? {} : { port: options.port }),
-    routes: nativeRoutes(state, manager),
-    fetch: () => textResponse("Not Found", 404),
+    routes: nativeRoutes(
+      state, manager, pipeline, sessions, csrfManager,
+      authManager, authorizationManager, oauthManager, pageManager,
+    ),
+    fetch: (request, server) => pageManager?.asset(request) ?? handleBunHttpException(
+      new BunNotFoundException(),
+      createBunHttpExceptionContext(request as BunHttpRequest, server as BunHttpServer, pipeline.mode),
+      pipeline.exceptionHandler,
+    ),
+    error: () => bunInternalServerError(),
   });
   state.server = server as BunHttpServer;
   await options.onServer?.(state.server);

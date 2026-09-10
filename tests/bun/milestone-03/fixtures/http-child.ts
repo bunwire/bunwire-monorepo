@@ -1,5 +1,7 @@
 import {
   BUN_HTTP_ROUTE_KIND,
+  BUN_JOB_HANDLE_KIND,
+  SyncQueueDriver,
   BunAdapter,
   Get,
   type BunHttpServer,
@@ -12,6 +14,7 @@ import {
   defineRuntimeRegistry,
 } from "@bunwire/core";
 import { applicationRegistry } from "../../../../examples/bun-app/.bunwire/registry.js";
+import { actionCodec } from "../../../../examples/bun-app/src/events.js";
 
 @Controller("/test")
 class FailureController {
@@ -19,7 +22,7 @@ class FailureController {
   failure(): Response { throw new Error("expected failure"); }
 
   @Get("/unsupported")
-  unsupported(): string { return "not a response"; }
+  unsupported(): Date { return new Date(0); }
 }
 
 const combinedRegistry = defineRuntimeRegistry({
@@ -29,7 +32,11 @@ const combinedRegistry = defineRuntimeRegistry({
   ],
   providers: applicationRegistry.providers,
   methods: [
-    ...applicationRegistry.methods,
+    ...applicationRegistry.methods.filter(({ method, kind }) => (
+      method === "index" || method === "echo" || method === "blocked" || method === "recordEvent"
+      || method === "recordJob" || kind === BUN_JOB_HANDLE_KIND
+    )),
+    ...applicationRegistry.events.flatMap((event) => event.listeners.map((listener) => listener.handle)),
     defineManagedMethodPlan({
       kind: BUN_HTTP_ROUTE_KIND,
       ownerKind: CONTROLLER_KIND,
@@ -49,15 +56,21 @@ const combinedRegistry = defineRuntimeRegistry({
   ],
   events: applicationRegistry.events,
   eventAliases: applicationRegistry.eventAliases,
+  classAttachments: applicationRegistry.classAttachments ?? [],
 });
 
 let server!: BunHttpServer;
 const app = defineApp()
   .withAdapter(new BunAdapter({
     handleSignals: false,
+    queues: { driver: new SyncQueueDriver(), eventCodecs: [actionCodec] },
     http: {
       hostname: "127.0.0.1",
       port: 0,
+      sessions: {
+        secret: "0123456789abcdef0123456789abcdef",
+        cookie: { secure: false },
+      },
       onServer(value) { server = value; },
     },
   }))

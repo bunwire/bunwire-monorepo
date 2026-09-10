@@ -50,7 +50,7 @@ class HttpController {
   @Post("/users")
   created(): Response { return new Response("created", { status: 201 }); }
   @Get("/unsupported")
-  unsupported(): string { return "not a response"; }
+  unsupported(): Date { return new Date(0); }
   @Get("/failure")
   failure(): Response { throw new Error("route failure"); }
   @Get("/:id")

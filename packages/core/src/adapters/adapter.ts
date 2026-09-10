@@ -1,4 +1,6 @@
 import type { Application } from "../application/application.js";
+import type { InvocationContext } from "../application/invocation-context.js";
+import type { ListenerDefinition } from "../events/definitions.js";
 import type { Container } from "../container/container.js";
 import type { NamespacedIdentifier } from "../managed-classes/identifiers.js";
 import { isNamespacedIdentifier } from "../managed-classes/identifiers.js";
@@ -67,6 +69,7 @@ export function defineAdapterValidationHook<
 }
 
 export interface AdapterRuntimeDefinition<Context = unknown> {
+  readonly eventListenerDelivery?: EventListenerDeliveryInterceptor<Context>;
   readonly providers?: readonly ProviderConstructor[];
   readonly parameterResolvers?: readonly ParameterResolverDefinition[];
   readonly registryConsumers?: readonly RuntimeRegistryConsumerDefinition<string, Context>[];
@@ -74,6 +77,7 @@ export interface AdapterRuntimeDefinition<Context = unknown> {
 }
 
 interface NormalizedAdapterRuntimeDefinition<Context> {
+  readonly eventListenerDelivery: EventListenerDeliveryInterceptor<Context> | undefined;
   readonly providers: readonly ProviderConstructor[];
   readonly parameterResolvers: readonly ParameterResolverDefinition[];
   readonly registryConsumers: readonly RuntimeRegistryConsumerDefinition<string, Context>[];
@@ -83,6 +87,16 @@ interface NormalizedAdapterRuntimeDefinition<Context> {
 interface AdapterConstructor {
   readonly compiler?: unknown;
 }
+
+export interface EventListenerDeliveryContext<Context = unknown> {
+  readonly listener: ListenerDefinition;
+  readonly event: object;
+  readonly invocation: InvocationContext<Context>;
+}
+export type EventListenerDeliveryInterceptor<Context = unknown> = (
+  context: EventListenerDeliveryContext<Context>,
+  next: () => Promise<void>,
+) => void | Promise<void>;
 
 function assertUniqueRuntimeIds(
   entries: readonly { readonly id: string }[],
@@ -105,6 +119,7 @@ export abstract class Adapter<Context = unknown> {
   #application: Application | undefined;
 
   protected constructor(runtime: AdapterRuntimeDefinition<Context> = {}) {
+    if (runtime.eventListenerDelivery !== undefined && typeof runtime.eventListenerDelivery !== "function") throw new TypeError("Adapter event listener delivery interceptor must be callable.");
     const providers = [...(runtime.providers ?? [])];
     const parameterResolvers = [...(runtime.parameterResolvers ?? [])];
     const registryConsumers = [...(runtime.registryConsumers ?? [])];
@@ -133,6 +148,7 @@ export abstract class Adapter<Context = unknown> {
       }
     }
     this.#runtime = Object.freeze({
+      eventListenerDelivery: runtime.eventListenerDelivery,
       providers: Object.freeze(providers),
       parameterResolvers: Object.freeze(parameterResolvers),
       registryConsumers: Object.freeze(registryConsumers),

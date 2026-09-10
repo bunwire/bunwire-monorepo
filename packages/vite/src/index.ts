@@ -2,8 +2,10 @@ export {
   defineBunwireConfig,
   loadBunwireConfig,
   type BunwireConfig,
+  type BunwirePagesConfig,
   type LoadBunwireConfigOptions,
   type ResolvedBunwireConfig,
+  type ResolvedBunwirePagesConfig,
 } from "./config.js";
 export {
   BunwireCompilerError,
@@ -19,6 +21,8 @@ export {
   type AnalyzedEventClass,
   type AnalyzedContainerParameter,
   type AnalyzedManagedClass,
+  type AnalyzedManagedClassAttachment,
+  type AnalyzedScheduleDefinition,
   type AnalyzedManagedMethod,
   type AnalyzedListenerClass,
   type AnalyzedMethodParameter,
@@ -48,9 +52,11 @@ export {
 } from "./discovery.js";
 export {
   BUNWIRE_CLIENT_MODULE_ID,
+  BUNWIRE_PAGES_MODULE_ID,
   BUNWIRE_DISCOVERY_MODULE_ID,
   BUNWIRE_REGISTRY_MODULE_ID,
   BUNWIRE_RESOLVED_CLIENT_MODULE_ID,
+  BUNWIRE_RESOLVED_PAGES_MODULE_ID,
   BUNWIRE_RESOLVED_VIRTUAL_MODULE_PREFIX,
   BUNWIRE_RESOLVED_REGISTRY_MODULE_ID,
   BUNWIRE_VIRTUAL_MODULE_NAMESPACE,
@@ -58,6 +64,14 @@ export {
   isBunwireVirtualModuleId,
   resolveBunwireVirtualModuleId,
 } from "./virtual-modules.js";
+export {
+  discoverBunwirePages,
+  generateBunwirePageModule,
+  type DiscoveredBunwirePage,
+  type GeneratedBunwirePageModule,
+  type BunwirePageAssetManifest,
+  renderBunwirePageManifest,
+} from "./page-generator.js";
 export {
   generateCallerContractModule,
   type GeneratedCallerContractModule,

@@ -59,3 +59,13 @@ pnpm --filter @bunwire/example-bun-app command -- routes:list
 ```
 
 Run the command entrypoint without arguments to see generated application and framework commands. The command role starts no HTTP server, worker, or scheduler loop unless `serve`, `queue:work`, or `schedule:run` selects that subsystem.
+
+## WebSocket example
+
+The separate `websocket/` source root has a generated `@WebSocket("/chat/:room")` registry, upgrade-time `@Use("auth")`, and native Bun publish/subscribe. Its demo query guard accepts `token=demo` and maps only the user ID into the connection context. After building, run:
+
+```sh
+pnpm --filter @bunwire/example-bun-app websocket
+```
+
+From a Bun REPL or browser console, connect with `new WebSocket("ws://127.0.0.1:3001/chat/general?token=demo")`. Connections without the demo token are rejected. This token is only for the local example; configure a real guard for an application.

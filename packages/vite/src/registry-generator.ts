@@ -105,6 +105,12 @@ export function generateRuntimeRegistryModule(
   options: GenerateRuntimeRegistryModuleOptions,
 ): GeneratedRuntimeRegistryModule {
   validateManagedMethodIdentities(options.analysis, options.extensions);
+  const classMiddlewareKinds = new Set(options.extensions.metadataHandlers.flatMap((handler) => {
+    const data = handler.data;
+    return data && typeof data === "object" && "type" in data && data.type === "bunwire.managed-class-compilation"
+      && "classMiddleware" in data && data.classMiddleware === true && "classKindIds" in data && Array.isArray(data.classKindIds)
+      ? data.classKindIds as string[] : [];
+  }));
   const mode = options.importMode ?? "relative";
   const classes = [...options.analysis.classes]
     .sort((left, right) => compareText(classSortKey(left), classSortKey(right)));
@@ -261,7 +267,10 @@ export function generateRuntimeRegistryModule(
       && (entry.data as { readonly scope?: unknown }).scope === "transient"
       ? "transient"
       : "singleton");
-    return `    { kind: ${decoratorRuntime}.definition.kind, target: ${target}, data: ${stableValue(entry.data)}, scope: ${JSON.stringify(scope)}, dependencies: [${dependencies.join(", ")}] }`;
+    const classMiddleware = classMiddlewareKinds.has(entry.kind.id)
+      ? entry.middleware.map((attachment) => `defineMiddlewareAttachment(${runtimeReference(attachment.target)}, ${stableValue(attachment.parameters)})`)
+      : undefined;
+    return `    { kind: ${decoratorRuntime}.definition.kind, target: ${target}, data: ${stableValue(entry.data)}, scope: ${JSON.stringify(scope)}, dependencies: [${dependencies.join(", ")}]${classMiddleware ? `, middleware: [${classMiddleware.join(", ")}]` : ""} }`;
   });
 
   const providerRecords = classes
@@ -317,6 +326,7 @@ export function generateRuntimeRegistryModule(
     ));
   const hasMiddlewareDefinitions = classes.some((entry) => entry.kind === MIDDLEWARE_KIND);
   const hasMiddlewareAttachments = classes.some((entry) => (
+    (classMiddlewareKinds.has(entry.kind.id) && entry.middleware.some((item) => item.source === "attachment")) ||
     entry.methods.some((method) => (
       method.middleware.some((item) => item.source === "attachment")
     ))

@@ -16,7 +16,7 @@ import { getManagedMethodMetadata } from "../managed-methods/method-decorator.js
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
 import type { ManagedMethodKind } from "../managed-methods/method-kind.js";
 import type { ParameterResolverDefinition } from "../managed-methods/resolvers.js";
-import { validateMiddlewareDefinition } from "../middleware/managed-middleware.js";
+import { validateMiddlewareAttachment, validateMiddlewareDefinition } from "../middleware/managed-middleware.js";
 import {
   EVENT_KIND,
   LISTENER_KIND,
@@ -384,7 +384,7 @@ export class Application<ApplicationContext = unknown> {
             plan: ManagedMethodPlan,
             callerArguments: readonly unknown[] = [],
             options: ManagedInvocationOptions<any, Result> = {},
-          ) => this.invokeManagedMethod<Result>(plan, callerArguments, options),
+          ) => this.invokeManagedMethodFromAdapter<Result>(plan, callerArguments, options),
         }) satisfies RuntimeRegistryConsumerContext;
         for (const consumer of adapterRuntime.registryConsumers) {
           await consumer.consume(this.#runtimeRegistry, consumerContext);
@@ -465,7 +465,15 @@ export class Application<ApplicationContext = unknown> {
     handler: (context: InvocationContext<ApplicationContext>) => Result | Promise<Result>,
     options: ManagedInvocationOptions<ApplicationContext, Result> = {},
   ): Promise<Result> {
-    this.assertRunning();
+    return this.runInvocationInternal(handler, options, false);
+  }
+
+  private async runInvocationInternal<Result>(
+    handler: (context: InvocationContext<ApplicationContext>) => Result | Promise<Result>,
+    options: ManagedInvocationOptions<ApplicationContext, Result>,
+    allowDuringStop: boolean,
+  ): Promise<Result> {
+    if (!(allowDuringStop && this.#state === "stopping")) this.assertRunning();
 
     const rootContainer = this.#rootContainer as Container;
     const parentContainer = options.parentContainer ?? rootContainer;
@@ -515,9 +523,23 @@ export class Application<ApplicationContext = unknown> {
   ): InvocationResult<Result> {
     this.assertRunning();
     this.#invocationEngine.validateInvocation(plan, callerArguments);
-    return await this.runInvocation(
+    return await this.runInvocationInternal(
       (context) => this.#invocationEngine.invoke<Result>(plan, context, callerArguments),
       options,
+      false,
+    ) as Awaited<Result>;
+  }
+
+  private async invokeManagedMethodFromAdapter<Result = unknown>(
+    plan: ManagedMethodPlan,
+    callerArguments: readonly unknown[],
+    options: ManagedInvocationOptions<ApplicationContext, Result>,
+  ): InvocationResult<Result> {
+    this.#invocationEngine.validateInvocation(plan, callerArguments);
+    return await this.runInvocationInternal(
+      (context) => this.#invocationEngine.invoke<Result>(plan, context, callerArguments),
+      options,
+      true,
     ) as Awaited<Result>;
   }
 
@@ -614,13 +636,20 @@ export class Application<ApplicationContext = unknown> {
         target: entry.target,
         dependencies: entry.dependencies,
       });
+      if (entry.middleware !== undefined) {
+        if (!Array.isArray(entry.middleware)) throw new TypeError("Runtime class middleware must be an array.");
+        for (const attachment of entry.middleware) validateMiddlewareAttachment(attachment);
+      }
       const policy = classPolicies.get(entry.kind.id);
+      if (entry.middleware?.length && !policy?.classMiddleware) {
+        throw new TypeError(`Managed class "${entry.target.name}" does not support class-level runtime middleware.`);
+      }
       if (policy) {
         if (entry.scope !== policy.scope || !compiler?.classDecorators.some((decorator) => decorator.kind === entry.kind && decorator.id === metadata.decoratorId)) {
           throw new TypeError("Intrinsic managed classes require canonical decorator identity and compiled binding scope.");
         }
         for (const method of policy.intrinsicMethods) {
-          if (!registry.methods.some((plan) => plan.target === entry.target && plan.kind === method.kind && plan.method === method.name)) {
+          if (!method.optional && !registry.methods.some((plan) => plan.target === entry.target && plan.kind === method.kind && plan.method === method.name)) {
             throw new TypeError(`Intrinsic managed class "${entry.target.name}" is missing required method "${method.name}".`);
           }
         }
@@ -671,7 +700,8 @@ export class Application<ApplicationContext = unknown> {
         const parameterPolicy = intrinsic.parameters;
         invalidIntrinsicParameters = parameterPolicy === "none" ? plan.parameters.length > 0
           : parameterPolicy === "payload-only" ? plan.parameters.some((parameter: ManagedMethodPlan["parameters"][number]) => parameter.source !== "transport")
-            : plan.parameters.some((parameter: ManagedMethodPlan["parameters"][number]) => parameter.source !== "resolver" || !parameterPolicy.resolverIds.includes(parameter.resolverId));
+            : parameterPolicy === "mixed" ? false
+              : plan.parameters.some((parameter: ManagedMethodPlan["parameters"][number]) => parameter.source !== "resolver" || !parameterPolicy.resolverIds.includes(parameter.resolverId));
       }
       if (intrinsic && (typeof Object.getOwnPropertyDescriptor(plan.target.prototype, plan.method)?.value !== "function" || invalidIntrinsicParameters)) {
         throw new TypeError("Intrinsic managed methods do not satisfy their canonical parameter policy.");

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 14 — Commands and Bunwire CLI Runtime (complete).
+Current milestone: Milestone 15 — Bun WebSockets (complete).
 
 Overall status:
 
@@ -20,7 +20,8 @@ Overall status:
 - Milestone 12: Complete — [details](progress/milestone-12.md)
 - Milestone 13: Complete — [details](progress/milestone-13.md)
 - Milestone 14: Complete — [details](progress/milestone-14.md)
-- Milestones 15–16: Not started
+- Milestone 15: Complete — [details](progress/milestone-15.md)
+- Milestone 16: Not started
 
 ## Implemented
 
@@ -43,14 +44,15 @@ Overall status:
 - Compiler-backed direct and central schedules, five-field cron/timezone semantics, isolated scheduled-task scopes, scheduled job dispatch, renewable lock-provider contracts, and graceful scheduler-role shutdown.
 - Stepped cron day-of-month and weekday fields follow the documented OR semantics.
 - Compiler-discovered managed commands, generated arguments/options/flags, isolated command scopes, deterministic CLI lifecycle/exit behavior, generated-registry introspection, and on-demand HTTP/worker/schedule operations.
+- Compiler-generated Bun-native WebSocket routes, upgrade middleware/security, durable identity snapshots, connection/message scopes, DI lifecycle hooks, native messaging, and bounded shutdown.
 
 ## Current Work
 
-- Milestone 14 is complete; no Bun package milestone is currently in progress.
+- Milestone 15 is complete; no Bun package milestone is currently in progress.
 
 ## Next
 
-- Milestone 15 — Bun WebSockets.
+- Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze.
 
 ## Blockers
 
@@ -72,3 +74,4 @@ Overall status:
 - [Milestone 12](progress/milestone-12.md)
 - [Milestone 13](progress/milestone-13.md)
 - [Milestone 14](progress/milestone-14.md)
+- [Milestone 15](progress/milestone-15.md)

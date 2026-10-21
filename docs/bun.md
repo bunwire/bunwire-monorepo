@@ -1656,37 +1656,47 @@ Bunwire's responsibility is the managed/decorator-driven application layer.
 Conceptually:
 
 ```ts
+import { WebSocket, BUN_WEBSOCKET_MESSAGE, type BunWebSocketMessageContext } from "@bunwire/bun";
+import { Inject, Use } from "@bunwire/core";
+import type { ServerWebSocket } from "bun";
+
 @WebSocket("/chat")
+@Use("auth")
 export class ChatSocket {
-  open(client) {}
+  open(client: ServerWebSocket<unknown>) { client.subscribe("chat"); }
 
-  message(client, message) {}
+  message(client: ServerWebSocket<unknown>, message: string | Buffer,
+    @Inject(BUN_WEBSOCKET_MESSAGE) context: BunWebSocketMessageContext) {
+    client.publish("chat", message);
+  }
 
-  close(client) {}
+  close(client: ServerWebSocket<unknown>, code: number, reason: string) {}
 }
 ```
 
-The exact final handler API needs design, but Bunwire should not create an unrelated WebSocket transport under Bun's implementation.
+`message(client, message)` is required. `open(client)`, `close(client, code, reason)`, and `drain(client)` are optional. Hooks may interleave framework/container-injected parameters with their native arguments; the generated plan keeps injected values out of transport arguments. The compiler generates socket identities and invocation plans, rejects duplicate socket paths and HTTP GET conflicts, and generates no caller-facing contract for these native hooks. The runtime exposes Bun's actual `ServerWebSocket`, including send, publish/subscribe, and backpressure behavior.
+
+Global middleware and socket-class `@Use()` attachments run against the HTTP request before upgrade. Configure `http.websocket.mapIdentity(context)` to return only durable JSON data for the connection; the adapter snapshots that data and disposes the HTTP request scope. The connection context token is `BUN_WEBSOCKET_CONNECTION`, and each message receives `BUN_WEBSOCKET_MESSAGE` in a child scope. Socket handlers are resolved once per connection, while message-scoped values are disposed after every message. `http.websocket.shutdownGraceMs` defaults to 5000 ms; shutdown sends close code `1001` and terminates connections still open after the grace period.
 
 ---
 
 # 41. WebSocket scopes
 
-WebSocket execution requires explicit lifetime semantics.
+WebSocket execution uses explicit lifetime semantics.
 
-The application should distinguish:
+The application distinguishes:
 
 ```text
 application scope
        ↓
 WebSocket connection scope
        ↓
-message execution
+WebSocket message scope
 ```
 
 Connection-specific state must not be stored accidentally in global singleton services.
 
-Authentication during the HTTP upgrade also needs a defined transition:
+Authentication during the HTTP upgrade follows this transition:
 
 ```text
 HTTP request context

@@ -182,9 +182,10 @@ const bunValidationHook = defineAdapterValidationHook<"bun.validate", BunRuntime
   validate({ applicationContext, registry }): void {
     const state = stateFor(applicationContext);
     validateBunHttpMiddleware(state.http, registry);
-    if (!state.sessionManager && registry.methods.some((plan) => (
-      plan.middleware.some((attachment) => attachment.target === CsrfMiddleware)
-    ))) {
+    if (!state.sessionManager && (
+      registry.methods.some((plan) => plan.middleware.some((attachment) => attachment.target === CsrfMiddleware))
+      || [...state.http.websocket.routes.values()].some((route) => route.entry.middleware?.some((attachment) => attachment.target === CsrfMiddleware))
+    )) {
       throw new BunAdapterError("The built-in csrf middleware requires configured Bun HTTP sessions.");
     }
     validateBunSecurityMiddleware(state, registry);
@@ -192,8 +193,16 @@ const bunValidationHook = defineAdapterValidationHook<"bun.validate", BunRuntime
 });
 
 function validateBunSecurityMiddleware(state: BunRuntimeState, registry: Parameters<typeof validateBunHttpMiddleware>[1]): void {
-  for (const plan of registry.methods) {
-    for (const attachment of plan.middleware) {
+  const entries = [
+    ...registry.methods.map((plan) => ({ attachments: plan.middleware, path: plan.kind === BUN_HTTP_ROUTE_KIND ? (() => {
+      const owner = registry.classes.find((entry) => entry.target === plan.target);
+      return owner && bunHttpCompiledRoute({ ownerKindId: owner.kind.id, ownerData: owner.data, methodData: plan.data,
+        transportParameterCount: plan.parameters.filter((parameter) => parameter.source === "transport").length }).path;
+    })() : undefined })),
+    ...[...state.http.websocket.routes.values()].map((route) => ({ attachments: route.entry.middleware ?? [], path: route.path })),
+  ];
+  for (const entry of entries) {
+    for (const attachment of entry.attachments) {
       if (attachment.target === AuthenticateMiddleware || attachment.target === GuestMiddleware) {
         if (!state.authManager) throw new BunAdapterError(`The built-in ${attachment.target === AuthenticateMiddleware ? "auth" : "guest"} middleware requires configured authentication.`);
         if (attachment.parameters.length > 1) throw new BunAdapterError(`${attachment.target.name} accepts at most one guard name.`);
@@ -208,15 +217,8 @@ function validateBunSecurityMiddleware(state: BunRuntimeState, registry: Paramet
         if (!state.authorizationManager.hasAbility(ability!, policy)) {
           throw new BunAdapterError(`The can middleware references unknown ${policy ? `policy ability ${JSON.stringify(`${policy}.${ability}`)}` : `ability ${JSON.stringify(ability)}`}.`);
         }
-        if (policy && plan.kind === BUN_HTTP_ROUTE_KIND) {
-          const owner = registry.classes.find((entry) => entry.target === plan.target);
-          const route = owner && bunHttpCompiledRoute({
-            ownerKindId: owner.kind.id,
-            ownerData: owner.data,
-            methodData: plan.data,
-            transportParameterCount: plan.parameters.filter((parameter) => parameter.source === "transport").length,
-          });
-          if (!route?.path.split("/").includes(`:${policy}`)) {
+        if (policy && entry.path !== undefined) {
+          if (!entry.path.split("/").includes(`:${policy}`)) {
             throw new BunAdapterError(`The can middleware policy ${JSON.stringify(policy)} requires route parameter ":${policy}".`);
           }
         }
@@ -319,6 +321,15 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       try { new BunPageManager(http.pages); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
     }
+    if (http.websocket !== undefined) {
+      const socket = http.websocket;
+      if (typeof socket !== "object" || socket === null
+        || (socket.mapIdentity !== undefined && typeof socket.mapIdentity !== "function")
+        || (socket.shutdownGraceMs !== undefined && (!Number.isSafeInteger(socket.shutdownGraceMs) || socket.shutdownGraceMs < 0))
+        || (socket.backpressureLimit !== undefined && (!Number.isSafeInteger(socket.backpressureLimit) || socket.backpressureLimit < 1))) {
+        throw new BunAdapterError("BunAdapter WebSocket options require a callable identity mapper and non-negative grace/positive backpressure limits.");
+      }
+    }
     validateQueueOptions(options.queues);
     if (role === "worker" || (role === "command" && options.queues?.worker !== undefined)) assertWorkerDriver(options.queues?.driver);
     else if (role !== "command" && options.queues?.worker !== undefined) throw new BunAdapterError("Queue worker options require the worker or command runtime role.");
@@ -382,6 +393,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
           ...(http.pages.flash === undefined ? {} : { flash: Object.freeze({ ...http.pages.flash }) }),
         }),
       }),
+      ...(http.websocket === undefined ? {} : { websocket: Object.freeze({ ...http.websocket }) }),
       mode: http.mode ?? "production",
       responseResolvers: Object.freeze([...(http.responseResolvers ?? [])]),
     });
@@ -426,7 +438,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       queueManager,
       registryConsumed: false,
       scopeManager,
-      http: createBunHttpRuntimeState(),
+      http: createBunHttpRuntimeState(this.#http.websocket as import("./websocket-runtime.js").BunWebSocketOptions | undefined),
       requests: createBunFormRequestRuntimeState(),
       signal: undefined,
       signalHandlers: undefined,
@@ -489,6 +501,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
     const state = stateFor(context.applicationContext);
     const errors: unknown[] = [];
     state.commandRuntime?.beginShutdown();
+    state.http.websocket.closing = true;
     state.scopeManager.beginShutdown();
     try { if (state.scheduler) await state.scheduler.stop(); } catch (error) { errors.push(error); }
     const draining = state.queueManager.drain();

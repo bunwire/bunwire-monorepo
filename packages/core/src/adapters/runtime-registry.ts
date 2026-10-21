@@ -7,6 +7,7 @@ import type { ConstructorDependencyMetadata } from "../container/metadata.js";
 import type { ManagedClassKind } from "../managed-classes/class-kind.js";
 import { MIDDLEWARE_KIND } from "../managed-classes/built-ins.js";
 import type { ManagedMethodPlan } from "../managed-methods/plan.js";
+import { validateMiddlewareAttachment, type MiddlewareAttachment } from "../middleware/managed-middleware.js";
 import {
   createRegistryConsumerId,
   type RegistryConsumerId,
@@ -24,6 +25,7 @@ export interface ManagedClassRegistryEntry<Data = unknown> {
   readonly data: Data;
   readonly scope: "singleton" | "transient";
   readonly dependencies: readonly ConstructorDependencyMetadata[];
+  readonly middleware?: readonly MiddlewareAttachment[];
 }
 
 export interface RuntimeRegistry {
@@ -64,6 +66,7 @@ export function defineRuntimeRegistry(options: DefineRuntimeRegistryOptions = {}
             ...entry,
             scope: entry.scope ?? (entry.kind === MIDDLEWARE_KIND ? "transient" : "singleton"),
             dependencies: Object.freeze((entry.dependencies ?? []).map((dependency) => Object.freeze({ ...dependency }))),
+            ...(entry.middleware === undefined ? {} : { middleware: Object.freeze(entry.middleware.map((attachment) => { validateMiddlewareAttachment(attachment); return attachment; })) }),
           })
     ))),
     providers: Object.freeze([...(options.providers ?? [])]),

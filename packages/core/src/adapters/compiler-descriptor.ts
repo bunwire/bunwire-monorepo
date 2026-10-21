@@ -25,11 +25,14 @@ export interface ManagedClassCompilationHandlerData {
   readonly scope: "singleton" | "transient";
   readonly properties: readonly string[];
   readonly compileMetadata: (decoratorData: unknown, properties: Readonly<Record<string, unknown>>) => unknown;
+  /** Place global and class-level middleware on the class registry entry for a host handshake. */
+  readonly classMiddleware?: boolean;
   readonly intrinsicMethods: readonly {
     readonly name: string;
+    readonly optional?: boolean;
     readonly kind: ManagedMethodKind;
     readonly compilerSymbol: CompilerSymbolReference;
-    readonly parameters: "payload-only" | "none" | {
+    readonly parameters: "payload-only" | "none" | "mixed" | {
       readonly resolverIds: readonly string[];
       readonly validateParameters?: (parameters: readonly {
         readonly methodIndex: number;
@@ -277,7 +280,8 @@ export function managedClassCompilationHandlers(descriptor: AdapterCompilerDescr
     const data = handler.data as ManagedClassCompilationHandlerData;
     if (!Array.isArray(data.classKindIds) || data.classKindIds.length === 0 || !Array.isArray(data.properties)
       || data.properties.some((key) => typeof key !== "string" || !key) || new Set(data.properties).size !== data.properties.length
-      || !["singleton", "transient"].includes(data.scope) || typeof data.compileMetadata !== "function" || !Array.isArray(data.intrinsicMethods)) {
+      || !["singleton", "transient"].includes(data.scope) || typeof data.compileMetadata !== "function" || !Array.isArray(data.intrinsicMethods)
+      || (data.classMiddleware !== undefined && typeof data.classMiddleware !== "boolean")) {
       throw new TypeError(`Malformed class compilation handler "${handler.id}".`);
     }
     for (const kindId of data.classKindIds) {
@@ -288,7 +292,8 @@ export function managedClassCompilationHandlers(descriptor: AdapterCompilerDescr
           ? method.parameters as { readonly resolverIds?: unknown }
           : undefined;
         if (!method || typeof method.name !== "string" || !method.name || names.has(method.name)
-          || (method.parameters !== "payload-only" && method.parameters !== "none"
+          || (method.optional !== undefined && typeof method.optional !== "boolean")
+          || (method.parameters !== "payload-only" && method.parameters !== "none" && method.parameters !== "mixed"
             && (!resolverPolicy || !Array.isArray(resolverPolicy.resolverIds) || resolverPolicy.resolverIds.length === 0
               || resolverPolicy.resolverIds.some((id) => !isNamespacedIdentifier(id))
               || new Set(resolverPolicy.resolverIds).size !== resolverPolicy.resolverIds.length

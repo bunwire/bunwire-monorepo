@@ -189,7 +189,7 @@ function appliesToRequest(
 }
 
 export function selectBunMiddleware(
-  plan: ManagedMethodPlan,
+  plan: Pick<ManagedMethodPlan, "middleware">,
   definitions: ReadonlyMap<MiddlewareConstructor, BunMiddlewareRuntimeDefinition>,
   pathname: string,
   method: BunHttpMethod,

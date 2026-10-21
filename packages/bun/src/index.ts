@@ -1,5 +1,19 @@
 export { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
 export {
+  WebSocket,
+  BUN_WEBSOCKET_KIND,
+  BUN_WEBSOCKET_OPEN_KIND,
+  BUN_WEBSOCKET_MESSAGE_KIND,
+  BUN_WEBSOCKET_CLOSE_KIND,
+  BUN_WEBSOCKET_DRAIN_KIND,
+  BUN_WEBSOCKET_CONNECTION,
+  BUN_WEBSOCKET_MESSAGE,
+  type BunWebSocketDefinition,
+  type BunWebSocketConnectionContext,
+  type BunWebSocketMessageContext,
+} from "./websocket.js";
+export type { BunWebSocketIdentity, BunWebSocketOptions } from "./websocket-runtime.js";
+export {
   Argument,
   Command,
   Flag,

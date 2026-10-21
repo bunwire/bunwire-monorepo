@@ -21,6 +21,7 @@ import type { BunAuthContext, BunAuthenticationOptions } from "./auth.js";
 import type { BunAuthorizationContext, BunAuthorizationOptions } from "./authorization.js";
 import type { BunOAuthContext } from "./oauth.js";
 import type { BunPageOptions } from "./pages.js";
+import type { BunWebSocketOptions } from "./websocket-runtime.js";
 
 export const BUN_HTTP_METHODS = Object.freeze([
   "GET",
@@ -76,6 +77,7 @@ export interface BunHttpServerOptions<Principal = unknown> {
   readonly auth?: BunAuthenticationOptions<Principal>;
   readonly authorization?: BunAuthorizationOptions<Principal>;
   readonly pages?: BunPageOptions<Principal>;
+  readonly websocket?: BunWebSocketOptions<Principal>;
 }
 
 export const BUN_HTTP_CONTEXT: Token<BunHttpContext> =

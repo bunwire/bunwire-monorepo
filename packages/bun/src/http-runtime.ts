@@ -56,11 +56,12 @@ import {
   type BunHttpResponseResolver,
 } from "./response.js";
 import { prepareBunFormRequestInput } from "./request-runtime.js";
+import { bunNativeWebSocketHandler, consumeBunWebSocketRegistry, createBunWebSocketRuntimeState, upgradeBunWebSocket, type BunWebSocketOptions, type BunWebSocketRuntimeState } from "./websocket-runtime.js";
 
 type NativeRouteHandler = (
   request: BunHttpRequest,
   server: BunHttpServer,
-) => Response | Promise<Response>;
+) => Response | undefined | Promise<Response | undefined>;
 
 type NativeRouteMethods = Partial<Record<BunHttpMethod, NativeRouteHandler>>;
 
@@ -81,14 +82,18 @@ export interface BunHttpRuntimeState {
   invocation: RuntimeRegistryConsumerContext<BunRuntimeContext> | undefined;
   server: BunHttpServer | undefined;
   middlewareDefinitions: ReadonlyMap<MiddlewareConstructor, BunMiddlewareRuntimeDefinition>;
+  readonly websocket: BunWebSocketRuntimeState;
+  socketHandler: ReturnType<typeof bunNativeWebSocketHandler> | undefined;
 }
 
-export function createBunHttpRuntimeState(): BunHttpRuntimeState {
+export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions): BunHttpRuntimeState {
   return {
     routes: new Map(),
     invocation: undefined,
     server: undefined,
     middlewareDefinitions: new Map(),
+    websocket: createBunWebSocketRuntimeState(websocketOptions),
+    socketHandler: undefined,
   };
 }
 
@@ -104,6 +109,13 @@ export function validateBunHttpMiddleware(
     registry,
     relevantPlans(registry),
   );
+  for (const route of state.websocket.routes.values()) {
+    for (const attachment of route.entry.middleware ?? []) {
+      if (!state.middlewareDefinitions.has(attachment.target)) {
+        throw new TypeError(`WebSocket route ${route.path} attaches unregistered middleware ${attachment.target.name}.`);
+      }
+    }
+  }
 }
 
 function ownerEntry(registry: RuntimeRegistry, plan: ManagedMethodPlan) {
@@ -117,6 +129,7 @@ export function consumeBunHttpRegistry(
 ): void {
   state.routes.clear();
   state.invocation = invocation;
+  consumeBunWebSocketRegistry(state.websocket, registry, invocation);
   const identities = new Map<string, ManagedMethodPlan>();
   for (const plan of registry.methods) {
     if (plan.kind !== BUN_HTTP_ROUTE_KIND) continue;
@@ -295,6 +308,17 @@ function nativeRoutes(
     }
     routes[path] = methods;
   }
+  for (const [path, socketRoute] of state.websocket.routes) {
+    const methods = routes[path] ?? Object.fromEntries(BUN_HTTP_METHODS.map((method) => [method, (request: BunHttpRequest, server: BunHttpServer) => handleBunHttpException(
+      new BunMethodNotAllowedException(["GET"]),
+      createBunHttpExceptionContext(request, server, pipeline.mode), pipeline.exceptionHandler,
+    )])) as NativeRouteMethods;
+    methods.GET = (request, server) => upgradeBunWebSocket(
+      state.websocket, socketRoute, request, server, manager, state.middlewareDefinitions, pipeline.mode, pipeline.exceptionHandler,
+      sessions, csrfManager, authManager, authorizationManager, oauthManager,
+    );
+    routes[path] = methods;
+  }
   return routes;
 }
 
@@ -321,6 +345,9 @@ export async function startBunHttpServer(
     ]),
     exceptionHandler: options.exceptionHandler ?? new BunDefaultHttpExceptionHandler(),
   });
+  const socketHandler = state.websocket.routes.size > 0
+    ? bunNativeWebSocketHandler(state.websocket, manager) : undefined;
+  state.socketHandler = socketHandler;
   const server = Bun.serve({
     ...(options.hostname === undefined ? {} : { hostname: options.hostname }),
     ...(options.port === undefined ? {} : { port: options.port }),
@@ -334,6 +361,13 @@ export async function startBunHttpServer(
       pipeline.exceptionHandler,
     ),
     error: () => bunInternalServerError(),
+    ...(socketHandler ? { websocket: {
+      open: socketHandler.open,
+      message: socketHandler.message,
+      drain: socketHandler.drain,
+      close: socketHandler.close,
+      ...(state.websocket.options.backpressureLimit === undefined ? {} : { backpressureLimit: state.websocket.options.backpressureLimit }),
+    } } : {}),
   });
   state.server = server as BunHttpServer;
   await options.onServer?.(state.server);
@@ -343,7 +377,15 @@ export async function stopBunHttpServer(state: BunHttpRuntimeState): Promise<voi
   const server = state.server;
   if (!server) return;
   state.server = undefined;
-  await server.stop(false);
+  const hadSockets = state.socketHandler !== undefined;
+  await state.socketHandler?.shutdown();
+  state.socketHandler = undefined;
+  if (!hadSockets) { await server.stop(false); return; }
+  const stop = server.stop(true);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([stop, new Promise<void>((resolve) => { timeout = setTimeout(resolve, 1000); })]);
+  } finally { if (timeout) clearTimeout(timeout); }
 }
 
 export const bunHttpContextResolver = defineParameterResolver({

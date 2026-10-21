@@ -2199,7 +2199,8 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       || !data.properties.every((key) => typeof key === "string" && key.length > 0)
       || new Set(data.properties).size !== data.properties.length
       || !Array.isArray(data.intrinsicMethods) || typeof data.compileMetadata !== "function"
-      || !["singleton", "transient"].includes(data.scope)) {
+      || !["singleton", "transient"].includes(data.scope)
+      || (data.classMiddleware !== undefined && typeof data.classMiddleware !== "boolean")) {
       throw new BunwireCompilerError("MANAGED_METHOD_INVALID", `Malformed class compilation handler "${handler.id}".`);
     }
     for (const kindId of data.classKindIds) {
@@ -2212,7 +2213,8 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
           ? method.parameters as { readonly resolverIds?: unknown }
           : undefined;
         if (!method || typeof method.name !== "string" || !method.name || names.has(method.name)
-          || (method.parameters !== "payload-only" && method.parameters !== "none"
+          || (method.optional !== undefined && typeof method.optional !== "boolean")
+          || (method.parameters !== "payload-only" && method.parameters !== "none" && method.parameters !== "mixed"
             && (!resolverPolicy || !Array.isArray(resolverPolicy.resolverIds) || resolverPolicy.resolverIds.length === 0
               || resolverPolicy.resolverIds.some((id) => typeof id !== "string" || !id.includes("."))
               || new Set(resolverPolicy.resolverIds).size !== resolverPolicy.resolverIds.length
@@ -2489,10 +2491,10 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     const match = discovered.get(declaration);
     const ownerKind = match?.definition.kind as ManagedClassKind | undefined;
     const classUses = matchDecorators(declaration, checker, useDefinitions);
-    if (classUses.length > 0 && ownerKind?.id !== CONTROLLER_KIND.id) {
+    if (classUses.length > 0 && ownerKind?.id !== CONTROLLER_KIND.id && !compilationHandlers.get(ownerKind?.id ?? "")?.classMiddleware) {
       fail(
         "MIDDLEWARE_ATTACHMENT_INVALID",
-        "Class-level @Use() is supported only on a canonical Controller class.",
+        "Class-level @Use() requires a canonical Controller or a managed class with class middleware support.",
         classUses[0]!.decorator,
       );
     }
@@ -2500,7 +2502,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       ? Object.freeze([])
       : analyzeUseEntries(
         classUses,
-        `Controller "${declaration.name?.text ?? "<anonymous>"}"`,
+        `Managed class "${declaration.name?.text ?? "<anonymous>"}"`,
         checker,
         middlewareTargetsBySymbol,
         middlewareTargetsByAlias,
@@ -2562,6 +2564,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       for (const intrinsic of compilation.intrinsicMethods) {
         const candidates = declaration.members.filter((member) => member.name && (ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name)) && member.name.text === intrinsic.name);
         const member = candidates[0];
+        if (intrinsic.optional && candidates.length === 0) continue;
         if (candidates.length !== 1 || !member || !ts.isMethodDeclaration(member) || !member.body
           || member.modifiers?.some((modifier) => [ts.SyntaxKind.StaticKeyword, ts.SyntaxKind.PrivateKeyword, ts.SyntaxKind.ProtectedKeyword, ts.SyntaxKind.AbstractKeyword].includes(modifier.kind))
           || methods.some((method) => method.name === intrinsic.name)) {
@@ -2643,9 +2646,12 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
   }
   const normalizedClasses = classes.map((entry) => Object.freeze({
     ...entry,
+    middleware: compilationHandlers.get(entry.kind.id)?.classMiddleware
+      ? deduplicateMiddleware([...middlewarePolicy.global, ...entry.middleware])
+      : entry.middleware,
     methods: Object.freeze(entry.methods.map((method) => Object.freeze({
       ...method,
-      middleware: deduplicateMiddleware([
+      middleware: compilationHandlers.get(entry.kind.id)?.classMiddleware ? Object.freeze([]) : deduplicateMiddleware([
         ...middlewarePolicy.global,
         ...(controllerMappings.get(entry) ?? []),
         ...entry.middleware,

@@ -2,7 +2,7 @@
 
 `@bunwire/bun` is Bunwire's first-party Bun host adapter and application runtime integration.
 
-Milestones 1–14 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, and managed commands. Remaining feature subsystems stay in their ordered milestones.
+Milestones 1–14 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, and managed commands. Milestone 15 adds Bun-native managed WebSockets.
 
 ```ts
 // bootstrap.ts
@@ -23,6 +23,12 @@ await app.withRuntimeRegistry(registry).start();
 ```
 
 `new BunAdapter()` defaults to the `http` role and starts exactly one native `Bun.serve()` server. The other roles are `worker`, `scheduler`, and `command`; they do not start HTTP resources. Native server options are configured through `http`, including an `onServer` escape hatch for the exact Bun server object.
+
+## WebSockets
+
+Decorate a class with `@WebSocket("/path")` and implement `message(client, message)`. Optional native hooks are `open(client)`, `close(client, code, reason)`, and `drain(client)`. Their client argument is Bun's actual `ServerWebSocket`, so `send`, `subscribe`, `publish`, and backpressure behavior remain native. The compiler generates the route and invocation plans and rejects duplicate socket paths or HTTP GET conflicts.
+
+Socket-class `@Use()` and global middleware authorize the HTTP upgrade. Configure `http.websocket.mapIdentity(context)` to copy durable JSON identity data into the connection; request context and session objects are disposed after upgrade. Inject `BUN_WEBSOCKET_CONNECTION` into the handler constructor for connection context, or `BUN_WEBSOCKET_MESSAGE` into a message method for its short-lived child scope. Each connection has its own handler instance. Shutdown sends code `1001`, waits `http.websocket.shutdownGraceMs` (default 5000 ms), then terminates remaining sockets.
 
 ## HTTP routes
 

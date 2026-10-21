@@ -17,12 +17,17 @@ describe("Bun Milestone 1 — compiler and generated-registry integration", () =
       "bun.job",
       "bun.scheduled-task",
       "bun.command",
+      "bun.websocket",
     ]);
     expect(application.extensions.adapter.methodKinds.map(({ id }) => id)).toEqual([
       "bun.http-route",
       "bun.job.handle",
       "bun.scheduled-task.handle",
       "bun.command.handle",
+      "bun.websocket.open",
+      "bun.websocket.message",
+      "bun.websocket.close",
+      "bun.websocket.drain",
     ]);
     expect(application.analysis.classes.map(({ name }) => name).sort()).toEqual([
       "CsrfMiddleware",

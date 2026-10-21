@@ -9,10 +9,16 @@ import {
   BUN_SCHEDULED_TASK_HANDLE_KIND,
   BUN_COMMAND_KIND,
   BUN_COMMAND_HANDLE_KIND,
+  BUN_WEBSOCKET_KIND,
+  BUN_WEBSOCKET_OPEN_KIND,
+  BUN_WEBSOCKET_MESSAGE_KIND,
+  BUN_WEBSOCKET_CLOSE_KIND,
+  BUN_WEBSOCKET_DRAIN_KIND,
   Argument,
   Option,
   Flag,
   Command,
+  WebSocket,
   Job,
   Queue,
   BunAdapter,
@@ -33,14 +39,14 @@ import {
 describe("Bun Milestone 1 — adapter foundation and runtime roles", () => {
   it("exports BunAdapter's canonical compiler descriptor", () => {
     expect(BUN_COMPILER_DESCRIPTOR.id).toBe("bun.adapter");
-    expect(BUN_COMPILER_DESCRIPTOR.classKinds).toEqual([BUN_REQUEST_KIND, BUN_JOB_KIND, BUN_SCHEDULED_TASK_KIND, BUN_COMMAND_KIND]);
-    expect(BUN_COMPILER_DESCRIPTOR.classDecorators).toEqual([Request.definition, Job.definition, Schedule.definition, Command.definition]);
+    expect(BUN_COMPILER_DESCRIPTOR.classKinds).toEqual([BUN_REQUEST_KIND, BUN_JOB_KIND, BUN_SCHEDULED_TASK_KIND, BUN_COMMAND_KIND, BUN_WEBSOCKET_KIND]);
+    expect(BUN_COMPILER_DESCRIPTOR.classDecorators).toEqual([Request.definition, Job.definition, Schedule.definition, Command.definition, WebSocket.definition]);
     expect(BUN_COMPILER_DESCRIPTOR.classAttachments).toEqual([Queue.definition]);
-    expect(BUN_COMPILER_DESCRIPTOR.methodKinds).toEqual([BUN_HTTP_ROUTE_KIND, BUN_JOB_HANDLE_KIND, BUN_SCHEDULED_TASK_HANDLE_KIND, BUN_COMMAND_HANDLE_KIND]);
+    expect(BUN_COMPILER_DESCRIPTOR.methodKinds).toEqual([BUN_HTTP_ROUTE_KIND, BUN_JOB_HANDLE_KIND, BUN_SCHEDULED_TASK_HANDLE_KIND, BUN_COMMAND_HANDLE_KIND, BUN_WEBSOCKET_OPEN_KIND, BUN_WEBSOCKET_MESSAGE_KIND, BUN_WEBSOCKET_CLOSE_KIND, BUN_WEBSOCKET_DRAIN_KIND]);
     expect(BUN_COMPILER_DESCRIPTOR.methodDecorators).toHaveLength(7);
     expect(BUN_COMPILER_DESCRIPTOR.parameterInjectors).toEqual(expect.arrayContaining([Argument.definition, Option.definition, Flag.definition]));
     expect(BUN_COMPILER_DESCRIPTOR.parameterInjectors).toHaveLength(4);
-    expect(BUN_COMPILER_DESCRIPTOR.metadataHandlers).toHaveLength(13);
+    expect(BUN_COMPILER_DESCRIPTOR.metadataHandlers).toHaveLength(15);
     expect(
       (BUN_COMPILER_DESCRIPTOR.middlewareDefinitions ?? []).map(
         (definition) => definition.data.alias,

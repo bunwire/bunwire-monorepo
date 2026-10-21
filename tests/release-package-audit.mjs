@@ -64,7 +64,7 @@ try {
       .split(/\r?\n/)
       .filter(Boolean);
     const allowed = /^package\/(?:package\.json|README\.md|LICENSE|dist\/.*\.(?:js|d\.ts|map))$/;
-    const unexpected = entries.filter((entry) => !allowed.test(entry));
+    const unexpected = entries.filter((entry) => !allowed.test(entry) && !(packageName === "bun" && entry === "package/SECURITY_REVIEW.md"));
     if (unexpected.length > 0) {
       throw new Error(`Unexpected files in @bunwire/${packageName} tarball: ${unexpected.join(", ")}`);
     }
@@ -72,6 +72,9 @@ try {
       if (!entries.includes(required)) {
         throw new Error(`@bunwire/${packageName} tarball is missing ${required}.`);
       }
+    }
+    if (packageName === "bun" && !entries.includes("package/SECURITY_REVIEW.md")) {
+      throw new Error("@bunwire/bun tarball is missing its linked security review.");
     }
 
     const manifest = JSON.parse(runExecutable("tar", ["-xOf", tarball, "package/package.json"], repositoryRoot));
@@ -117,6 +120,7 @@ try {
   await writeFile(path.join(consumerRoot, "consumer.ts"), `
 import { Controller, Service, createToken, defineApp } from "@bunwire/core";
 import { BunAdapter } from "@bunwire/bun";
+import { BunTestClient } from "@bunwire/bun/testing";
 import { bunwire, defineBunwireConfig } from "@bunwire/vite";
 import { ElectrobunAdapter, Route } from "@bunwire/electrobun";
 
@@ -127,14 +131,15 @@ const config = defineBunwireConfig({ source: "./src", bootstrap: "./src/bootstra
 const plugin = bunwire();
 const app = defineApp().withAdapter(new ElectrobunAdapter());
 const bunApp = defineApp().withAdapter(new BunAdapter({ handleSignals: false }));
-void [VALUE, Values, ReleaseController, config, plugin, app, bunApp];
+void [VALUE, Values, ReleaseController, config, plugin, app, bunApp, BunTestClient];
 `);
   await writeFile(path.join(consumerRoot, "consumer.mjs"), `
 import { createToken, defineApp } from "@bunwire/core";
 import { BunAdapter } from "@bunwire/bun";
+import { BunTestClient } from "@bunwire/bun/testing";
 import { bunwire } from "@bunwire/vite";
 import { ElectrobunAdapter } from "@bunwire/electrobun";
-if (typeof createToken !== "function" || typeof defineApp !== "function" || typeof bunwire !== "function" || typeof ElectrobunAdapter !== "function" || typeof BunAdapter !== "function") {
+if (typeof createToken !== "function" || typeof defineApp !== "function" || typeof bunwire !== "function" || typeof ElectrobunAdapter !== "function" || typeof BunAdapter !== "function" || typeof BunTestClient !== "function") {
   throw new Error("Packed Bunwire public ESM exports are incomplete.");
 }
 `);

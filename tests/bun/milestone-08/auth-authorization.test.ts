@@ -20,6 +20,7 @@ function request(init: RequestInit = {}): BunHttpRequest {
 
 function http(native = request(), session?: BunHttpContext<Principal>["session"]): BunHttpContext<Principal> {
   return {
+    requestId: "test-request",
     request: native,
     server: {} as never,
     route: { method: "GET", path: "/posts/:post", params: { post: "42" } },

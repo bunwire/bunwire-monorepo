@@ -41,6 +41,7 @@ class HttpController {
       path: context.route.path,
       param: context.route.params.id,
       url: context.request.url,
+      requestId: context.requestId,
       scopeId: context.scope.id,
       markerScopeId: marker.scopeId,
       frozen: Object.isFrozen(context) && Object.isFrozen(context.route.params),
@@ -211,6 +212,23 @@ describe("Bun Milestone 3 — native HTTP runtime", () => {
       expect(response.status).toBe(500);
       expect(await response.text()).toBe("Internal Server Error");
     }
+    await app.stop();
+  });
+
+  it("emits isolated request lifecycle records with the context request ID", async () => {
+    const records: import("@bunwire/bun").BunOperationRecord[] = [];
+    const app = defineApp().withAdapter(new BunAdapter({ handleSignals: false, observability: (record) => records.push(record) }))
+      .withRuntimeRegistry(registry());
+    await app.start();
+    const get = options.routes["/api/users/:id"]!.GET!;
+    const first = await (await get(request("http://local/api/users/one", { id: "one" }), server)).json() as { requestId: string };
+    const second = await (await get(request("http://local/api/users/two", { id: "two" }), server)).json() as { requestId: string };
+    expect(first.requestId).not.toBe(second.requestId);
+    expect(records).toHaveLength(4);
+    expect(records[0]).toMatchObject({ kind: "http", phase: "start", requestId: first.requestId, route: "/api/users/:id", method: "GET" });
+    expect(records[1]).toMatchObject({ kind: "http", phase: "end", requestId: first.requestId, status: 200, outcome: "ok" });
+    expect(records[1]!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(Object.isFrozen(records[0])).toBe(true);
     await app.stop();
   });
 

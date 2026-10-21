@@ -40,6 +40,7 @@ describe("Bun Milestone 1 — compiler and generated-registry integration", () =
       "ExampleHttpMiddleware",
       "ExampleGuardMiddleware",
       "ExampleActionRecorded",
+      "ExampleChat",
       "ExampleEventAudit",
       "RecordExampleAction",
       "ExampleQueuedAudit",

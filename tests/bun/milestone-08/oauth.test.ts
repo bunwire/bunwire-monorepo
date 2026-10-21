@@ -21,6 +21,7 @@ function request(url = "http://local/oauth/callback"): BunHttpRequest {
 
 function http(native: BunHttpRequest, session: Session): BunHttpContext<Principal> {
   return {
+    requestId: "test-request",
     request: native,
     server: {} as never,
     route: { method: "GET", path: "/oauth/callback", params: {} },

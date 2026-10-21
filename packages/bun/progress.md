@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 15 — Bun WebSockets (complete).
+Current milestone: Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze (complete).
 
 Overall status:
 
@@ -21,7 +21,7 @@ Overall status:
 - Milestone 13: Complete — [details](progress/milestone-13.md)
 - Milestone 14: Complete — [details](progress/milestone-14.md)
 - Milestone 15: Complete — [details](progress/milestone-15.md)
-- Milestone 16: Not started
+- Milestone 16: Complete — [details](progress/milestone-16.md)
 
 ## Implemented
 
@@ -45,14 +45,15 @@ Overall status:
 - Stepped cron day-of-month and weekday fields follow the documented OR semantics.
 - Compiler-discovered managed commands, generated arguments/options/flags, isolated command scopes, deterministic CLI lifecycle/exit behavior, generated-registry introspection, and on-demand HTTP/worker/schedule operations.
 - Compiler-generated Bun-native WebSocket routes, upgrade middleware/security, durable identity snapshots, connection/message scopes, DI lifecycle hooks, native messaging, and bounded shutdown.
+- Integrated real Bun application flows, isolated testing utilities, structured observability, security review and hardening, performance sanity checks, documentation, and compatibility assertions for the initial package contract.
 
 ## Current Work
 
-- Milestone 15 is complete; no Bun package milestone is currently in progress.
+- Milestone 16 is complete. No package milestone is in progress.
 
 ## Next
 
-- Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze.
+- Only additive post-plan work, such as additional session/queue stores, OAuth providers, distributed scheduler locks, and richer WebSocket or page conveniences. Versioning and publication require a separate release decision.
 
 ## Blockers
 
@@ -75,3 +76,4 @@ Overall status:
 - [Milestone 13](progress/milestone-13.md)
 - [Milestone 14](progress/milestone-14.md)
 - [Milestone 15](progress/milestone-15.md)
+- [Milestone 16](progress/milestone-16.md)

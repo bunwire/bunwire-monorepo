@@ -14,6 +14,7 @@ export default defineConfig({
     alias: {
       "@bunwire/bun/client": fileURLToPath(new URL("./packages/bun/src/client.ts", import.meta.url)),
       "@bunwire/bun/react": fileURLToPath(new URL("./packages/bun/src/react.ts", import.meta.url)),
+      "@bunwire/bun/testing": fileURLToPath(new URL("./packages/bun/src/testing.ts", import.meta.url)),
       "@bunwire/bun": fileURLToPath(new URL("./packages/bun/src/index.ts", import.meta.url)),
       "@bunwire/core": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
       "@bunwire/validation": fileURLToPath(new URL("./packages/validation/src/index.ts", import.meta.url)),

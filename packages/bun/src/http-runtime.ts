@@ -57,6 +57,7 @@ import {
 } from "./response.js";
 import { prepareBunFormRequestInput } from "./request-runtime.js";
 import { bunNativeWebSocketHandler, consumeBunWebSocketRegistry, createBunWebSocketRuntimeState, upgradeBunWebSocket, type BunWebSocketOptions, type BunWebSocketRuntimeState } from "./websocket-runtime.js";
+import { BunOperationObserver } from "./observability.js";
 
 type NativeRouteHandler = (
   request: BunHttpRequest,
@@ -78,6 +79,7 @@ interface BunHttpPipeline {
 }
 
 export interface BunHttpRuntimeState {
+  readonly observer: BunOperationObserver;
   readonly routes: Map<string, Map<BunHttpMethod, CompiledHttpRoute>>;
   invocation: RuntimeRegistryConsumerContext<BunRuntimeContext> | undefined;
   server: BunHttpServer | undefined;
@@ -86,13 +88,14 @@ export interface BunHttpRuntimeState {
   socketHandler: ReturnType<typeof bunNativeWebSocketHandler> | undefined;
 }
 
-export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions): BunHttpRuntimeState {
+export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions, observer = new BunOperationObserver()): BunHttpRuntimeState {
   return {
+    observer,
     routes: new Map(),
     invocation: undefined,
     server: undefined,
     middlewareDefinitions: new Map(),
-    websocket: createBunWebSocketRuntimeState(websocketOptions),
+    websocket: createBunWebSocketRuntimeState(websocketOptions, observer),
     socketHandler: undefined,
   };
 }
@@ -185,6 +188,7 @@ async function invokeRoute(
   authorizationManager?: AuthorizationManager,
   oauthManager?: OAuthManager,
   pageManager?: BunPageManager,
+  requestId = crypto.randomUUID(),
 ): Promise<Response> {
   let httpContext: BunHttpContext | undefined;
   try {
@@ -201,6 +205,7 @@ async function invokeRoute(
           ? oauthManager.createContext(() => context, auth, lease.session)
           : undefined;
         context = Object.freeze({
+          requestId,
           request,
           server,
           route: Object.freeze({
@@ -296,10 +301,13 @@ function nativeRoutes(
     for (const method of BUN_HTTP_METHODS) {
       const route = compiledMethods.get(method);
       methods[method] = route
-        ? (request, server) => invokeRoute(
-            route, request, server, manager, invocation, state, pipeline,
-            sessions, csrfManager, authManager, authorizationManager, oauthManager, pageManager,
-          )
+        ? (request, server) => {
+            const requestId = crypto.randomUUID();
+            return state.observer.run({ kind: "http", id: requestId, requestId, route: route.path, method: route.method },
+              () => invokeRoute(route, request, server, manager, invocation, state, pipeline,
+                sessions, csrfManager, authManager, authorizationManager, oauthManager, pageManager, requestId),
+              (response) => response.status);
+          }
         : (request, server) => handleBunHttpException(
             new BunMethodNotAllowedException(allow),
             createBunHttpExceptionContext(request, server, pipeline.mode),

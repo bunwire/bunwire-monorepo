@@ -69,7 +69,7 @@ function isFile(value: unknown): value is File {
 }
 
 function fileInput(body: BunFormRequestInput): BunFormRequestFileInput {
-  const files: Record<string, File | readonly File[]> = {};
+  const files: Record<string, File | readonly File[]> = Object.create(null) as Record<string, File | readonly File[]>;
   for (const [key, value] of Object.entries(body)) {
     if (isFile(value)) files[key] = value;
     else if (Array.isArray(value)) {
@@ -128,7 +128,7 @@ export function prepareBunFormRequestInput(context: BunHttpContext): void {
 }
 
 function validationMessages(errors: ValidationErrorsLike): Readonly<Record<string, readonly string[]>> {
-  const grouped: Record<string, string[]> = {};
+  const grouped: Record<string, string[]> = Object.create(null) as Record<string, string[]>;
   for (const error of errors.all()) {
     (grouped[error.attribute] ??= []).push(error.message);
   }

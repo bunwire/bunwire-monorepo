@@ -37,6 +37,7 @@ import type { BunExecutionScopeManager } from "./execution-scopes.js";
 import type { QueueManager } from "./queue-manager.js";
 import type { BunScheduler } from "./scheduler.js";
 import { Queue } from "./queued-listeners.js";
+import { BunOperationObserver } from "./observability.js";
 
 export interface BunCliRunOptions {
   readonly argv?: readonly string[];
@@ -145,7 +146,8 @@ export class BunCommandRuntime {
   readonly stopped: Promise<void>; #resolveStopped!: () => void;
   #registry: RuntimeRegistry | undefined; #invocation: RuntimeRegistryConsumerContext | undefined; #ran = false;
   constructor(private readonly application: Application, private readonly scopes: BunExecutionScopeManager, private readonly queues: QueueManager,
-    private readonly scheduler: BunScheduler, private readonly operations: CommandRuntimeOperations) { this.stopped = new Promise((resolve) => { this.#resolveStopped = resolve; }); }
+    private readonly scheduler: BunScheduler, private readonly operations: CommandRuntimeOperations,
+    private readonly observer = new BunOperationObserver()) { this.stopped = new Promise((resolve) => { this.#resolveStopped = resolve; }); }
   consume(registry: RuntimeRegistry, invocation: RuntimeRegistryConsumerContext): void {
     this.#registry = registry; this.#invocation = invocation; this.#commands.clear();
     for (const entry of registry.classes) {
@@ -179,7 +181,7 @@ export class BunCommandRuntime {
     if (!applicationCommand && !framework) { await write(io, "stderr", `Unknown command "${name}".`); return 2; }
     if (tail.includes("--help") || tail.includes("-h")) return applicationCommand ? (await write(io, "stdout", usage(applicationCommand)), 0) : this.#writeFrameworkHelp(name, io);
     try {
-      return await this.scopes.run("command", async (scope) => {
+      return await this.observer.run({ kind: "command", id: crypto.randomUUID(), command: name }, () => this.scopes.run("command", async (scope) => {
         if (applicationCommand) {
           const parsed = parse(applicationCommand.parameters, tail); const context = Object.freeze({ name, argv: Object.freeze([...tail]), arguments: parsed.arguments, options: parsed.options, io, signal: this.#controller.signal, scope });
           scope.value(BUN_COMMAND_CONTEXT, context); const result = await this.application.invokeManagedMethod(applicationCommand.plan, [], { parentContainer: scope.container });
@@ -187,7 +189,7 @@ export class BunCommandRuntime {
         }
         const context = Object.freeze({ name, argv: Object.freeze([...tail]), arguments: Object.freeze({}), options: Object.freeze({}), io, signal: this.#controller.signal, scope }); scope.value(BUN_COMMAND_CONTEXT, context);
         return await framework!(tail, io);
-      });
+      }));
     } catch (error) { const usageFailure = error instanceof Error && /^(Unknown option|Option |Flag |Value |Expected |Missing required|Combined)/.test(error.message); await write(io, "stderr", errorText(error)); return usageFailure ? 2 : 1; }
   }
   async #writeList(io: BunCommandIO): Promise<void> { await write(io, "stdout", ["Usage: bunwire <command> [arguments] [options]", "", "Commands:", ...[...BUN_FRAMEWORK_COMMAND_NAMES, ...this.#commands.keys()].sort().map((name) => `  ${name}`)].join("\n")); }

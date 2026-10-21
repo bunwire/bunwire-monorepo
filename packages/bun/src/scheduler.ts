@@ -7,6 +7,7 @@ import { JsonJobSerializer } from "./job-serializer.js";
 import type { BunExecutionScopeManager } from "./execution-scopes.js";
 import type { QueueManager } from "./queue-manager.js";
 import { MemoryScheduleLockProvider, type ScheduleExecutionOutcome, type ScheduleLockLease, type ScheduleLockProvider } from "./schedule-lock.js";
+import { BunOperationObserver } from "./observability.js";
 
 export interface BunSchedulerClock { now(): number; waitUntil(timestamp: number, signal: AbortSignal): Promise<void> }
 export interface BunSchedulerErrorContext { readonly error: unknown; readonly definition: RuntimeScheduleDefinition; readonly scheduledAt: number }
@@ -49,7 +50,8 @@ function freezeScheduleValue(value: unknown): unknown {
 export class BunScheduler {
   readonly options: ReturnType<typeof normalizeSchedulerOptions>; readonly done: Promise<void>; readonly #entries: Entry[] = []; readonly #active = new Set<Promise<void>>();
   #state: BunSchedulerState = "idle"; #closing = false; #resolve!: () => void; #reject!: (error: unknown) => void; #controller = new AbortController(); #startup: ReturnType<typeof setTimeout> | undefined; #lastMinute = -Infinity; readonly #failures: unknown[] = []; #initializationAttempted = false; #closed = false;
-  constructor(private readonly application: Application, private readonly scopes: BunExecutionScopeManager, private readonly queues: QueueManager, options?: BunSchedulerOptions) {
+  constructor(private readonly application: Application, private readonly scopes: BunExecutionScopeManager, private readonly queues: QueueManager,
+    options?: BunSchedulerOptions, private readonly observer = new BunOperationObserver()) {
     this.options = normalizeSchedulerOptions(options); this.done = new Promise<void>((resolve, reject) => { this.#resolve = resolve; this.#reject = reject; }); void this.done.catch(() => undefined);
   }
   get state(): BunSchedulerState { return this.#state; } get activeCount(): number { return this.#active.size; }
@@ -108,6 +110,9 @@ export class BunScheduler {
   }
   #launch(entry: Entry, scheduledAt: number): void { const work = this.#execute(entry, scheduledAt); this.#active.add(work); void work.finally(() => { this.#active.delete(work); this.#finish(); }).catch(() => undefined); }
   async #execute(entry: Entry, scheduledAt: number): Promise<void> {
+    const observationId = `${entry.definition.id}:${scheduledAt}`;
+    const startedAt = performance.now();
+    this.observer.emit({ kind: "schedule", phase: "start", id: observationId, at: Date.now(), scheduledTask: entry.definition.id });
     const leases: ScheduleLockLease[] = []; let outcome: ScheduleExecutionOutcome = "success"; let userError: unknown;
     try {
       for (const mode of ["overlap", "single-server"] as const) {
@@ -142,6 +147,10 @@ export class BunScheduler {
         if (this.options.failurePolicy === "stop") this.#fault(userError);
       }
     } catch (error) { outcome = "failure"; this.#fault(error); }
-    finally { for (const lease of leases.reverse()) { try { await this.options.locks.release(lease, outcome); } catch (error) { this.#fault(error); } } }
+    finally {
+      for (const lease of leases.reverse()) { try { await this.options.locks.release(lease, outcome); } catch (error) { outcome = "failure"; this.#fault(error); } }
+      this.observer.emit({ kind: "schedule", phase: "end", id: observationId, at: Date.now(), scheduledTask: entry.definition.id,
+        durationMs: performance.now() - startedAt, outcome: outcome === "success" ? "ok" : "error" });
+    }
   }
 }

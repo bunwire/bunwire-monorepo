@@ -27,6 +27,14 @@ The event audit is an application-singleton, in-memory demonstration. Event alia
 
 The job audit is also in-memory. Job payloads round-trip through the default JSON serializer and execute with constructor DI in separate `queue-job` scopes. The HTTP example starts no worker loop; the sync driver awaits execution, enforces cooperative timeout but never retries or supports delay. `QueueExampleAction` additionally demonstrates Bun `@Queue` on a Core listener with an explicit event codec and a separate audit, without changing the direct delivery count.
 
+## Integrated milestone 16 demo
+
+For a single-process exercise of the major systems together, set `BUNWIRE_EXAMPLE_INTEGRATED=1` and run `bun src/main.ts` from this example directory. Set `BUNWIRE_EXAMPLE_PORT=0` for an ephemeral port; startup prints `BUNWIRE_EXAMPLE_READY` with the actual URL. This demo selects a memory queue and starts a worker beside HTTP so one process can show queued listener/job delivery. Production multi-process roles need a shared queue driver instead.
+
+The generated `POST /api/integrated/:id` route runs CSRF, session authentication, ability authorization, a DI-backed Form Request, direct event dispatch, queued listener dispatch, and job dispatch. `GET /api/integrated/status/:id` reports their audit counts. `GET /api/page` and `/api/page/dashboard` show HTML and navigation responses; invalid page submissions flash validation errors/old input into the next page response. `GET /api/login` and `/api/logout` change the session principal. The same HTTP server exposes an authenticated `/api/chat` WebSocket with a durable identity snapshot. Write `stop` to stdin to drain the worker, sockets, scopes, and server through `app.stop()`.
+
+`tests/bun/milestone-16/example-process.test.ts` executes this flow, including an authenticated Bun WebSocket client and shutdown. `scheduler-worker.test.ts` drives the generated scheduler example into a live memory worker at a fixed timestamp.
+
 ## Worker example
 
 The separate `worker/` source root has its own generated registry and composition root. It starts no HTTP server. After building above, run:
@@ -35,7 +43,7 @@ The separate `worker/` source root has its own generated registry and compositio
 pnpm --filter @bunwire/example-bun-app worker:demo
 ```
 
-The demo submits a job that succeeds on its second attempt and a queued Core listener whose codec reconstructs private event state. It waits for both, then drains through `app.stop()`. `pnpm --filter @bunwire/example-bun-app worker` runs until SIGINT/SIGTERM; the entrypoint observes `worker.done` and always awaits Core shutdown. Infrastructure failures produce a nonzero exit.
+The demo submits a job that succeeds on its second attempt, a job that exhausts its retries and appears in the failed-job store, and a queued Core listener whose codec reconstructs private event state. It waits for all three outcomes, then drains through `app.stop()`. `pnpm --filter @bunwire/example-bun-app worker` runs until SIGINT/SIGTERM; the entrypoint observes `worker.done` and always awaits Core shutdown. Infrastructure failures produce a nonzero exit.
 
 Both the queue and failed-job store are in-memory, process-local and non-durable. The standalone demo intentionally submits and consumes in the same process; it cannot receive work from this HTTP example. Cross-process deployments need an explicitly configured shared durable driver/store.
 

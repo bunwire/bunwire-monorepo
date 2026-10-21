@@ -30,6 +30,7 @@ import {
 import type { BunRuntimeContext } from "./runtime.js";
 import { BunDefaultHttpExceptionHandler, createBunHttpExceptionContext, handleBunHttpException,
   type BunHttpExceptionHandler, type BunHttpMode } from "./exceptions.js";
+import { BunOperationObserver } from "./observability.js";
 
 export type BunWebSocketIdentity = null | boolean | number | string | readonly BunWebSocketIdentity[] | { readonly [key: string]: BunWebSocketIdentity };
 
@@ -59,10 +60,14 @@ interface ActiveConnection extends PendingConnection {
   readonly context: BunWebSocketConnectionContext;
   ready: Promise<void>;
   readonly messages: Set<Promise<void>>;
+  readonly startedAt: number;
+  messageCount: number;
+  failed: boolean;
   closing?: Promise<void>;
 }
 
 export interface BunWebSocketRuntimeState {
+  readonly observer: BunOperationObserver;
   readonly routes: Map<string, SocketRoute>;
   readonly pending: Map<number, PendingConnection>;
   readonly connections: Map<number, ActiveConnection>;
@@ -72,8 +77,8 @@ export interface BunWebSocketRuntimeState {
   readonly options: BunWebSocketOptions;
 }
 
-export function createBunWebSocketRuntimeState(options: BunWebSocketOptions = {}): BunWebSocketRuntimeState {
-  return { routes: new Map(), pending: new Map(), connections: new Map(), invocation: undefined, nextId: 1, closing: false, options };
+export function createBunWebSocketRuntimeState(options: BunWebSocketOptions = {}, observer = new BunOperationObserver()): BunWebSocketRuntimeState {
+  return { routes: new Map(), pending: new Map(), connections: new Map(), invocation: undefined, nextId: 1, closing: false, options, observer };
 }
 
 /** @internal Copy only durable JSON identity data across the HTTP/connection scope boundary. */
@@ -171,6 +176,8 @@ export async function upgradeBunWebSocket(
   authorizationManager?: AuthorizationManager,
   oauthManager?: OAuthManager,
 ): Promise<Response | undefined> {
+  const requestId = crypto.randomUUID();
+  return state.observer.run({ kind: "websocket-upgrade", id: requestId, requestId, route: route.path, method: "GET" }, async () => {
   if (state.closing) return new Response("Server shutting down", { status: 503 });
   const invocation = state.invocation;
   if (!invocation) throw new TypeError("WebSocket registry has not been consumed.");
@@ -183,7 +190,7 @@ export async function upgradeBunWebSocket(
       const auth = authManager?.createContext(() => context!);
       const authorization = authorizationManager?.createContext(() => context!, auth);
       const oauth = auth && lease && oauthManager ? oauthManager.createContext(() => context!, auth, lease.session) : undefined;
-      context = Object.freeze({ request, server, route: Object.freeze({ method: "GET" as const, path: route.path, params: params(request) }),
+      context = Object.freeze({ requestId, request, server, route: Object.freeze({ method: "GET" as const, path: route.path, params: params(request) }),
         scope, cookies, ...(lease ? { session: lease.session } : {}), ...(csrf ? { csrf } : {}), ...(auth ? { auth } : {}),
         ...(authorization ? { authorization } : {}), ...(oauth ? { oauth } : {}) });
       scope.value(BUN_HTTP_CONTEXT, context).value(BUN_COOKIES, cookies);
@@ -226,6 +233,7 @@ export async function upgradeBunWebSocket(
   }); } catch (error) {
     return handleBunHttpException(error, createBunHttpExceptionContext(request, server, mode), exceptionHandler);
   }
+  }, (response) => response?.status ?? 101);
 }
 
 export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manager: BunExecutionScopeManager) {
@@ -239,9 +247,11 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
     connection.closing = (async () => {
       try { await connection.ready; } catch { /* open failure already reported */ }
       await Promise.allSettled([...connection.messages]);
-      try { await invoke(connection, "close", [connection.socket, code, reason]); } catch (error) { report(error); }
-      try { await connection.scope.dispose(); } catch (error) { report(error); }
+      try { await invoke(connection, "close", [connection.socket, code, reason]); } catch (error) { connection.failed = true; report(error); }
+      try { await connection.scope.dispose(); } catch (error) { connection.failed = true; report(error); }
       state.connections.delete(connection.id);
+      state.observer.emit({ kind: "websocket-connection", phase: "end", id: String(connection.id), at: Date.now(),
+        durationMs: performance.now() - connection.startedAt, outcome: connection.failed ? "error" : "ok", route: connection.route.path, connectionId: connection.id });
     })();
     return connection.closing;
   };
@@ -259,9 +269,10 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
         const target = pending.route.entry.target;
         scope.scoped(target, () => new target(...pending.route.entry.dependencies.map((dependency) => scope!.resolve(dependency.token))));
         const connection: ActiveConnection = { ...pending, id: ws.data.id, socket: ws, scope, context,
-          ready: Promise.resolve(), messages: new Set() };
+          ready: Promise.resolve(), messages: new Set(), startedAt: performance.now(), messageCount: 0, failed: false };
         state.connections.set(connection.id, connection);
-        connection.ready = invoke(connection, "open", [ws]).catch((error) => { report(error); ws.close(1011, "WebSocket open failed"); });
+        state.observer.emit({ kind: "websocket-connection", phase: "start", id: String(connection.id), at: Date.now(), route: connection.route.path, connectionId: connection.id });
+        connection.ready = invoke(connection, "open", [ws]).catch((error) => { connection.failed = true; report(error); ws.close(1011, "WebSocket open failed"); });
       } catch (error) {
         report(error);
         if (scope) void scope.dispose().catch(report);
@@ -271,22 +282,24 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
     async message(ws: ServerWebSocket<{ readonly id: number }>, message: string | Buffer): Promise<void> {
       const connection = state.connections.get(ws.data.id);
       if (!connection || connection.closing || state.closing) return;
-      const work = (async () => {
+      const messageId = ++connection.messageCount;
+      const work = state.observer.run({ kind: "websocket-message", id: `${connection.id}:${messageId}`, route: connection.route.path,
+        connectionId: connection.id, messageId }, async () => {
         await connection.ready;
         await manager.run("websocket-message", async (scope) => {
           const context: BunWebSocketMessageContext = Object.freeze({ connection: connection.context, message, scope });
           scope.value(BUN_WEBSOCKET_MESSAGE, context);
           await invoke(connection, "message", [ws, message], scope);
         }, { parent: connection.scope });
-      })();
+      });
       connection.messages.add(work);
-      try { await work; } catch (error) { report(error); ws.close(1011, "WebSocket message failed"); }
+      try { await work; } catch (error) { connection.failed = true; report(error); ws.close(1011, "WebSocket message failed"); }
       finally { connection.messages.delete(work); }
     },
     async drain(ws: ServerWebSocket<{ readonly id: number }>): Promise<void> {
       const connection = state.connections.get(ws.data.id);
       if (!connection || connection.closing) return;
-      try { await connection.ready; await invoke(connection, "drain", [ws]); } catch (error) { report(error); ws.close(1011, "WebSocket drain failed"); }
+      try { await connection.ready; await invoke(connection, "drain", [ws]); } catch (error) { connection.failed = true; report(error); ws.close(1011, "WebSocket drain failed"); }
     },
     async close(ws: ServerWebSocket<{ readonly id: number }>, code: number, reason: string): Promise<void> {
       const connection = state.connections.get(ws.data.id);

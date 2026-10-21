@@ -1,0 +1,17 @@
+# Bun package security review — Milestone 16
+
+This review covers the first stable Bun package contract. It records framework behavior, verification, and the boundary left to application-owned extensions.
+
+| Area | Framework boundary and verification |
+| --- | --- |
+| Page/HTML output | The default shell escapes script JSON and asset attributes. Page props now reject accessors, sparse/custom arrays, symbols, non-enumerable fields, cycles, and non-JSON values before copying. `tests/bun/milestone-09/pages.test.ts` covers script injection and accessor rejection. Application-supplied `pages.shell` remains trusted rendering code. |
+| CSRF | The generated `csrf` middleware requires sessions, checks a session-bound token for unsafe requests, and rejects absent/wrong tokens with 419. `tests/bun/milestone-07/csrf-runtime.test.ts`, `session-process.test.ts`, and the integrated example cover rejection/success. |
+| Session fixation/cookies | Session login regenerates the ID and CSRF token; logout invalidates authentication. Session IDs are signed, and cookie defaults are `Secure`, `HttpOnly`, and `SameSite=Lax`. `tests/bun/milestone-07/session.test.ts`, Milestone 8 security tests, and the integrated example cover these paths. The local HTTP example explicitly disables `Secure`. |
+| OAuth state | Authorization Code + S256 PKCE stores random state and verifier in the server-side session, checks expiry/provider association, and consumes a matching flow once. `tests/bun/milestone-08/oauth.test.ts` covers missing, mismatched, expired, and replayed state. Provider identity mapping is application-owned. |
+| Principal/authorization isolation | Auth contexts are created per HTTP request. Built-in `auth`, `guest`, and `can` middleware resolve against that context; authorization failures use standard 401/403 paths. Milestone 8 runtime/process tests and the integrated example cover login, denial, and logout. |
+| Error disclosure | Production unknown exceptions render a generic 500, while explicit development mode may include details. Milestone 3 and 5 HTTP tests verify response behavior. Custom exception handlers are trusted application code. |
+| Queued payloads/deserialization | The default serializer accepts lossless JSON tuples only and rejects cycles, accessors, hidden/symbol keys, non-plain instances, unsafe numbers, and malformed payloads. Versioned envelopes and canonical job IDs are checked before invocation; event codecs must reconstruct their exact canonical event class. Milestone 11/12 queue, worker, and codec tests cover these paths. Custom serializers and drivers are trusted extensions. |
+| WebSocket upgrade | Global/class middleware runs in the HTTP request scope before upgrade. Only explicitly mapped durable JSON identity crosses into a connection scope; message scopes are children and dispose after each message. Milestone 15 process/identity tests and the integrated example cover denied/authorized upgrades, isolation, and shutdown. |
+| Object input/prototype keys | Form Request query/body/route merging retains own special keys without prototype assignment; file and validation-error maps now use null prototypes. Page props use descriptor validation before any copy. Milestone 6 special-field and Milestone 9 page tests cover the public input behavior. |
+
+No new middleware, serializer, rendering, or host security policy was introduced for this review. Applications remain responsible for their own authorization rules, trusted extension implementations, durable infrastructure, secret management, and deployment TLS.

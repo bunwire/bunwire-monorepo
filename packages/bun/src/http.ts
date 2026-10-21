@@ -49,6 +49,7 @@ export interface BunHttpRouteContext {
 }
 
 export interface BunHttpContext<Principal = unknown> {
+  readonly requestId: string;
   readonly request: BunHttpRequest;
   readonly server: BunHttpServer;
   readonly route: BunHttpRouteContext;

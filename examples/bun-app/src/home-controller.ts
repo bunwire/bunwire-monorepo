@@ -12,11 +12,30 @@ import {
 import { Controller, EventDispatcher, Inject, Use } from "@bunwire/core";
 import { ExampleJobAudit, RecordExampleJob } from "./jobs.js";
 import { EchoRequest } from "./echo-request.js";
-import { ExampleActionRecorded, ExampleEventAudit } from "./events.js";
+import { ExampleActionRecorded, ExampleEventAudit, ExampleQueuedAudit } from "./events.js";
 import type { ExamplePrincipal } from "./auth.js";
 
 @Controller("/api")
 export class HomeController {
+  @Use("csrf", "auth", "can:dashboard.view")
+  @Post("/integrated/:id")
+  async integrated(request: EchoRequest, events: EventDispatcher, @Inject(BUN_QUEUE_MANAGER) queues: QueueManager): Promise<object> {
+    const id = request.validated().id;
+    await events.dispatch(new ExampleActionRecorded(id));
+    const receipt = await queues.job(RecordExampleJob, id).onQueue("default").dispatch();
+    return { id, receipt, requestId: request.context.requestId };
+  }
+
+  @Use("auth")
+  @Get("/integrated/status/:id")
+  integratedStatus(@Context() context: BunHttpContext, direct: ExampleEventAudit, queued: ExampleQueuedAudit,
+    jobs: ExampleJobAudit): object {
+    const id = context.route.params.id;
+    return { direct: direct.records.filter((entry) => entry === id).length,
+      queued: queued.records.filter((entry) => entry === id).length,
+      jobs: jobs.records.filter((entry) => entry === id).length };
+  }
+
   @Post("/jobs/:id")
   async recordJob(@Context() context: BunHttpContext, @Inject(BUN_QUEUE_MANAGER) queues: QueueManager, audit: ExampleJobAudit): Promise<object> {
     const id = context.route.params.id!;

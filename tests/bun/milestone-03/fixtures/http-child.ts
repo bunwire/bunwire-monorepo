@@ -1,6 +1,7 @@
 import {
   BUN_HTTP_ROUTE_KIND,
   BUN_JOB_HANDLE_KIND,
+  BUN_WEBSOCKET_KIND,
   SyncQueueDriver,
   BunAdapter,
   Get,
@@ -27,7 +28,7 @@ class FailureController {
 
 const combinedRegistry = defineRuntimeRegistry({
   classes: [
-    ...applicationRegistry.classes,
+    ...applicationRegistry.classes.filter((entry) => entry.kind !== BUN_WEBSOCKET_KIND),
     { kind: CONTROLLER_KIND, target: FailureController, data: { prefix: "/test" } },
   ],
   providers: applicationRegistry.providers,

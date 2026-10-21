@@ -1,4 +1,5 @@
 export { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
+export type { BunObservationHook, BunOperationRecord, BunOperationKind, BunOperationPhase } from "./observability.js";
 export {
   WebSocket,
   BUN_WEBSOCKET_KIND,

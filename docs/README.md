@@ -1963,3 +1963,7 @@ Compiler metadata extensions
 For Electrobun, a developer should be able to write controllers, services, Providers, and typed methods while Bunwire compiles the object graph and invocation plans once. At runtime the exported Application is started once. Its adapter prepares the native host context, Bunwire stores that context in the root container, runs Provider registration once, connects generated registries to the adapter, and completes host startup. Each invocation then runs Provider boot, resolves injected parameters from the container or adapter injectors, places caller arguments into their correct method positions, and hands the result back to the platform.
 
 That separation is the foundation of Bunwire.
+
+## Bun host adapter
+
+`@bunwire/bun` is a separate first-party host adapter built on those Core and compiler contracts. Its explicit `http`, `worker`, `scheduler`, and `command` roles share generated managed metadata while owning different native resources. Bun-owned HTTP, sessions, pages, queues, schedules, commands, and WebSockets stay in that package; Core retains generic managed invocation, DI, Provider lifecycle, middleware, and direct event dispatch. `BunAdapterOptions.observability` supplies per-application structured lifecycle records, and the Bun HTTP context carries a request ID. The package's [guide](../packages/bun/README.md) and [milestones](../packages/bun/MILESTONES.md) define its concrete host behavior and release boundary.

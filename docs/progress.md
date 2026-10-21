@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: `@bunwire/bun` Milestone 15 — Bun WebSockets (complete).
+Current milestone: `@bunwire/bun` Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze (complete).
 
 Overall status:
 
@@ -43,6 +43,7 @@ Overall status:
 - `@bunwire/bun` Milestone 13: Complete — [details](../packages/bun/progress/milestone-13.md)
 - `@bunwire/bun` Milestone 14: Complete — [details](../packages/bun/progress/milestone-14.md)
 - `@bunwire/bun` Milestone 15: Complete — [details](../packages/bun/progress/milestone-15.md)
+- `@bunwire/bun` Milestone 16: Complete — [details](../packages/bun/progress/milestone-16.md)
 
 ## Implemented
 
@@ -86,16 +87,17 @@ Overall status:
 - `@bunwire/bun` Milestone 13 adds Core-owned compile-only schedule declarations, generic compiler generation, Bun-owned direct tasks and queue dispatch, explicit cron/timezone behavior, renewable lock-provider contracts, a runnable scheduler role, and graceful active-work shutdown.
 - `@bunwire/bun` Milestone 14 adds canonical managed commands, generated argument/option/flag plans, isolated command scopes, deterministic CLI IO/errors/exit codes, registry-backed operational commands, and on-demand HTTP/worker/schedule activation.
 - `@bunwire/bun` Milestone 15 adds compiler-generated Bun-native WebSocket routes, upgrade middleware, durable identity mapping, connection/message scopes, lifecycle hooks, and bounded shutdown.
+- `@bunwire/bun` Milestone 16 completes combined runtime examples, isolated testing helpers, structured observability, security hardening/review, performance sanity checks, documentation, and compatibility verification.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- `@bunwire/bun` Milestone 15 is complete; no package milestone is currently in progress.
+- `@bunwire/bun` Milestone 16 is complete; no package milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- `@bunwire/bun` Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze.
+- Only additive post-plan Bun work remains, such as additional stores/drivers, OAuth providers, distributed scheduler locks, and richer WebSocket/page conveniences. Versioning and publication are separate release decisions.
 
 ## Blockers
 
@@ -140,3 +142,4 @@ Overall status:
 - [`@bunwire/bun` Milestone 13](../packages/bun/progress/milestone-13.md)
 - [`@bunwire/bun` Milestone 14](../packages/bun/progress/milestone-14.md)
 - [`@bunwire/bun` Milestone 15](../packages/bun/progress/milestone-15.md)
+- [`@bunwire/bun` Milestone 16](../packages/bun/progress/milestone-16.md)

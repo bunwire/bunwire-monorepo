@@ -7,6 +7,7 @@ import {
   type Application,
 } from "@bunwire/core";
 import { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
+import { BunOperationObserver, type BunObservationHook } from "./observability.js";
 import { BUN_QUEUE_MANAGER, QueueManager, validateQueueOptions, type BunQueueOptions } from "./queue-manager.js";
 import { BUN_QUEUE_WORKER, assertWorkerDriver, workerOptions, type QueueWorker } from "./queue-worker.js";
 import { snapshotEventCodecs } from "./queue-event-codec.js";
@@ -55,6 +56,7 @@ import { BUN_COMMAND_RUNTIME, BunCommandRuntime, bunCommandArgumentResolver, bun
 export type BunRuntimeRole = "http" | "worker" | "scheduler" | "command";
 
 export interface BunAdapterOptions<Principal = unknown> {
+  readonly observability?: BunObservationHook;
   readonly queues?: BunQueueOptions;
   readonly role?: BunRuntimeRole;
   readonly handleSignals?: boolean;
@@ -67,6 +69,7 @@ export interface BunRuntimeContext {
 }
 
 interface BunRuntimeState {
+  observer: BunOperationObserver;
   worker: QueueWorker | undefined;
   scheduler: BunScheduler | undefined;
   commandRuntime: BunCommandRuntime | undefined;
@@ -235,6 +238,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
   readonly #handleSignals: boolean;
   readonly #http: BunHttpServerOptions<Principal>;
   readonly #scheduler: BunSchedulerOptions | undefined;
+  readonly #observer: BunOperationObserver;
 
   constructor(options: BunAdapterOptions<Principal> = {}) {
     if (typeof options !== "object" || options === null || Array.isArray(options)) {
@@ -331,17 +335,23 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       }
     }
     validateQueueOptions(options.queues);
+    if (options.observability !== undefined && typeof options.observability !== "function") throw new BunAdapterError("BunAdapter observability must be callable.");
     if (role === "worker" || (role === "command" && options.queues?.worker !== undefined)) assertWorkerDriver(options.queues?.driver);
     else if (role !== "command" && options.queues?.worker !== undefined) throw new BunAdapterError("Queue worker options require the worker or command runtime role.");
     if (options.scheduler !== undefined && role !== "scheduler" && role !== "command") throw new BunAdapterError("BunAdapter scheduler options require the scheduler or command runtime role.");
     if (options.scheduler !== undefined) normalizeSchedulerOptions(options.scheduler);
     super({
-      eventListenerDelivery: (context, next) => stateFor(context.invocation.applicationContext!).queueManager.deliverListener(context.listener, context.event, next),
+      eventListenerDelivery: (context, next) => {
+        const state = stateFor(context.invocation.applicationContext!);
+        return state.observer.run({ kind: "listener", id: crypto.randomUUID(), event: context.event.constructor.name, listener: context.listener.target.name },
+          () => state.queueManager.deliverListener(context.listener, context.event, next));
+      },
       parameterResolvers: [bunHttpContextResolver, bunFormRequestResolver, bunCommandArgumentResolver, bunCommandOptionResolver, bunCommandFlagResolver],
       registryConsumers: [bunRegistryConsumer],
       validationHooks: [bunValidationHook],
     });
     this.#role = role;
+    this.#observer = new BunOperationObserver(options.observability);
     this.#scheduler = options.scheduler === undefined ? undefined : Object.freeze({ ...options.scheduler });
     this.#queues = options.queues === undefined ? undefined : Object.freeze({ ...options.queues,
       ...(options.queues.worker === undefined ? {} : { worker: workerOptions(options.queues.worker) }),
@@ -407,11 +417,11 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
     }
     const runtimeContext = Object.freeze({ role: this.#role });
     const scopeManager = new BunExecutionScopeManager(context.rootContainer);
-    const queueManager = new QueueManager(context.application, scopeManager, this.#queues);
+    const queueManager = new QueueManager(context.application, scopeManager, this.#queues, this.#observer);
     scopeManager.applicationScope.value(BUN_QUEUE_MANAGER, queueManager);
     const worker = this.#role === "worker" ? queueManager.createWorker() : undefined;
     if (worker) scopeManager.applicationScope.value(BUN_QUEUE_WORKER, worker);
-    const scheduler = this.#role === "scheduler" || this.#role === "command" ? new BunScheduler(context.application, scopeManager, queueManager, this.#scheduler) : undefined;
+    const scheduler = this.#role === "scheduler" || this.#role === "command" ? new BunScheduler(context.application, scopeManager, queueManager, this.#scheduler, this.#observer) : undefined;
     if (scheduler) scopeManager.applicationScope.value(BUN_SCHEDULER, scheduler);
     const sessionManager = this.#http.sessions
       ? await SessionManager.create(this.#http.sessions)
@@ -436,9 +446,10 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       scheduler,
       commandRuntime: undefined,
       queueManager,
+      observer: this.#observer,
       registryConsumed: false,
       scopeManager,
-      http: createBunHttpRuntimeState(this.#http.websocket as import("./websocket-runtime.js").BunWebSocketOptions | undefined),
+      http: createBunHttpRuntimeState(this.#http.websocket as import("./websocket-runtime.js").BunWebSocketOptions | undefined, this.#observer),
       requests: createBunFormRequestRuntimeState(),
       signal: undefined,
       signalHandlers: undefined,
@@ -460,7 +471,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
           scopeManager.applicationScope.value(BUN_QUEUE_WORKER, activeWorker);
           activeWorker.start(); await activeWorker.done;
         },
-      });
+      }, this.#observer);
       state.commandRuntime = commandRuntime;
       scopeManager.applicationScope.value(BUN_COMMAND_RUNTIME, commandRuntime);
     }

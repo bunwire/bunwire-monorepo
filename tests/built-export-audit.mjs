@@ -41,7 +41,7 @@ for (const packageName of packageNames) {
   }
 }
 
-for (const [subpath, allowlistKey] of [["client", "bunClient"], ["react", "bunReact"]]) {
+for (const [subpath, allowlistKey] of [["client", "bunClient"], ["react", "bunReact"], ["testing", "bunTesting"]]) {
   const runtimePath = path.join(repositoryRoot, "packages/bun/dist", `${subpath}.js`);
   const declarationPath = path.join(repositoryRoot, "packages/bun/dist", `${subpath}.d.ts`);
   const runtime = await import(`${pathToFileURL(runtimePath).href}?audit=${Date.now()}`);

@@ -801,6 +801,10 @@
       "BunOAuthProviderException",
       "BunOAuthTokenEndpointAuthMethod",
       "BunOAuthTokenSet",
+      "BunObservationHook",
+      "BunOperationKind",
+      "BunOperationPhase",
+      "BunOperationRecord",
       "BunPageComponentError",
       "BunPageError",
       "BunPageJsonValue",
@@ -917,6 +921,20 @@
       "runBunCli",
       "validateBunPageManifest",
       "validateTimeZone"
+    ]
+  },
+  "bunTesting": {
+    "runtime": [
+      "BunTestClient",
+      "RecordingEventDispatcher",
+      "RecordingQueueDriver",
+      "runScheduledTick"
+    ],
+    "declarations": [
+      "BunTestClient",
+      "RecordingEventDispatcher",
+      "RecordingQueueDriver",
+      "runScheduledTick"
     ]
   },
   "bunClient": {

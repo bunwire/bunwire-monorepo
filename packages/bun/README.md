@@ -411,6 +411,32 @@ Use `scope.scoped()` for one cached instance per scope. A scoped binding may sup
 
 WebSocket message scopes require a live WebSocket connection scope as their parent. Other child kinds attach directly to the application scope. `app.stop()` rejects new scopes, waits for active `manager.run()` executions, and disposes remaining scopes before Bunwire's signal handlers are removed.
 
-Milestones 3 and 4 add canonical HTTP and HTTP-middleware context; Milestone 12 adds explicit `BUN_JOB_CONTEXT`; Milestone 13 adds `BUN_SCHEDULE_CONTEXT`; Milestone 14 adds `BUN_COMMAND_CONTEXT`. WebSocket contexts remain deferred to their owning milestone.
+Milestones 3 and 4 add canonical HTTP and HTTP-middleware context; Milestone 12 adds explicit `BUN_JOB_CONTEXT`; Milestone 13 adds `BUN_SCHEDULE_CONTEXT`; Milestone 14 adds `BUN_COMMAND_CONTEXT`; Milestone 15 adds WebSocket connection/message contexts.
 
-See [MILESTONES.md](MILESTONES.md) and [progress.md](progress.md) for the full implementation plan and current status.
+## Testing
+
+The opt-in `@bunwire/bun/testing` entrypoint contains instance-local helpers. `BunTestClient` sends real HTTP requests to a running application, retains response cookies for session/auth checks, and adds an explicit CSRF header through `csrfRequest()`. `connectWebSocket()` opens a native client when cookie headers are not needed. `RecordingEventDispatcher` can replace Core's dispatcher through an application Provider, while `RecordingQueueDriver` retains real memory-driver lease behavior and exposes dispatch assertions. `runScheduledTick()` calls a running application's idle scheduler at a specified timestamp.
+
+```ts
+import { BunTestClient, RecordingQueueDriver } from "@bunwire/bun/testing";
+
+const queue = new RecordingQueueDriver();
+const client = new BunTestClient("http://127.0.0.1:3000");
+const session = await (await client.request("/api/session")).json();
+await client.csrfRequest("/api/session", session.csrfToken, { method: "POST" });
+queue.assertDispatched("app.some-job");
+```
+
+Create a fresh queue/dispatcher/client for each test and close the application and queue driver after use. The integrated example test under `tests/bun/milestone-16` shows a real Bun server, worker, authenticated WebSocket, and graceful shutdown.
+
+## Observability
+
+Pass `observability(record)` to `BunAdapter` to receive frozen `start` and `end` records for managed HTTP requests, Core listener delivery, job attempts, scheduled work, commands, and WebSocket upgrades/connections/messages. Records include operation IDs, applicable route or work identities, timestamps, end duration/outcome, and HTTP status. They exclude request bodies, credentials, session values, and job payloads. Every managed `BunHttpContext` also has a unique `requestId`; the HTTP records use the same ID. Hook failures are reported to `console.error` and do not alter the application result.
+
+## Extension points and non-goals
+
+Use Core's canonical adapter/compiler descriptors for new managed class kinds, method kinds, and parameter injectors; use `http.responseResolvers` and `http.exceptionHandler` for HTTP output/errors. Bun's `QueueDriver`, `JobSerializer`, `SessionStore`, and `ScheduleLockProvider` are the durable backend seams. `http.onServer` exposes the actual Bun server. These are intentional public contracts; generated registry records and queue/page versions are versioned boundaries.
+
+This initial package does not include an ORM, SQL/model binding layer, Redis/SQLite queue drivers, distributed scheduler locks, full logging/tracing infrastructure, OAuth provider presets/OIDC, or host-managed browser rendering beyond the documented page/Vite integration. Memory queue and session stores are process-local. Multiple process roles require an application-supplied shared backend when they exchange work.
+
+See [MILESTONES.md](MILESTONES.md), [SECURITY_REVIEW.md](SECURITY_REVIEW.md), and [progress.md](progress.md) for the implementation plan, security boundaries, and current status.

@@ -13,6 +13,7 @@
     "test:release-pack": "node tests/release-package-audit.mjs",
     "test:clean-install": "node tests/clean-install.mjs",
     "performance:sanity": "node tests/performance-sanity.mjs",
+    "performance:sanity:bun": "vitest run --config vitest.config.ts tests/bun/milestone-16/example-process.test.ts tests/bun/milestone-16/scheduler-worker.test.ts",
     "test:architecture": "vitest run tests/milestone-00/architecture.test.ts",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "quality": "pnpm check:boundaries && pnpm typecheck && pnpm test:electrobun-sdk-contract && pnpm test && pnpm build && pnpm test:built-exports"

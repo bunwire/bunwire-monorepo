@@ -9,6 +9,7 @@ import { BUN_JOB_CONTEXT, InvalidJobError } from "./job-context.js";
 import { QueueWorker, workerOptions, assertWorkerDriver, type BunQueueWorkerOptions } from "./queue-worker.js";
 import { Queue } from "./queued-listeners.js";
 import { snapshotEventCodecs, requireSynchronousCodecResult, type QueueEventCodec } from "./queue-event-codec.js";
+import { BunOperationObserver } from "./observability.js";
 
 export interface BunQueueOptions { readonly driver: QueueDriver; readonly serializer?: JobSerializer; readonly failedJobs?: FailedJobStore; readonly worker?: BunQueueWorkerOptions; readonly eventCodecs?: readonly QueueEventCodec<any, any>[] }
 export interface JobDispatchOptions { readonly queue?: string; readonly delay?: number; readonly tries?: number }
@@ -69,7 +70,8 @@ export class QueueManager {
   #closing = false;
   #closePromise: Promise<void> | undefined;
   #worker: QueueWorker | undefined;
-  constructor(private readonly application: Application, private readonly scopes: BunExecutionScopeManager, private readonly options?: BunQueueOptions) {
+  constructor(private readonly application: Application, private readonly scopes: BunExecutionScopeManager, private readonly options?: BunQueueOptions,
+    private readonly observer = new BunOperationObserver()) {
     validateQueueOptions(options); this.#serializer = options?.serializer ?? new JsonJobSerializer();
     this.#failedJobs = options?.failedJobs ?? new MemoryFailedJobStore();
     this.#eventCodecs = snapshotEventCodecs(options?.eventCodecs);
@@ -206,7 +208,8 @@ export class QueueManager {
     let envelope: QueueEnvelope;
     try { envelope = snapshotEnvelope(input); }
     catch (error) { return Promise.reject(new InvalidJobError("Invalid queued envelope.", { cause: error })); }
-    return this.#track(this.scopes.run("queue-job", async (scope) => {
+    return this.#track(this.observer.run({ kind: "job", id: envelope.id, jobId: envelope.id, job: envelope.job,
+      attempt: envelope.attempts, queue: envelope.queue }, () => this.scopes.run("queue-job", async (scope) => {
       scope.value(BUN_JOB_CONTEXT, Object.freeze({ envelope, scope, signal: cancellation.signal }));
       const timeout = envelope.policy.timeout;
       const started = performance.now();
@@ -242,7 +245,7 @@ export class QueueManager {
       if (cancellation.signal.aborted && !errors.includes(cancellation.signal.reason)) errors.push(cancellation.signal.reason);
       if (errors.length === 1) throw errors[0];
       if (errors.length > 1) throw new AggregateError(errors, "Job execution and cancellation failed.");
-    }));
+    })));
   }
   /** Reject new submissions and settle all accepted executions before scopes/driver cleanup. */
   async drain(): Promise<void> {

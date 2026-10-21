@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createToken, defineApp, defineManagedMethodPlan, defineRuntimeRegistry, getManagedClassMetadata, type Application } from "@bunwire/core";
-import { Argument, BUN_COMMAND_CONTEXT, BUN_COMMAND_HANDLE_KIND, BUN_COMMAND_KIND, BUN_COMMAND_RUNTIME, BunAdapter, Command, Flag, Option, type BunCommandContext, type BunCommandIO } from "@bunwire/bun";
+import { Argument, BUN_COMMAND_CONTEXT, BUN_COMMAND_HANDLE_KIND, BUN_COMMAND_KIND, BUN_COMMAND_RUNTIME, BunAdapter, Command, Flag, Option, type BunCommandContext, type BunCommandIO, type BunOperationRecord } from "@bunwire/bun";
 
 const apps: Application[] = []; afterEach(async () => { await Promise.allSettled(apps.splice(0).map((app) => app.stop())); });
 function io() { const stdout: string[] = []; const stderr: string[] = []; const value: BunCommandIO = { stdout: (line) => { stdout.push(line); }, stderr: (line) => { stderr.push(line); } }; return { value, stdout, stderr }; }
@@ -12,15 +12,19 @@ async function start(registry: ReturnType<typeof defineRuntimeRegistry>, options
 describe("Bun command runtime", () => {
   it("parses generated arguments, options and flags and invokes inside a disposed command scope", async () => {
     const calls: unknown[][] = []; let context!: BunCommandContext;
+    const records: BunOperationRecord[] = [];
     @Command({ name: "greet", description: "Greet a team." }) class Greet { constructor(value: BunCommandContext) { context = value; } handle(name: string, count: number, force: boolean): number { calls.push([name, count, force]); return 7; } }
     const parameters = [
       { source: "resolver" as const, methodIndex: 0, resolverId: Argument.definition.resolverId, data: Argument.definition.createMetadata({ name: "name", choices: ["Ada", "Grace"] }) },
       { source: "resolver" as const, methodIndex: 1, resolverId: Option.definition.resolverId, data: Option.definition.createMetadata({ name: "count", alias: "c", type: "integer", default: 2 }) },
       { source: "resolver" as const, methodIndex: 2, resolverId: Flag.definition.resolverId, data: Flag.definition.createMetadata({ name: "force", alias: "f" }) },
     ];
-    const app = await start(commandRegistry(Greet, parameters, [{ index: 0, token: BUN_COMMAND_CONTEXT }])); const output = io();
+    const app = await start(commandRegistry(Greet, parameters, [{ index: 0, token: BUN_COMMAND_CONTEXT }]),
+      { role: "command", handleSignals: false, observability: (record) => { records.push(record); } }); const output = io();
     await expect(app.rootContainer.get(BUN_COMMAND_RUNTIME).run(["greet", "Ada", "-c", "3", "--force"], output.value)).resolves.toBe(7);
     expect(calls).toEqual([["Ada", 3, true]]); expect(context.arguments).toEqual({ name: "Ada" }); expect(context.options).toEqual({ count: 3, force: true }); expect(Object.isFrozen(context)).toBe(true); expect(context.scope.state).toBe("disposed");
+    expect(records).toMatchObject([{ kind: "command", phase: "start", command: "greet" },
+      { kind: "command", phase: "end", command: "greet", outcome: "ok" }]);
   });
   it("renders help and deterministic usage failures with explicit codes", async () => {
     @Command("greet") class Greet { handle(_name: string): void {} }

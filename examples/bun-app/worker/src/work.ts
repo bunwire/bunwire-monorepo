@@ -23,6 +23,17 @@ export class Greet {
   }
 }
 
+@Job({ id: "example.worker-permanent-failure" })
+export class FailPermanently {
+  protected tries = 2;
+  protected backoff = [20];
+  constructor(@Inject(BUN_JOB_CONTEXT) private readonly context: BunJobContext) {}
+  handle(name: string): never {
+    console.log(`FAILED_ATTEMPT ${name} attempt=${this.context.envelope.attempts}`);
+    throw new Error("Demonstrate a terminal failed job.");
+  }
+}
+
 @Event()
 export class Welcome {
   readonly #name: string;

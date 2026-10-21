@@ -48,6 +48,14 @@ describe("Bun Milestone 9 — server-driven pages", () => {
     await expect(navigation.json()).resolves.toEqual({ component: "Dashboard", props: { count: 1 }, url: "/dashboard?tab=one" });
   });
 
+  it("rejects accessor and malformed array page props without executing getters", () => {
+    let invoked = 0;
+    const accessor = Object.defineProperty({}, "value", { enumerable: true, get() { invoked++; return "unsafe"; } });
+    expect(() => page("Dashboard", accessor)).toThrow(/JSON-compatible/);
+    expect(invoked).toBe(0);
+    expect(() => page("Dashboard", { values: [, "hole"] })).toThrow(/JSON-compatible/);
+  });
+
   it("merges framework, ordered shared, flash, and controller props deterministically", async () => {
     const store = new MemorySessionStore();
     const sessions = await SessionManager.create({ secret: "0123456789abcdef0123456789abcdef", store, cookie: { secure: false } });

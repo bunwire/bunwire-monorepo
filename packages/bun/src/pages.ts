@@ -62,15 +62,15 @@ export class BunPageResult<Props extends Readonly<Record<string, unknown>> = Rea
   readonly component: string;
   readonly props: Props;
 
-  constructor(component: string, props: Props) {
+  constructor(component: string, properties: Props) {
     if (typeof component !== "string" || component.trim().length === 0) {
       throw new BunPageError("Bun page component must be a non-empty string.");
     }
-    if (!props || typeof props !== "object" || Array.isArray(props)) {
+    if (!properties || typeof properties !== "object" || Array.isArray(properties)) {
       throw new BunPageError("Bun page props must be an object.");
     }
     this.component = component;
-    this.props = Object.freeze({ ...props });
+    this.props = props(properties, "Bun page props") as Props;
     Object.freeze(this);
   }
 }
@@ -91,11 +91,22 @@ function isPlainJson(value: unknown, ancestors = new Set<object>()): value is Bu
   if (typeof value !== "object" || ancestors.has(value)) return false;
   ancestors.add(value);
   try {
-    if (Array.isArray(value)) return value.every((entry) => isPlainJson(entry, ancestors));
+    if (Array.isArray(value)) {
+      if (Object.getPrototypeOf(value) !== Array.prototype || Reflect.ownKeys(value).length !== value.length + 1) return false;
+      for (let index = 0; index < value.length; index++) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+        if (!descriptor || !("value" in descriptor) || !isPlainJson(descriptor.value, ancestors)) return false;
+      }
+      return true;
+    }
     const prototype = Object.getPrototypeOf(value);
-    return (prototype === Object.prototype || prototype === null)
-      && Object.getOwnPropertySymbols(value).length === 0
-      && Object.values(value).every((entry) => isPlainJson(entry, ancestors));
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") return false;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable || !isPlainJson(descriptor.value, ancestors)) return false;
+    }
+    return true;
   } finally {
     ancestors.delete(value);
   }

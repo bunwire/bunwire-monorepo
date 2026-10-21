@@ -16,6 +16,8 @@ describe("generated Bun examples", () => {
   it("runs the worker entrypoint, retries a job and reconstructs its queued listener event before clean shutdown", async () => {
     const output = await run(fileURLToPath(new URL("../../../examples/bun-app/worker/main.ts", import.meta.url)), ["--demo"]);
     expect(output).toContain("JOB Bunwire attempt=2"); expect(output).toContain("LISTENER Bunwire scope=queue-job");
+    expect(output).toContain("FAILED_ATTEMPT Bunwire attempt=2");
+    expect(output).toContain("FAILED_JOB example.worker-permanent-failure attempt=2 reason=exhausted");
   });
   it("keeps direct and synchronous queued example audits separate using the generated sidecar", async () => {
     expect(await run(fileURLToPath(new URL("./fixtures/example-events.ts", import.meta.url)))).toContain("EXAMPLE_EVENTS_OK stopped");

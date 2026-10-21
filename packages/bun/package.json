@@ -31,6 +31,10 @@
     "./react": {
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     }
   },
   "files": [
@@ -38,6 +42,7 @@
     "dist/**/*.d.ts",
     "dist/**/*.map",
     "README.md",
+    "SECURITY_REVIEW.md",
     "LICENSE"
   ],
   "publishConfig": {

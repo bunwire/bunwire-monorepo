@@ -6,7 +6,7 @@ import {
 } from "@bunwire/core";
 import {
   BunAdapter, MemoryQueueDriver, BUN_EXECUTION_SCOPE_MANAGER, BUN_HTTP_CONTEXT,
-  type BunRuntimeRole, type BunHttpContext,
+  type BunRuntimeRole, type BunHttpContext, type BunOperationRecord,
 } from "@bunwire/bun";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -17,9 +17,11 @@ async function start(
   events: readonly EventDefinition[],
   providers: readonly (new () => ProviderLifecycle)[] = [],
   role: BunRuntimeRole = "command",
+  observe?: (record: BunOperationRecord) => void,
 ) {
   const listeners = events.flatMap((event) => event.listeners);
-  const app = defineApp().withAdapter(new BunAdapter({ role, handleSignals: false, ...(role === "worker" ? { queues: { driver: new MemoryQueueDriver() } } : {}) }))
+  const app = defineApp().withAdapter(new BunAdapter({ role, handleSignals: false,
+    ...(observe ? { observability: observe } : {}), ...(role === "worker" ? { queues: { driver: new MemoryQueueDriver() } } : {}) }))
     .withProviders(...providers)
     .withRuntimeRegistry(defineRuntimeRegistry({
       classes: [...events, ...listeners], methods: listeners.map((entry) => entry.handle), events,
@@ -30,6 +32,19 @@ async function start(
 }
 
 describe("Bun Milestone 10 — Core dispatcher runtime contract", () => {
+  it("exposes event and listener identities in structured delivery records", async () => {
+    const records: BunOperationRecord[] = [];
+    @Event() class Recorded {}
+    @Listener(Recorded) class Observed { handle(_event: Recorded): void {} }
+    const app = await start([defineEventDefinition({ target: Recorded, listeners: [defineListenerDefinition({ target: Observed, event: Recorded })] })],
+      [], "command", (record) => { records.push(record); });
+    await app.rootContainer.get(EventDispatcher).dispatch(new Recorded());
+    expect(records.map(({ kind, phase, event, listener, outcome }) => ({ kind, phase, event, listener, outcome }))).toEqual([
+      { kind: "listener", phase: "start", event: "Recorded", listener: "Observed", outcome: undefined },
+      { kind: "listener", phase: "end", event: "Recorded", listener: "Observed", outcome: "ok" },
+    ]);
+  });
+
   it.each(["worker", "scheduler", "command"] as const)("dispatches the exact event instance in the %s role without HTTP", async (role) => {
     const received: object[] = [];
     @Event()

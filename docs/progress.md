@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: `@bunwire/bun` Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze (complete).
+Current milestone: `@bunwire/bun` Milestone 17 — Authorization conveniences (complete).
 
 Overall status:
 
@@ -44,6 +44,7 @@ Overall status:
 - `@bunwire/bun` Milestone 14: Complete — [details](../packages/bun/progress/milestone-14.md)
 - `@bunwire/bun` Milestone 15: Complete — [details](../packages/bun/progress/milestone-15.md)
 - `@bunwire/bun` Milestone 16: Complete — [details](../packages/bun/progress/milestone-16.md)
+- `@bunwire/bun` Milestone 17: Complete — [details](../packages/bun/progress/milestone-17.md)
 
 ## Implemented
 
@@ -89,16 +90,17 @@ Overall status:
 - `@bunwire/bun` Milestone 15 adds compiler-generated Bun-native WebSocket routes, upgrade middleware, durable identity mapping, connection/message scopes, lifecycle hooks, and bounded shutdown.
 - `@bunwire/bun` Milestone 16 completes combined runtime examples, isolated testing helpers, structured observability, security hardening/review, performance sanity checks, documentation, and compatibility verification.
 - Post-completion Bun regressions fixed: session special-key persistence and WebSocket shutdown with an unresolved handler; see the Milestone 7 and 15 progress records.
+- `@bunwire/bun` Milestone 17 adds request-scoped authorization allow/deny and named-policy helpers over the existing manager and middleware behavior.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- `@bunwire/bun` Milestone 16 is complete; no package milestone is currently in progress.
+- `@bunwire/bun` Milestone 17 is complete; no package milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- Only additive post-plan Bun work remains, such as additional stores/drivers, OAuth providers, distributed scheduler locks, and richer WebSocket/page conveniences. Versioning and publication are separate release decisions.
+- `@bunwire/bun` Milestone 18 — HTTP input and response conveniences in [the Bun v2 plan](../packages/bun/MILESTONES-v2.md).
 
 ## Blockers
 
@@ -144,3 +146,4 @@ Overall status:
 - [`@bunwire/bun` Milestone 14](../packages/bun/progress/milestone-14.md)
 - [`@bunwire/bun` Milestone 15](../packages/bun/progress/milestone-15.md)
 - [`@bunwire/bun` Milestone 16](../packages/bun/progress/milestone-16.md)
+- [`@bunwire/bun` Milestone 17](../packages/bun/progress/milestone-17.md)

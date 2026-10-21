@@ -32,12 +32,20 @@ class AdminRequest extends FormRequest<{ value?: string }> {
   static rulesCalls = 0;
   override async authorize(): Promise<boolean> {
     AdminRequest.authorizationCalls += 1;
-    return this.context.authorization!.can("dashboard.view");
+    return this.context.authorization!.allows("dashboard.view");
   }
   override rules() {
     AdminRequest.rulesCalls += 1;
     return { value: ["optional", "string"] };
   }
+}
+
+@BunRequest()
+class PostRequest extends FormRequest {
+  override authorize(): Promise<boolean> {
+    return this.context.authorization!.policy("post").allows("update");
+  }
+  override rules() { return {}; }
 }
 
 @Controller("/security")
@@ -62,6 +70,12 @@ class SecurityController {
   post(context: BunHttpContext<Principal>): object {
     return { post: context.route.params.post };
   }
+  @Get("/posts-direct/:post")
+  async postDirect(context: BunHttpContext<Principal>): Promise<object> {
+    const policy = context.authorization!.policy("post");
+    await policy.authorize("update");
+    return { post: context.route.params.post, canEdit: await policy.allows("update") };
+  }
   @Get("/logout")
   async logout(context: BunHttpContext<Principal>): Promise<object> {
     await context.auth!.logout();
@@ -70,6 +84,10 @@ class SecurityController {
   @Get("/form")
   form(_request: AdminRequest): object {
     SecurityController.formCalls += 1;
+    return { valid: true };
+  }
+  @Get("/posts-form/:post")
+  postForm(_request: PostRequest): object {
     return { valid: true };
   }
 }
@@ -96,6 +114,7 @@ const registry = defineRuntimeRegistry({
     defineMiddlewareDefinition({ target: GuestMiddleware, data: { alias: "guest" } }),
     defineMiddlewareDefinition({ target: AuthorizeMiddleware, data: { alias: "can" } }),
     { kind: BUN_REQUEST_KIND, target: AdminRequest, data: { type: "request" }, dependencies: [] },
+    { kind: BUN_REQUEST_KIND, target: PostRequest, data: { type: "request" }, dependencies: [] },
   ],
   methods: [
     method("public", "/public"),
@@ -103,6 +122,7 @@ const registry = defineRuntimeRegistry({
     method("account", "/account", [defineMiddlewareAttachment(AuthenticateMiddleware)]),
     method("guest", "/guest", [defineMiddlewareAttachment(GuestMiddleware)]),
     method("post", "/posts/:post", [defineMiddlewareAttachment(AuthorizeMiddleware, ["update", "post"])]),
+    method("postDirect", "/posts-direct/:post"),
     method("logout", "/logout", [defineMiddlewareAttachment(AuthenticateMiddleware)]),
     defineManagedMethodPlan({
       kind: BUN_HTTP_ROUTE_KIND,
@@ -115,6 +135,19 @@ const registry = defineRuntimeRegistry({
         methodIndex: 0,
         resolverId: BUN_FORM_REQUEST_RESOLVER_ID,
         token: AdminRequest,
+      }],
+    }),
+    defineManagedMethodPlan({
+      kind: BUN_HTTP_ROUTE_KIND,
+      ownerKind: CONTROLLER_KIND,
+      target: SecurityController,
+      method: "postForm",
+      data: { method: "GET", path: "/posts-form/:post" },
+      parameters: [{
+        source: "resolver",
+        methodIndex: 0,
+        resolverId: BUN_FORM_REQUEST_RESOLVER_ID,
+        token: PostRequest,
       }],
     }),
   ],
@@ -173,6 +206,14 @@ describe("Bun Milestone 8 — security HTTP runtime", () => {
 
     const denied = await routes["/security/account"]!.GET!(request("/security/account"), server);
     expect(denied.status).toBe(401);
+    const directDenied = await routes["/security/posts-direct/:post"]!.GET!(
+      request("/security/posts-direct/42", undefined, { post: "42" }), server,
+    );
+    expect(directDenied.status).toBe(403);
+    const formDenied = await routes["/security/posts-form/:post"]!.GET!(
+      request("/security/posts-form/42", undefined, { post: "42" }), server,
+    );
+    expect(formDenied.status).toBe(403);
 
     const login = await routes["/security/login"]!.GET!(request("/security/login"), server);
     expect(await login.json()).toEqual({ id: "user-1" });
@@ -186,6 +227,14 @@ describe("Bun Milestone 8 — security HTTP runtime", () => {
 
     const allowed = await routes["/security/posts/:post"]!.GET!(request("/security/posts/42", refreshed, { post: "42" }), server);
     expect(await allowed.json()).toEqual({ post: "42" });
+    const directAllowed = await routes["/security/posts-direct/:post"]!.GET!(
+      request("/security/posts-direct/42", refreshed, { post: "42" }), server,
+    );
+    expect(await directAllowed.json()).toEqual({ post: "42", canEdit: true });
+    const formAllowed = await routes["/security/posts-form/:post"]!.GET!(
+      request("/security/posts-form/42", refreshed, { post: "42" }), server,
+    );
+    expect(await formAllowed.json()).toEqual({ valid: true });
 
     const logout = await routes["/security/logout"]!.GET!(request("/security/logout", refreshed), server);
     expect(await logout.json()).toEqual({ guest: true });

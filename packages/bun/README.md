@@ -150,6 +150,35 @@ The default guard resolves before middleware, so `context.auth.principal`/`user`
 
 Use generated `auth`, `guest`, and `can` middleware through Core `@Use()`. `@Use("auth:bearer")` selects an exact guard, `@Use("can:dashboard.view")` evaluates a global ability, and `@Use("can:update,post")` resolves the `:post` route parameter through the named policy. The same authorization manager is available directly through `context.authorization`; Form Request `authorize()` runs against it before validation.
 
+Request-scoped `context.authorization` also offers `allows()` and `denies()` alongside the existing `can()` and `authorize()`. All checks are async. Bind a named policy once with `policy(name, resource?)`; when the resource is omitted, it uses the policy's existing named route-parameter resolver. An explicit resource takes precedence. Unknown abilities or policies deny access, while `authorize()` throws the normal 403 exception.
+
+For a Controller or page response, pass authorization state to the browser deliberately:
+
+```ts
+const canEdit = await context.authorization!.policy("post", post).allows("update");
+return page("Posts/Show", { post, canEdit });
+```
+
+In a Form Request's `authorize()` method, return an allow check:
+
+```ts
+return this.context.authorization!.allows("posts.create");
+```
+
+An ordinary Service can receive request authorization as a method argument; it must not retain it beyond the request:
+
+```ts
+await postsService.update(post, context.authorization!);
+
+// In PostsService:
+async update(post: Post, authorization: BunAuthorizationContext<Principal>) {
+  await authorization.policy("post", post).authorize("update");
+  // Apply the update.
+}
+```
+
+Do not retain request authorization context in an application-singleton Service. Methods on the policy helper evaluate against the current request principal; `denies()` is the inverse of `allows()`, and the helper's `authorize()` follows the same 403 path as `context.authorization.authorize()`.
+
 OAuth remains application-routed. Configure providers under `auth.oauth`, return `await context.oauth.redirect("provider")` from an initiation route, and call `await context.oauth.callback("provider")` from its callback route. Bunwire stores one-time state and the S256 PKCE verifier server-side, maps the external identity through the application hook, and logs the resulting principal into a session guard. `createOAuth2Provider()` uses `oauth4webapi` for the Authorization Code exchange; OIDC and provider-specific presets remain deferred.
 
 ## React server-driven pages

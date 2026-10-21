@@ -34,6 +34,14 @@ export interface BunAuthorizationCheckOptions<Resource = unknown> {
   readonly resource?: Resource;
 }
 
+export interface BunAuthorizationPolicyCheck<Resource = unknown> {
+  readonly name: string;
+  readonly resource: Resource | undefined;
+  allows(ability: string): Promise<boolean>;
+  denies(ability: string): Promise<boolean>;
+  authorize(ability: string): Promise<void>;
+}
+
 export interface BunAuthorizationEvaluation<Principal = unknown, Resource = unknown> {
   readonly ability: string;
   readonly principal: Principal | undefined;
@@ -190,6 +198,28 @@ export class BunAuthorizationContext<Principal = unknown> {
       http: this.#http(),
       ...(options.policy === undefined ? {} : { policy: options.policy }),
       ...(options.resource === undefined ? {} : { resource: options.resource }),
+    });
+  }
+
+  allows<Resource = unknown>(ability: string, options: BunAuthorizationCheckOptions<Resource> = {}): Promise<boolean> {
+    return this.can(ability, options);
+  }
+
+  async denies<Resource = unknown>(ability: string, options: BunAuthorizationCheckOptions<Resource> = {}): Promise<boolean> {
+    return !await this.can(ability, options);
+  }
+
+  policy<Resource = unknown>(name: string, resource?: Resource): BunAuthorizationPolicyCheck<Resource> {
+    assertPolicyName(name);
+    const options: BunAuthorizationCheckOptions<Resource> = resource === undefined
+      ? { policy: name }
+      : { policy: name, resource };
+    return Object.freeze({
+      name,
+      resource,
+      allows: (ability: string) => this.allows(ability, options),
+      denies: (ability: string) => this.denies(ability, options),
+      authorize: (ability: string) => this.authorize(ability, options),
     });
   }
 

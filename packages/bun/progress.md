@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 16 — Production hardening, testing utilities, documentation, and compatibility freeze (complete).
+Current milestone: Milestone 17 — Authorization conveniences (complete).
 
 Overall status:
 
@@ -22,6 +22,7 @@ Overall status:
 - Milestone 14: Complete — [details](progress/milestone-14.md)
 - Milestone 15: Complete — [details](progress/milestone-15.md)
 - Milestone 16: Complete — [details](progress/milestone-16.md)
+- Milestone 17: Complete — [details](progress/milestone-17.md)
 
 ## Implemented
 
@@ -47,14 +48,15 @@ Overall status:
 - Compiler-generated Bun-native WebSocket routes, upgrade middleware/security, durable identity snapshots, connection/message scopes, DI lifecycle hooks, native messaging, and bounded shutdown.
 - Integrated real Bun application flows, isolated testing utilities, structured observability, security review and hardening, performance sanity checks, documentation, and compatibility assertions for the initial package contract.
 - Post-completion regressions fixed: special session keys persist across store normalization, and unresolved WebSocket handlers no longer hold shutdown past its grace period; details remain with Milestones 7 and 15.
+- Milestone 17 adds request-scoped authorization allow/deny and named-policy helpers while preserving the existing manager and middleware behavior.
 
 ## Current Work
 
-- Milestone 16 is complete. No package milestone is in progress.
+- Milestone 17 is complete. No package milestone is currently in progress.
 
 ## Next
 
-- Only additive post-plan work, such as additional session/queue stores, OAuth providers, distributed scheduler locks, and richer WebSocket or page conveniences. Versioning and publication require a separate release decision.
+- Milestone 18 — HTTP input and response conveniences in [the v2 plan](MILESTONES-v2.md).
 
 ## Blockers
 
@@ -78,3 +80,4 @@ Overall status:
 - [Milestone 14](progress/milestone-14.md)
 - [Milestone 15](progress/milestone-15.md)
 - [Milestone 16](progress/milestone-16.md)
+- [Milestone 17](progress/milestone-17.md)

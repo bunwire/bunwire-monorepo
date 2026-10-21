@@ -73,6 +73,7 @@ export {
   type BunAuthorizationEvaluation,
   type BunAuthorizationOptions,
   type BunAuthorizationPolicy,
+  type BunAuthorizationPolicyCheck,
 } from "./authorization.js";
 export {
   BUN_COOKIES,

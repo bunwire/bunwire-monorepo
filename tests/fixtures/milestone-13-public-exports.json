@@ -721,6 +721,7 @@
       "BunAuthorizationException",
       "BunAuthorizationOptions",
       "BunAuthorizationPolicy",
+      "BunAuthorizationPolicyCheck",
       "BunBearerAuthGuardOptions",
       "BunChildExecutionScopeKind",
       "BunCliRunOptions",

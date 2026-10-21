@@ -2,6 +2,13 @@
 
 Status: Complete
 
+## Post-Completion Regression Fix
+
+- Review found that `*/n` in a day-of-month or weekday field was treated as an unrestricted `*` field for OR matching. Only an exact `*` is now unrestricted; stepped fields retain their selected-day restrictions.
+- Added cron cases for a stepped day-of-month match, a stepped weekday match, and a case where neither stepped field matches. Existing bare-wildcard, timezone, and DST checks remain in the affected suite.
+- Verification: focused runtime/scheduler checkpoint, 22/22 passed; complete Bun Milestone 6 and 13 test groups, 34/34 passed; `pnpm.cmd typecheck` passed (workspace build graph and test types). No public API or package-boundary change; unrelated passing tests were not repeated.
+- Expected behavior: standard day-of-month/weekday OR semantics apply to stepped fields without scheduling unintended or skipped occurrences. No remaining Milestone 13 regression work or blocker is known.
+
 ## Packages Changed
 
 - `@bunwire/core`, `@bunwire/vite`, `@bunwire/bun`, and the Bun example.

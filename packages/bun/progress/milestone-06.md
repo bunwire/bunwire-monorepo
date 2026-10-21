@@ -2,6 +2,13 @@
 
 Status: Complete
 
+## Post-Completion Regression Fix
+
+- Review found that query and form field aggregation read inherited object keys. Literal `constructor` was malformed and `__proto__` was omitted. The accumulator now has a null prototype and checks own keys before combining repeats.
+- Added HTTP runtime coverage for literal `constructor` and `__proto__` fields in query, urlencoded, and multipart inputs, including repeated fields and body-over-query precedence.
+- Verification: focused runtime/scheduler checkpoint, 22/22 passed; complete Bun Milestone 6 and 13 test groups, 34/34 passed; `pnpm.cmd typecheck` passed (workspace build graph and test types). No public API or package-boundary change; unrelated passing tests were not repeated.
+- Expected behavior: special field names are preserved as caller-supplied own keys and repeated values are aggregated without inherited-property interference. No remaining Milestone 6 regression work or blocker is known.
+
 ## Packages Changed
 
 - `packages/validation`

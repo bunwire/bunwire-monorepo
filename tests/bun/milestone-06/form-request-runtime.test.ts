@@ -287,6 +287,37 @@ describe("Bun Milestone 6 — Form Request runtime", () => {
     await app.stop();
   });
 
+  it("preserves own special field names and repeats across query and form inputs", async () => {
+    const { app, handler } = await start();
+    const encoded = await handler(nativeRequest(
+      "name=valid&constructor=body&__proto__=first&__proto__=second",
+      "application/x-www-form-urlencoded",
+      "special",
+      "constructor=query&__proto__=query",
+    ), server);
+    expect(encoded.status).toBe(200);
+    const result = await encoded.json() as { query: Record<string, unknown>; all: Record<string, unknown> };
+    expect(Object.hasOwn(result.query, "constructor")).toBe(true);
+    expect(Object.hasOwn(result.query, "__proto__")).toBe(true);
+    expect(result.query["constructor"]).toBe("query");
+    expect(result.query["__proto__"]).toBe("query");
+    expect(Object.hasOwn(result.all, "__proto__")).toBe(true);
+    expect(result.all["constructor"]).toBe("body");
+    expect(result.all["__proto__"]).toEqual(["first", "second"]);
+
+    const form = new FormData();
+    form.append("name", "valid");
+    form.append("constructor", "multipart");
+    form.append("__proto__", "multipart");
+    const multipart = await handler(nativeRequest(form, undefined, "multipart", ""), server);
+    expect(multipart.status).toBe(200);
+    const multipartResult = await multipart.json() as { all: Record<string, unknown> };
+    expect(multipartResult.all["constructor"]).toBe("multipart");
+    expect(Object.hasOwn(multipartResult.all, "__proto__")).toBe(true);
+    expect(multipartResult.all["__proto__"]).toBe("multipart");
+    await app.stop();
+  });
+
   it("returns deterministic validation, authorization, and malformed-body failures without invoking the controller", async () => {
     const { app, handler } = await start();
     const invalid = await handler(nativeRequest(JSON.stringify({ name: "" }), "application/json"), server);

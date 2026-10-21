@@ -33,6 +33,7 @@ Overall status:
 - Generated Core middleware execution for Bun HTTP with immutable native context, actual-path/method filters, DI, ordered policy, parameterized attachments, short-circuiting, and request isolation.
 - Centralized native/JSON/void/redirect response resolution, ordered extension resolvers, deterministic HTTP exceptions, and replaceable reporting/rendering.
 - Canonical registered Form Requests with constructor DI, deterministic HTTP input aggregation, preparation, authorization, async validation, exact compiler identities, and request isolation.
+- Form Request aggregation preserves literal special field names and repeated query/form values.
 - Signed server-side sessions, native cookie integration, one-request flash/old input, same-session serialization, and generated CSRF middleware.
 - Generic session/bearer authentication, standards-backed OAuth 2.0 Authorization Code + PKCE, explicit abilities and policies, and generated `auth`, `guest`, and `can` middleware.
 - Versioned server-driven pages, framework-neutral browser navigation, a React renderer, generated Vite page manifests, development HMR, exact production assets, and page-aware validation flash.
@@ -40,6 +41,7 @@ Overall status:
 - Canonical generated jobs, transient constructor DI, typed explicit dispatch, strict/versioned serialization, sync execution, memory queue leases, and lifecycle-coordinated queue cleanup.
 - Automatic workers, cooperative timeouts, retries/backoff, renewable leases, failed-job management and queued Core listeners with typed codecs, generic compiler attachments, runnable examples and graceful shutdown.
 - Compiler-backed direct and central schedules, five-field cron/timezone semantics, isolated scheduled-task scopes, scheduled job dispatch, renewable lock-provider contracts, and graceful scheduler-role shutdown.
+- Stepped cron day-of-month and weekday fields follow the documented OR semantics.
 - Compiler-discovered managed commands, generated arguments/options/flags, isolated command scopes, deterministic CLI lifecycle/exit behavior, generated-registry introspection, and on-demand HTTP/worker/schedule operations.
 
 ## Current Work

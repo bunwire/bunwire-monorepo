@@ -46,14 +46,14 @@ function freezeRecord(input: Record<string, unknown>): BunFormRequestInput {
 }
 
 function appendValue(target: Record<string, unknown>, key: string, value: unknown): void {
-  const existing = target[key];
+  const existing = Object.hasOwn(target, key) ? target[key] : undefined;
   if (existing === undefined) target[key] = value;
   else if (Array.isArray(existing)) target[key] = [...existing, value];
   else target[key] = [existing, value];
 }
 
 function entriesInput(entries: Iterable<readonly [string, unknown]>): BunFormRequestInput {
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const [key, value] of entries) appendValue(result, key, value);
   return freezeRecord(result);
 }

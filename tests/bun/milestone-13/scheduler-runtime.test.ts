@@ -137,6 +137,9 @@ describe("cron and local lock contracts", () => {
     expect(cronMatches(cron, Date.UTC(2026, 0, 5, 9, 15), "UTC")).toBe(true); expect(cronMatches(cron, Date.UTC(2026, 0, 5, 9, 16), "UTC")).toBe(false);
     expect(cronMatches(parseCronExpression("0 4 * * *"), Date.UTC(2026, 0, 1, 3, 0), "Africa/Lagos")).toBe(true);
     const fallback = parseCronExpression("30 1 * * *"); expect(cronMatches(fallback, Date.UTC(2026, 10, 1, 5, 30), "America/New_York")).toBe(true); expect(cronMatches(fallback, Date.UTC(2026, 10, 1, 6, 30), "America/New_York")).toBe(true);
+    expect(cronMatches(parseCronExpression("0 12 */2 * MON"), Date.UTC(2026, 9, 21, 12), "UTC")).toBe(true);
+    expect(cronMatches(parseCronExpression("0 12 2 * */2"), Date.UTC(2026, 9, 22, 12), "UTC")).toBe(true);
+    expect(cronMatches(parseCronExpression("0 12 */2 * */2"), Date.UTC(2026, 9, 26, 12), "UTC")).toBe(false);
     for (const invalid of ["* * * *", "60 * * * *", "* * * * FUNDAY", "*/0 * * * *"]) expect(() => parseCronExpression(invalid)).toThrow();
   });
   it("fences, renews, releases and recovers expired memory locks", () => {

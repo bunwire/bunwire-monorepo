@@ -25,7 +25,7 @@ function field(source: string, minimum: number, maximum: number, names: Readonly
 export function parseCronExpression(source: string): BunCronExpression {
   if (typeof source !== "string" || source.trim() !== source) throw new BunScheduleError("Cron expressions must be trimmed five-field strings.");
   const parts = source.split(/\s+/); if (parts.length !== 5) throw new BunScheduleError("Cron expressions require exactly five fields (minute hour day month weekday).");
-  return Object.freeze({ source, minutes: field(parts[0]!, 0, 59), hours: field(parts[1]!, 0, 23), days: field(parts[2]!, 1, 31), months: field(parts[3]!, 1, 12, MONTHS), weekdays: field(parts[4]!, 0, 7, DAYS), anyDay: parts[2]!.startsWith("*"), anyWeekday: parts[4]!.startsWith("*") });
+  return Object.freeze({ source, minutes: field(parts[0]!, 0, 59), hours: field(parts[1]!, 0, 23), days: field(parts[2]!, 1, 31), months: field(parts[3]!, 1, 12, MONTHS), weekdays: field(parts[4]!, 0, 7, DAYS), anyDay: parts[2] === "*", anyWeekday: parts[4] === "*" });
 }
 export function validateTimeZone(timezone: string): string {
   if (typeof timezone !== "string" || !timezone.trim() || timezone !== timezone.trim()) throw new BunScheduleError("Schedule timezone must be a non-empty IANA timezone.");

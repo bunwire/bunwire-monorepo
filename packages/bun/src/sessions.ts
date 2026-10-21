@@ -128,12 +128,12 @@ function freezeRecord(record: BunSessionStoreRecord): BunSessionStoreRecord {
     || (record.csrfToken !== undefined && typeof record.csrfToken !== "string")) {
     throw new BunSessionError("Session stores must return valid immutable-compatible records.");
   }
-  const data: Record<string, BunSessionValue> = {};
+  const data: Record<string, BunSessionValue> = Object.create(null);
   for (const [key, value] of Object.entries(record.data ?? {})) {
     assertValue(value);
     data[key] = freezeValue(cloneValue(value));
   }
-  const framework: Record<string, BunSessionValue> = {};
+  const framework: Record<string, BunSessionValue> = Object.create(null);
   for (const [key, value] of Object.entries(record.framework ?? {})) {
     assertValue(value);
     framework[key] = freezeValue(cloneValue(value));

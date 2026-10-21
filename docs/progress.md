@@ -88,6 +88,7 @@ Overall status:
 - `@bunwire/bun` Milestone 14 adds canonical managed commands, generated argument/option/flag plans, isolated command scopes, deterministic CLI IO/errors/exit codes, registry-backed operational commands, and on-demand HTTP/worker/schedule activation.
 - `@bunwire/bun` Milestone 15 adds compiler-generated Bun-native WebSocket routes, upgrade middleware, durable identity mapping, connection/message scopes, lifecycle hooks, and bounded shutdown.
 - `@bunwire/bun` Milestone 16 completes combined runtime examples, isolated testing helpers, structured observability, security hardening/review, performance sanity checks, documentation, and compatibility verification.
+- Post-completion Bun regressions fixed: session special-key persistence and WebSocket shutdown with an unresolved handler; see the Milestone 7 and 15 progress records.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work

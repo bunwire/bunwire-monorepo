@@ -46,6 +46,7 @@ Overall status:
 - Compiler-discovered managed commands, generated arguments/options/flags, isolated command scopes, deterministic CLI lifecycle/exit behavior, generated-registry introspection, and on-demand HTTP/worker/schedule operations.
 - Compiler-generated Bun-native WebSocket routes, upgrade middleware/security, durable identity snapshots, connection/message scopes, DI lifecycle hooks, native messaging, and bounded shutdown.
 - Integrated real Bun application flows, isolated testing utilities, structured observability, security review and hardening, performance sanity checks, documentation, and compatibility assertions for the initial package contract.
+- Post-completion regressions fixed: special session keys persist across store normalization, and unresolved WebSocket handlers no longer hold shutdown past its grace period; details remain with Milestones 7 and 15.
 
 ## Current Work
 

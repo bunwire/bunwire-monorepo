@@ -8,6 +8,7 @@ import {
   type BunHttpRequest,
 } from "@bunwire/bun";
 import { describe, expect, it } from "vitest";
+import { BUN_SESSION_FRAMEWORK_GET, BUN_SESSION_FRAMEWORK_SET } from "../../../packages/bun/src/sessions.js";
 
 function request(cookie?: string): BunHttpRequest {
   return Object.assign(new Request("http://local/session", {
@@ -70,6 +71,23 @@ describe("Bun Milestone 7 — sessions", () => {
     const tampered = await sessions.open(new BunCookieJar(request(`${rotated}x`), [sessions.cookieName]));
     expect(tampered.session.get("count")).toBeUndefined();
     await tampered.commit(new Response());
+  });
+
+  it("preserves own special keys in persisted data and framework metadata", async () => {
+    const sessions = await manager();
+    const first = await sessions.open(new BunCookieJar(request(), [sessions.cookieName]));
+    const nested = Object.fromEntries([["__proto__", "nested"], ["constructor", "other"]]);
+    first.session.put("__proto__", nested);
+    first.session.put("constructor", "data");
+    first.session[BUN_SESSION_FRAMEWORK_SET]("__proto__", "framework");
+    const cookie = cookieValue(await first.commit(new Response()));
+
+    const restored = await sessions.open(new BunCookieJar(request(cookie), [sessions.cookieName]));
+    expect(restored.session.has("__proto__")).toBe(true);
+    expect(restored.session.get("__proto__")).toEqual(nested);
+    expect(restored.session.get("constructor")).toBe("data");
+    expect(restored.session[BUN_SESSION_FRAMEWORK_GET]("__proto__")).toBe("framework");
+    await restored.commit(new Response());
   });
 
   it("keeps flash for exactly the following request and supports old input", async () => {

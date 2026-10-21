@@ -108,3 +108,9 @@ After this milestone, a Bun HTTP application can opt into secure server-side ses
 ## Next Work Within This Milestone
 
 - None; Milestone 7 is complete. Milestone 8 is next.
+
+## Post-completion regression fix — 2026-10-21
+
+- Preserved own session data and framework metadata keys such as `__proto__` through store normalization by copying into null-prototype records. Nested special keys continue to round-trip.
+- Added a session commit/reload regression test. The focused session, scope, and WebSocket check passed 33/33; the complete Bun package suite passed 297/297. Workspace typecheck, package-boundary checks, the example build, and the built-export audit passed.
+- Milestone status remains complete; no session API or persisted record format changed.

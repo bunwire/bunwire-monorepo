@@ -74,6 +74,12 @@ interface ResolvedResource {
 }
 
 const scopeManagers = new WeakMap<BunExecutionScope, BunExecutionScopeManager>();
+const DEFER_WEBSOCKET_CONNECTION = Symbol("bunwire.bun.defer-websocket-connection");
+
+/** @internal Keep an unfinished WebSocket handler outside application shutdown tracking. */
+export function deferWebSocketConnection(manager: BunExecutionScopeManager, scope: BunExecutionScope): void {
+  manager[DEFER_WEBSOCKET_CONNECTION](scope);
+}
 
 function appendDisposalError(errors: unknown[], error: unknown): void {
   if (error instanceof AggregateError) {
@@ -273,6 +279,7 @@ export class BunExecutionScope {
 }
 
 interface ActiveRun {
+  readonly scope: BunExecutionScope;
   readonly settled: Promise<void>;
 }
 
@@ -361,6 +368,7 @@ export class BunExecutionScopeManager {
     const scope = this.create(kind, options);
     let settleRun!: () => void;
     const activeRun: ActiveRun = {
+      scope,
       settled: new Promise<void>((resolve) => {
         settleRun = resolve;
       }),
@@ -415,6 +423,25 @@ export class BunExecutionScopeManager {
   /** @internal Adapter admission boundary; cleanup waits for host/submission draining. */
   beginShutdown(): void {
     if (this.#state === "active") this.#state = "closing";
+  }
+
+  [DEFER_WEBSOCKET_CONNECTION](scope: BunExecutionScope): void {
+    if (scopeManagers.get(scope) !== this || scope.kind !== "websocket-connection") {
+      throw new BunExecutionScopeError("Only a WebSocket connection owned by this manager can be deferred.");
+    }
+    const belongsToConnection = (candidate: BunExecutionScope): boolean => {
+      for (let current: BunExecutionScope | undefined = candidate; current; current = current.parent) {
+        if (current === scope) return true;
+      }
+      return false;
+    };
+    scope.parent?.removeChild(scope);
+    for (const child of [...this.#scopes]) {
+      if (belongsToConnection(child)) this.scopeDisposed(child);
+    }
+    for (const run of [...this.#activeRuns]) {
+      if (belongsToConnection(run.scope)) this.#activeRuns.delete(run);
+    }
   }
 
   scopeDisposed(scope: BunExecutionScope): void {

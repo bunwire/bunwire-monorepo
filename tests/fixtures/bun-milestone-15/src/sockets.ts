@@ -24,12 +24,16 @@ export class ChatSocket {
       dependency: this.dependency.label }));
   }
 
-  message(client: ServerWebSocket<unknown>, message: string | Buffer, @Inject(BUN_WEBSOCKET_MESSAGE) context: BunWebSocketMessageContext): void {
+  async message(client: ServerWebSocket<unknown>, message: string | Buffer, @Inject(BUN_WEBSOCKET_MESSAGE) context: BunWebSocketMessageContext): Promise<void> {
     this.count++;
     context.scope.value(MESSAGE_RESOURCE, context.scope.id, { dispose: (id) => { console.log(`MESSAGE_DISPOSED ${id}`); } });
     const text = String(message);
     client.send(JSON.stringify({ event: "message", text, count: this.count, connection: this.connection.scope.id,
       messageScope: context.scope.id, identity: this.connection.identity }));
+    if (text === "hang") {
+      console.log("HANG_STARTED");
+      await new Promise<void>(() => undefined);
+    }
     if (text.startsWith("publish:")) client.publish(this.connection.params.room!, text.slice(8));
   }
 

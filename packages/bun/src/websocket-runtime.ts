@@ -10,7 +10,7 @@ import { BUN_AUTH_CONTEXT, BUN_AUTH_INITIALIZE, type AuthManager } from "./auth.
 import { BUN_AUTHORIZATION_CONTEXT, type AuthorizationManager } from "./authorization.js";
 import { BUN_COOKIES, BunCookieJar } from "./cookies.js";
 import { BUN_CSRF_CONTEXT, type CsrfManager } from "./csrf.js";
-import type { BunExecutionScope, BunExecutionScopeManager } from "./execution-scopes.js";
+import { deferWebSocketConnection, type BunExecutionScope, type BunExecutionScopeManager } from "./execution-scopes.js";
 import { BUN_HTTP_CONTEXT, bunHttpCompiledRoute, type BunHttpContext, type BunHttpRequest, type BunHttpServer } from "./http.js";
 import { createBunMiddlewareContext, selectBunMiddleware, type BunMiddlewareRuntimeDefinition } from "./middleware.js";
 import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
@@ -245,9 +245,21 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
   const finalize = async (connection: ActiveConnection, code: number, reason: string): Promise<void> => {
     if (connection.closing) return connection.closing;
     connection.closing = (async () => {
-      try { await connection.ready; } catch { /* open failure already reported */ }
-      await Promise.allSettled([...connection.messages]);
-      try { await invoke(connection, "close", [connection.socket, code, reason]); } catch (error) { connection.failed = true; report(error); }
+      const settled = (async () => {
+        try { await connection.ready; } catch { /* open failure already reported */ }
+        await Promise.allSettled([...connection.messages]);
+      })();
+      const closePlan = connection.route.methods.get("close");
+      try {
+        if (closePlan) {
+          // Enter Core's accepted invocation before stop completes; run the hook only after active work settles.
+          await state.invocation!.invoke(closePlan, [connection.socket, code, reason], {
+            parentContainer: connection.scope.container,
+            around: async (_invocation, next) => { await settled; return next(); },
+          });
+        } else await settled;
+      } catch (error) { connection.failed = true; report(error); }
+      await settled;
       try { await connection.scope.dispose(); } catch (error) { connection.failed = true; report(error); }
       state.connections.delete(connection.id);
       state.observer.emit({ kind: "websocket-connection", phase: "end", id: String(connection.id), at: Date.now(),
@@ -299,7 +311,10 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
     async drain(ws: ServerWebSocket<{ readonly id: number }>): Promise<void> {
       const connection = state.connections.get(ws.data.id);
       if (!connection || connection.closing) return;
-      try { await connection.ready; await invoke(connection, "drain", [ws]); } catch (error) { connection.failed = true; report(error); ws.close(1011, "WebSocket drain failed"); }
+      const work = (async () => { await connection.ready; await invoke(connection, "drain", [ws]); })();
+      connection.messages.add(work);
+      try { await work; } catch (error) { connection.failed = true; report(error); ws.close(1011, "WebSocket drain failed"); }
+      finally { connection.messages.delete(work); }
     },
     async close(ws: ServerWebSocket<{ readonly id: number }>, code: number, reason: string): Promise<void> {
       const connection = state.connections.get(ws.data.id);
@@ -317,8 +332,11 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
         });
       }
       for (const connection of [...state.connections.values()]) {
+        connection.failed = true;
+        deferWebSocketConnection(manager, connection.scope);
         connection.socket.terminate();
-        await finalize(connection, 1001, "Server shutting down");
+        state.connections.delete(connection.id);
+        void finalize(connection, 1001, "Server shutting down").catch(report);
       }
       state.pending.clear();
     },

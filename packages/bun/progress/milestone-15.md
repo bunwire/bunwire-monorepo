@@ -81,3 +81,10 @@ Status: Complete
 ## Next
 
 - Begin Milestone 16 according to `packages/bun/MILESTONES.md`.
+
+## Post-completion regression fix — 2026-10-21
+
+- A pending WebSocket message previously kept `app.stop()` waiting after `shutdownGraceMs`. Timed-out connections now leave shutdown tracking while their scopes remain alive until handler settlement; late close hooks and cleanup still run if work finishes.
+- Drain hooks now participate in the same in-flight work wait as message hooks. Added deadline, late-settlement, late-failure, and real Bun process regression coverage.
+- Focused scope/session/WebSocket tests passed 33/33. The complete Bun package suite passed 297/297, and the final WebSocket identity/process rerun passed 11/11. Workspace typecheck, package-boundary checks, the example build, and the built-export audit passed.
+- Milestone status remains complete. A handler that never settles cannot have its execution scope safely disposed; shutdown no longer waits for it.

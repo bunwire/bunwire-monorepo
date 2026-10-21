@@ -78,6 +78,9 @@ describe("Bun Milestone 15 — real WebSocket server", () => {
       first.socket.send("publish:hello-room");
       await waitUntil(() => second.messages.includes("hello-room"), () => JSON.stringify(second.messages));
 
+      first.socket.send("hang");
+      await waitUntil(() => output.includes("HANG_STARTED"), () => output);
+
       current.stdin.write("stop\n");
       await waitUntil(() => output.includes("BUNWIRE_WEBSOCKET_STOPPED") || current.exitCode !== null, () => output, 10000);
       expect(output).toContain("BUNWIRE_WEBSOCKET_STOPPED");

@@ -117,3 +117,7 @@ Status: Complete
 ## Next Work Within This Milestone
 
 - None.
+
+## Post-completion review — 2026-10-21
+
+- The security review now records null-prototype session normalization for special keys. The completed Milestone 7 and 15 progress files record the corresponding regression fixes and current verification results.

@@ -44,6 +44,8 @@ import {
 } from "./authorization.js";
 import { BUN_OAUTH_MANAGER, OAuthManager, validateBunOAuthOptions } from "./oauth.js";
 import { BUN_PAGE_MANAGER, BunPageManager } from "./pages.js";
+import { BUN_SIGNED_URLS, SignedUrlManager, SignedUrlMiddleware, validateBunSignedUrlOptions } from "./signed-urls.js";
+import { validateBunPaginationOptions } from "./pagination.js";
 import {
   consumeBunFormRequestRegistry,
   createBunFormRequestResolver,
@@ -86,6 +88,7 @@ interface BunRuntimeState {
   authorizationManager: AuthorizationManager | undefined;
   oauthManager: OAuthManager | undefined;
   pageManager: BunPageManager | undefined;
+  signedUrlManager: SignedUrlManager | undefined;
 }
 
 type BunShutdownSignal = "SIGINT" | "SIGTERM";
@@ -196,6 +199,16 @@ const bunValidationHook = defineAdapterValidationHook<"bun.validate", BunRuntime
 });
 
 function validateBunSecurityMiddleware(state: BunRuntimeState, registry: Parameters<typeof validateBunHttpMiddleware>[1]): void {
+  for (const plan of registry.methods) {
+    if (plan.kind !== BUN_HTTP_ROUTE_KIND && plan.middleware.some((attachment) => attachment.target === SignedUrlMiddleware)) {
+      throw new BunAdapterError("The signed middleware is supported only on Bun HTTP routes.");
+    }
+  }
+  for (const route of state.http.websocket.routes.values()) {
+    if (route.entry.middleware?.some((attachment) => attachment.target === SignedUrlMiddleware)) {
+      throw new BunAdapterError("The signed middleware is supported only on Bun HTTP routes.");
+    }
+  }
   const entries = [
     ...registry.methods.map((plan) => ({ attachments: plan.middleware, path: plan.kind === BUN_HTTP_ROUTE_KIND ? (() => {
       const owner = registry.classes.find((entry) => entry.target === plan.target);
@@ -225,6 +238,10 @@ function validateBunSecurityMiddleware(state: BunRuntimeState, registry: Paramet
             throw new BunAdapterError(`The can middleware policy ${JSON.stringify(policy)} requires route parameter ":${policy}".`);
           }
         }
+      }
+      if (attachment.target === SignedUrlMiddleware) {
+        if (!state.signedUrlManager) throw new BunAdapterError("The built-in signed middleware requires configured signed URLs.");
+        if (attachment.parameters.length > 0) throw new BunAdapterError("The signed middleware does not accept parameters.");
       }
     }
   }
@@ -321,6 +338,14 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       try { validateBunAuthorizationOptions(http.authorization); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
     }
+    if (http.signedUrls !== undefined) {
+      try { validateBunSignedUrlOptions(http.signedUrls); }
+      catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
+    }
+    if (http.pagination !== undefined) {
+      try { validateBunPaginationOptions(http.pagination); }
+      catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
+    }
     if (http.pages !== undefined) {
       try { new BunPageManager(http.pages); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
@@ -404,6 +429,8 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
         }),
       }),
       ...(http.websocket === undefined ? {} : { websocket: Object.freeze({ ...http.websocket }) }),
+      ...(http.signedUrls === undefined ? {} : { signedUrls: Object.freeze({ ...http.signedUrls }) }),
+      ...(http.pagination === undefined ? {} : { pagination: Object.freeze({ ...http.pagination }) }),
       mode: http.mode ?? "production",
       responseResolvers: Object.freeze([...(http.responseResolvers ?? [])]),
     });
@@ -435,12 +462,14 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       ? new OAuthManager(this.#http.auth.oauth, authManager)
       : undefined;
     const pageManager = this.#http.pages ? new BunPageManager(this.#http.pages) : undefined;
+    const signedUrlManager = this.#http.signedUrls ? await SignedUrlManager.create(this.#http.signedUrls) : undefined;
     if (sessionManager) scopeManager.applicationScope.value(BUN_SESSION_MANAGER, sessionManager);
     if (csrfManager) scopeManager.applicationScope.value(BUN_CSRF_MANAGER, csrfManager);
     if (authManager) scopeManager.applicationScope.value(BUN_AUTH_MANAGER, authManager as AuthManager<unknown>);
     if (authorizationManager) scopeManager.applicationScope.value(BUN_AUTHORIZATION_MANAGER, authorizationManager as AuthorizationManager<unknown>);
     if (oauthManager) scopeManager.applicationScope.value(BUN_OAUTH_MANAGER, oauthManager as OAuthManager<unknown>);
     if (pageManager) scopeManager.applicationScope.value(BUN_PAGE_MANAGER, pageManager as BunPageManager<unknown>);
+    if (signedUrlManager) scopeManager.applicationScope.value(BUN_SIGNED_URLS, signedUrlManager);
     const state: BunRuntimeState = {
       worker,
       scheduler,
@@ -459,11 +488,12 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       authorizationManager: authorizationManager as AuthorizationManager | undefined,
       oauthManager: oauthManager as OAuthManager | undefined,
       pageManager: pageManager as BunPageManager | undefined,
+      signedUrlManager,
     };
     if (this.#role === "command" && scheduler) {
       const commandRuntime = new BunCommandRuntime(context.application, scopeManager, queueManager, scheduler, {
         serve: async () => {
-          await startBunHttpServer(state.http, state.scopeManager, this.#http as unknown as BunHttpServerOptions, state.sessionManager, state.csrfManager, state.authManager, state.authorizationManager, state.oauthManager, state.pageManager);
+          await startBunHttpServer(state.http, state.scopeManager, this.#http as unknown as BunHttpServerOptions, state.sessionManager, state.csrfManager, state.authManager, state.authorizationManager, state.oauthManager, state.pageManager, state.signedUrlManager);
           await commandRuntime.stopped;
         },
         work: async () => {
@@ -499,6 +529,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
         state.authorizationManager,
         state.oauthManager,
         state.pageManager,
+        state.signedUrlManager,
       );
     }
     if (this.#handleSignals) {

@@ -22,6 +22,8 @@ import type { BunAuthorizationContext, BunAuthorizationOptions } from "./authori
 import type { BunOAuthContext } from "./oauth.js";
 import type { BunPageOptions } from "./pages.js";
 import type { BunWebSocketOptions } from "./websocket-runtime.js";
+import type { BunSignedUrls, BunSignedUrlOptions } from "./signed-urls.js";
+import type { BunPaginationContext, BunPaginationOptions } from "./pagination.js";
 
 export const BUN_HTTP_METHODS = Object.freeze([
   "GET",
@@ -60,6 +62,8 @@ export interface BunHttpContext<Principal = unknown> {
   readonly auth?: BunAuthContext<Principal>;
   readonly authorization?: BunAuthorizationContext<Principal>;
   readonly oauth?: BunOAuthContext<Principal>;
+  readonly signedUrls?: BunSignedUrls;
+  readonly pagination: BunPaginationContext;
 }
 
 export type BunHttpServerCallback = (
@@ -79,6 +83,8 @@ export interface BunHttpServerOptions<Principal = unknown> {
   readonly authorization?: BunAuthorizationOptions<Principal>;
   readonly pages?: BunPageOptions<Principal>;
   readonly websocket?: BunWebSocketOptions<Principal>;
+  readonly signedUrls?: BunSignedUrlOptions;
+  readonly pagination?: BunPaginationOptions;
 }
 
 export const BUN_HTTP_CONTEXT: Token<BunHttpContext> =

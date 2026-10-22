@@ -4,6 +4,7 @@ import {
   BunAuthorizationError,
   BunAuthorizationException,
   BunCookieJar,
+  BunPaginationContext,
   type BunAuthorizationPolicy,
   type BunAuthorizationPolicyCheck,
   type BunHttpContext,
@@ -23,6 +24,7 @@ function http(params: Readonly<Record<string, string>> = { post: "42" }): BunHtt
     route: { method: "GET", path: "/posts/:post", params },
     scope: {} as never,
     cookies: new BunCookieJar(request),
+    pagination: new BunPaginationContext(request),
   };
 }
 

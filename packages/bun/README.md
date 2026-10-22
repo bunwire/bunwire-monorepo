@@ -2,7 +2,7 @@
 
 `@bunwire/bun` is Bunwire's first-party Bun host adapter and application runtime integration.
 
-Milestones 1–14 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, and managed commands. Milestone 15 adds Bun-native managed WebSockets.
+Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–18 add authorization conveniences, signed URLs, pagination, and file validation.
 
 ```ts
 // bootstrap.ts
@@ -93,6 +93,38 @@ Use the exact decorated class as a Controller parameter. The compiler emits its 
 The runtime collects query, body, and route values with `query < body < route` precedence. `sources.route`, `sources.query`, `sources.body`, and `sources.files` retain separate frozen views. JSON objects, urlencoded forms, multipart fields, repeated values, and native `File` objects are supported. Parsing uses a cloned request and does not consume `request.context.request`.
 
 `prepareForValidation()` may call protected `merge()`, then `authorize()` runs, followed by `validateAsync()`. A ready instance exposes `context`, `all()`, `get()`, `errors`, and `validated()`. Authorization failures use 403; validation failures use the standard 422 JSON response. Middleware that short-circuits before `next()` does not parse or validate a Form Request.
+
+File uploads can use `file`, `maxFileBytes:N`, and `mime:type,...` in the same ruleset. `file` requires a native `File` or a nonempty array of files; the other rules check each file. `mime` compares the browser-supplied `File.type` metadata, so use an application content inspector when the actual bytes matter. These rules retain JSON 422 errors and the normal page request validation redirect.
+
+## Signed URLs and pagination
+
+Configure a separate signing secret and attach `@Use("signed")` to a generated HTTP route. The compiler includes the built-in middleware in the registry. Generate a link from `context.signedUrls`; verification returns the normal HTTP 403 for missing, changed, malformed, or expired signatures:
+
+```ts
+new BunAdapter({ http: {
+  signedUrls: { secret: process.env.BUNWIRE_URL_SECRET!, origin: "https://example.com" },
+  pagination: { defaultPageSize: 20, maxPageSize: 100 },
+} });
+
+// Inside a managed HTTP request:
+const link = await context.signedUrls!.sign("/reports/42?format=pdf", { expiresInSeconds: 600 });
+const absoluteLink = await context.signedUrls!.sign("/reports/42", { absolute: true });
+```
+
+The secret must contain at least 32 UTF-8 bytes. Links are relative by default; absolute links require an explicitly configured HTTP(S) origin. Verification binds the method (GET by default), path, ordered query pairs, and optional expiry. Query encoding is normalized through `URLSearchParams`; repeated query values keep their order. `bw_signature` and `bw_expires` are reserved. Replacing the secret invalidates outstanding links, so retain the old secret until existing links expire if they must remain usable. The request's Host and forwarding headers never choose the signing origin.
+
+`context.pagination.input()` parses `page` and `perPage` into `{ page, pageSize, offset }`. Values must be positive safe integers, `perPage` must stay within the configured maximum, and duplicate parameters fail with HTTP 400. `context.pagination.result(items, total)` returns those values, `total`, `pageCount`, and relative `self`, `first`, `previous`, `next`, and `last` links. Links retain nonpagination filters, including repeated values. The application performs its own data query and count:
+
+```ts
+const { pageSize, offset } = context.pagination.input();
+const [items, total] = await Promise.all([
+  repository.list({ limit: pageSize, offset }),
+  repository.count(),
+]);
+return context.pagination.result(items, total);
+```
+
+Both helpers are request scoped through `BUN_SIGNED_URLS` (when configured) and `BUN_PAGINATION` for explicit injection.
 
 ## Sessions, cookies, and CSRF
 

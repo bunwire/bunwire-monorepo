@@ -20,6 +20,7 @@ import {
 import { CsrfMiddleware } from "./csrf.js";
 import { AuthenticateMiddleware, GuestMiddleware } from "./auth.js";
 import { AuthorizeMiddleware } from "./authorization.js";
+import { SignedUrlMiddleware } from "./signed-urls.js";
 import { Job, BUN_JOB_KIND, BUN_JOB_HANDLE_KIND, BUN_JOB_COMPILATION_HANDLER, BUN_JOB_NO_CALLER_CONTRACT_HANDLER } from "./jobs.js";
 import { Queue, BUN_QUEUE_IDENTITY_HANDLER } from "./queued-listeners.js";
 import { Schedule, BUN_SCHEDULED_TASK_KIND, BUN_SCHEDULED_TASK_HANDLE_KIND, BUN_SCHEDULED_TASK_COMPILATION_HANDLER, BUN_APPLICATION_SCHEDULE_HANDLER, BUN_SCHEDULE_NO_CALLER_CONTRACT_HANDLER } from "./scheduled-tasks.js";
@@ -58,6 +59,10 @@ export const BUN_COMPILER_DESCRIPTOR = defineAdapterCompilerDescriptor({
     Object.freeze({
       compilerSymbol: Object.freeze({ moduleSpecifier: "@bunwire/bun", exportName: "AuthorizeMiddleware" }),
       data: Object.freeze({ scope: "transient" as const, alias: "can" }),
+    }),
+    Object.freeze({
+      compilerSymbol: Object.freeze({ moduleSpecifier: "@bunwire/bun", exportName: "SignedUrlMiddleware" }),
+      data: Object.freeze({ scope: "transient" as const, alias: "signed" }),
     }),
   ],
   metadataHandlers: [

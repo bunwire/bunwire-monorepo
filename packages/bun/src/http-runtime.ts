@@ -49,6 +49,8 @@ import {
   type AuthorizationManager,
 } from "./authorization.js";
 import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
+import { BUN_SIGNED_URLS, type SignedUrlManager } from "./signed-urls.js";
+import { BUN_PAGINATION, BunPaginationContext, type BunPaginationOptions } from "./pagination.js";
 import type { BunRuntimeContext } from "./runtime.js";
 import { BunPageResult, type BunPageManager } from "./pages.js";
 import {
@@ -188,6 +190,8 @@ async function invokeRoute(
   authorizationManager?: AuthorizationManager,
   oauthManager?: OAuthManager,
   pageManager?: BunPageManager,
+  signedUrlManager?: SignedUrlManager,
+  paginationOptions?: BunPaginationOptions,
   requestId = crypto.randomUUID(),
 ): Promise<Response> {
   let httpContext: BunHttpContext | undefined;
@@ -204,6 +208,7 @@ async function invokeRoute(
         const oauth = auth && lease && oauthManager
           ? oauthManager.createContext(() => context, auth, lease.session)
           : undefined;
+        const pagination = new BunPaginationContext(request, paginationOptions);
         context = Object.freeze({
           requestId,
           request,
@@ -220,6 +225,8 @@ async function invokeRoute(
           ...(auth ? { auth } : {}),
           ...(authorization ? { authorization } : {}),
           ...(oauth ? { oauth } : {}),
+          ...(signedUrlManager ? { signedUrls: signedUrlManager } : {}),
+          pagination,
         });
         httpContext = context;
         scope.value(BUN_HTTP_CONTEXT, context);
@@ -229,6 +236,8 @@ async function invokeRoute(
         if (auth) scope.value(BUN_AUTH_CONTEXT, auth);
         if (authorization) scope.value(BUN_AUTHORIZATION_CONTEXT, authorization);
         if (oauth) scope.value(BUN_OAUTH_CONTEXT, oauth);
+        if (signedUrlManager) scope.value(BUN_SIGNED_URLS, signedUrlManager);
+        scope.value(BUN_PAGINATION, pagination);
         if (auth) await auth[BUN_AUTH_INITIALIZE]();
         prepareBunFormRequestInput(context);
         const pathname = new URL(request.url).pathname;
@@ -289,6 +298,8 @@ function nativeRoutes(
   authorizationManager?: AuthorizationManager,
   oauthManager?: OAuthManager,
   pageManager?: BunPageManager,
+  signedUrlManager?: SignedUrlManager,
+  paginationOptions?: BunPaginationOptions,
 ): Record<string, NativeRouteMethods> {
   const invocation = state.invocation;
   if (!invocation) {
@@ -305,7 +316,7 @@ function nativeRoutes(
             const requestId = crypto.randomUUID();
             return state.observer.run({ kind: "http", id: requestId, requestId, route: route.path, method: route.method },
               () => invokeRoute(route, request, server, manager, invocation, state, pipeline,
-                sessions, csrfManager, authManager, authorizationManager, oauthManager, pageManager, requestId),
+                sessions, csrfManager, authManager, authorizationManager, oauthManager, pageManager, signedUrlManager, paginationOptions, requestId),
               (response) => response.status);
           }
         : (request, server) => handleBunHttpException(
@@ -324,6 +335,7 @@ function nativeRoutes(
     methods.GET = (request, server) => upgradeBunWebSocket(
       state.websocket, socketRoute, request, server, manager, state.middlewareDefinitions, pipeline.mode, pipeline.exceptionHandler,
       sessions, csrfManager, authManager, authorizationManager, oauthManager,
+      paginationOptions,
     );
     routes[path] = methods;
   }
@@ -340,6 +352,7 @@ export async function startBunHttpServer(
   authorizationManager?: AuthorizationManager,
   oauthManager?: OAuthManager,
   pageManager?: BunPageManager,
+  signedUrlManager?: SignedUrlManager,
 ): Promise<void> {
   const pipeline: BunHttpPipeline = Object.freeze({
     mode: options.mode ?? "production",
@@ -361,7 +374,7 @@ export async function startBunHttpServer(
     ...(options.port === undefined ? {} : { port: options.port }),
     routes: nativeRoutes(
       state, manager, pipeline, sessions, csrfManager,
-      authManager, authorizationManager, oauthManager, pageManager,
+      authManager, authorizationManager, oauthManager, pageManager, signedUrlManager, options.pagination,
     ),
     fetch: (request, server) => pageManager?.asset(request) ?? handleBunHttpException(
       new BunNotFoundException(),

@@ -14,6 +14,7 @@ import { deferWebSocketConnection, type BunExecutionScope, type BunExecutionScop
 import { BUN_HTTP_CONTEXT, bunHttpCompiledRoute, type BunHttpContext, type BunHttpRequest, type BunHttpServer } from "./http.js";
 import { createBunMiddlewareContext, selectBunMiddleware, type BunMiddlewareRuntimeDefinition } from "./middleware.js";
 import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
+import { BUN_PAGINATION, BunPaginationContext, type BunPaginationOptions } from "./pagination.js";
 import { BUN_SESSION, type SessionManager } from "./sessions.js";
 import {
   BUN_WEBSOCKET_CLOSE_KIND,
@@ -175,6 +176,7 @@ export async function upgradeBunWebSocket(
   authManager?: AuthManager,
   authorizationManager?: AuthorizationManager,
   oauthManager?: OAuthManager,
+  paginationOptions?: BunPaginationOptions,
 ): Promise<Response | undefined> {
   const requestId = crypto.randomUUID();
   return state.observer.run({ kind: "websocket-upgrade", id: requestId, requestId, route: route.path, method: "GET" }, async () => {
@@ -190,10 +192,12 @@ export async function upgradeBunWebSocket(
       const auth = authManager?.createContext(() => context!);
       const authorization = authorizationManager?.createContext(() => context!, auth);
       const oauth = auth && lease && oauthManager ? oauthManager.createContext(() => context!, auth, lease.session) : undefined;
+      const pagination = new BunPaginationContext(request, paginationOptions);
       context = Object.freeze({ requestId, request, server, route: Object.freeze({ method: "GET" as const, path: route.path, params: params(request) }),
         scope, cookies, ...(lease ? { session: lease.session } : {}), ...(csrf ? { csrf } : {}), ...(auth ? { auth } : {}),
-        ...(authorization ? { authorization } : {}), ...(oauth ? { oauth } : {}) });
+        ...(authorization ? { authorization } : {}), ...(oauth ? { oauth } : {}), pagination });
       scope.value(BUN_HTTP_CONTEXT, context).value(BUN_COOKIES, cookies);
+      scope.value(BUN_PAGINATION, pagination);
       if (lease) scope.value(BUN_SESSION, lease.session);
       if (csrf) scope.value(BUN_CSRF_CONTEXT, csrf);
       if (auth) scope.value(BUN_AUTH_CONTEXT, auth);

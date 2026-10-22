@@ -4,6 +4,7 @@ import {
   BunAuthError,
   BunAuthorizationException,
   BunCookieJar,
+  BunPaginationContext,
   SessionManager,
   createBearerAuthGuard,
   createSessionAuthGuard,
@@ -26,6 +27,7 @@ function http(native = request(), session?: BunHttpContext<Principal>["session"]
     route: { method: "GET", path: "/posts/:post", params: { post: "42" } },
     scope: {} as never,
     cookies: new BunCookieJar(native),
+    pagination: new BunPaginationContext(native),
     ...(session ? { session } : {}),
   };
 }

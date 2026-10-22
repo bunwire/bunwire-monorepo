@@ -21,6 +21,31 @@ function hasRequiredValue(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0);
 }
 
+function files(value: unknown): readonly File[] | undefined {
+  if (typeof File === "undefined") return undefined;
+  if (value instanceof File) return [value];
+  return Array.isArray(value) && value.length > 0 && value.every((entry) => entry instanceof File)
+    ? value as readonly File[]
+    : undefined;
+}
+
+function fileByteLimit(context: RuleContext): number {
+  const raw = context.arguments[0];
+  const limit = raw === undefined ? Number.NaN : Number(raw);
+  if (!Number.isSafeInteger(limit) || limit < 0) {
+    throw new Error(`Rule "${context.attribute}" requires a non-negative safe-integer byte limit.`);
+  }
+  return limit;
+}
+
+function mimeTypes(context: RuleContext): readonly string[] {
+  const values = context.arguments;
+  if (values.length === 0 || values.some((value) => !/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(value))) {
+    throw new Error(`Rule "${context.attribute}" requires one or more exact MIME types.`);
+  }
+  return values.map((value) => value.toLowerCase());
+}
+
 export const required: Rule = {
   name: "required", defaultMessage: "The :attribute field is required.", runsOnAbsent: true, runsOnNull: true, runsWhenSkipped: true,
   caller: ({ value }) => hasRequiredValue(value) ? pass() : failure(),
@@ -39,6 +64,15 @@ export const integer: Rule = { name: "integer", defaultMessage: "The :attribute 
 export const boolean: Rule = { name: "boolean", defaultMessage: "The :attribute field must be a boolean.", caller: ({ value }) => typeof value === "boolean" ? pass() : failure() };
 export const array: Rule = { name: "array", defaultMessage: "The :attribute field must be an array.", caller: ({ value }) => Array.isArray(value) ? pass() : failure() };
 export const object: Rule = { name: "object", defaultMessage: "The :attribute field must be an object.", caller: ({ value }) => value !== null && typeof value === "object" && !Array.isArray(value) ? pass() : failure() };
+export const file: Rule = { name: "file", defaultMessage: "The :attribute field must contain a file.", runsOnAbsent: true, runsOnNull: true, caller: ({ value }) => files(value) ? pass() : failure() };
+export const maxFileBytes: Rule = {
+  name: "maxFileBytes", defaultMessage: "The :attribute field may not exceed :max bytes per file.",
+  caller: (context) => { const max = fileByteLimit(context); const selected = files(context.value); return selected && selected.every((entry) => entry.size <= max) ? pass() : failure({ max }); },
+};
+export const mime: Rule = {
+  name: "mime", defaultMessage: "The :attribute field must have an allowed MIME type.",
+  caller: (context) => { const allowed = mimeTypes(context); const selected = files(context.value); return selected && selected.every((entry) => allowed.includes(entry.type.toLowerCase())) ? pass() : failure(); },
+};
 
 export const min: Rule = {
   name: "min", defaultMessage: "The :attribute field must be at least :min.",
@@ -75,9 +109,11 @@ export const rules = Object.freeze({
   notIn: (...values: readonly MembershipValue[]): RuleInvocation => invoke("notIn", values),
   same: (path: string): RuleInvocation => invoke("same", [path]),
   different: (path: string): RuleInvocation => invoke("different", [path]),
+  maxFileBytes: (maximum: number): RuleInvocation => invoke("maxFileBytes", [maximum]),
+  mime: (...types: readonly string[]): RuleInvocation => invoke("mime", types),
 });
 
 export const builtInRules = Object.freeze([
-  required, optional, nullable, string, number, integer, boolean, array, object,
+  required, optional, nullable, string, number, integer, boolean, array, object, file, maxFileBytes, mime,
   min, max, between, email, url, inRule, notIn, same, different,
 ] as const);

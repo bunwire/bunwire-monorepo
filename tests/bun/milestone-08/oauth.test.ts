@@ -1,6 +1,7 @@
 import {
   AuthManager,
   BunCookieJar,
+  BunPaginationContext,
   BunOAuthCallbackException,
   OAuthManager,
   SessionManager,
@@ -27,6 +28,7 @@ function http(native: BunHttpRequest, session: Session): BunHttpContext<Principa
     route: { method: "GET", path: "/oauth/callback", params: {} },
     scope: {} as never,
     cookies: new BunCookieJar(native),
+    pagination: new BunPaginationContext(native),
     session,
   };
 }

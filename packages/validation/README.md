@@ -44,7 +44,9 @@ dot or bracket paths, such as `locations.name` or `items[0].name`.
 Rules are executable objects with a stable name and a `caller(context)`. The
 default registry includes `required`, `optional`, `nullable`, `string`,
 `number`, `integer`, `boolean`, `array`, `object`, `min`, `max`, `between`,
-`email`, `url`, `in`, `notIn`, `same`, and `different`.
+`email`, `url`, `in`, `notIn`, `same`, `different`, `file`, `maxFileBytes`, and `mime`.
+
+`file` accepts a native `File` or nonempty `File[]`. `maxFileBytes:N` checks each file's byte size; `mime:type,...` compares each file's `File.type` to the listed exact media types. `File.type` and filenames are client metadata, not proof of content. Use a separate content inspector when trust in the bytes is required.
 
 Rule declarations accept arrays (the canonical form) or pipe strings:
 
@@ -73,7 +75,7 @@ const ruleset = {
 ```
 
 Available factories are `rules.min`, `rules.max`, `rules.between`, `rules.in`,
-`rules.notIn`, `rules.same`, and `rules.different`.
+`rules.notIn`, `rules.same`, `rules.different`, `rules.maxFileBytes`, and `rules.mime`.
 
 Arguments are parsed once from aliases and exposed to rules as string tokens.
 Consequently, `in:1,2,3` accepts both `1` and `"1"`; `null` is skipped by

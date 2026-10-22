@@ -1,4 +1,5 @@
 export { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
+export { BUN_RATE_LIMIT_MANAGER, BunRateLimitError, BunRateLimitManager, MemoryRateLimitBackend, ThrottleMiddleware, type BunRateLimitBackend, type BunRateLimitConsumption, type BunRateLimitRequest, type BunRateLimitPolicy, type BunRateLimitOptions } from "./rate-limiting.js";
 export { BUN_SIGNED_URLS, BunSignedUrlError, SignedUrlManager, SignedUrlMiddleware, type BunSignedUrlOptions, type BunSignUrlOptions, type BunSignedUrls } from "./signed-urls.js";
 export { BUN_PAGINATION, BunPaginationContext, BunPaginationError, type BunPaginationOptions, type BunPaginationInput, type BunPaginationResult, type BunPaginationLinks } from "./pagination.js";
 export { BUN_MAINTENANCE, BunMaintenance, BunOperationalHttpError, type BunHealthOptions, type BunReadinessCheck, type BunMaintenanceOptions } from "./operational-http.js";
@@ -27,6 +28,7 @@ export {
   BUN_COMMAND_KIND,
   BUN_FRAMEWORK_COMMAND_NAMES,
   BunCommandError,
+  BunCommandUsageError,
   type BunCommandArgumentDefinition,
   type BunCommandArgumentOptions,
   type BunCommandContext,
@@ -34,6 +36,9 @@ export {
   type BunCommandFlagDefinition,
   type BunCommandFlagOptions,
   type BunCommandIO,
+  type BunCommandExecutionIO,
+  type BunCommandPromptOptions,
+  type BunCommandStatus,
   type BunCommandOptionDefinition,
   type BunCommandOptionOptions,
   type BunCommandOptions,

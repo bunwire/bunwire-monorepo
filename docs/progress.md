@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: `@bunwire/bun` Milestone 19 — operational HTTP features (complete).
+Current milestone: `@bunwire/bun` Milestone 21 — command UX (complete).
 
 Overall status:
 
@@ -47,6 +47,8 @@ Overall status:
 - `@bunwire/bun` Milestone 17: Complete — [details](../packages/bun/progress/milestone-17.md)
 - `@bunwire/bun` Milestone 18: Complete — [details](../packages/bun/progress/milestone-18.md)
 - `@bunwire/bun` Milestone 19: Complete — [details](../packages/bun/progress/milestone-19.md)
+- `@bunwire/bun` Milestone 20: Complete — [details](../packages/bun/progress/milestone-20.md)
+- `@bunwire/bun` Milestone 21: Complete — [details](../packages/bun/progress/milestone-21.md)
 
 ## Implemented
 
@@ -97,12 +99,12 @@ Overall status:
 
 ## Current Work
 
-- `@bunwire/bun` Milestone 19 completed opt-in health endpoints and runtime maintenance controls.
+- `@bunwire/bun` Milestone 21 completed generated command help, deterministic display helpers, and explicit command prompts.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- `@bunwire/bun` Milestone 20 — rate limiting in [the Bun v2 plan](../packages/bun/MILESTONES-v2.md).
+- `@bunwire/bun` Milestone 22 — advanced page protocol in [the Bun v2 plan](../packages/bun/MILESTONES-v2.md).
 
 ## Blockers
 

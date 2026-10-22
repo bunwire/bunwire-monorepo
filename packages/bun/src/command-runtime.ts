@@ -30,7 +30,9 @@ import {
   type BunCommandOptionDefinition,
   type BunCommandParameterDefinition,
   type BunCommandValue,
+  BunCommandUsageError,
 } from "./commands.js";
+import { createBunCommandExecutionIO, defaultBunCommandIO } from "./command-io.js";
 import { BUN_HTTP_ROUTE_KIND, bunHttpCompiledRoute } from "./http.js";
 import { BUN_JOB_KIND, type BunJobDefinition } from "./jobs.js";
 import type { BunExecutionScopeManager } from "./execution-scopes.js";
@@ -55,12 +57,16 @@ interface CommandRuntimeOperations {
   readonly work: () => Promise<void>;
 }
 
-const DEFAULT_IO: BunCommandIO = Object.freeze({
-  stdout(line: string): void { console.log(line); },
-  stderr(line: string): void { console.error(line); },
-});
-
 export const BUN_COMMAND_RUNTIME: Token<BunCommandRuntime> = createToken<BunCommandRuntime>("bunwire.bun.command-runtime");
+
+const FRAMEWORK_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
+  help: "Show global or per-command help.", list: "List available commands.",
+  serve: "Start the configured HTTP server.", "routes:list": "List generated HTTP routes.",
+  "events:list": "List generated events and listeners.", "jobs:list": "List generated jobs.",
+  "queue:work": "Start a queue worker.", "queue:failed": "List failed jobs.",
+  "queue:retry": "Retry a failed job.", "queue:forget": "Delete a failed job record.",
+  "schedule:run": "Execute due scheduled tasks once.", "schedule:list": "List generated schedules.",
+});
 
 function errorText(error: unknown): string {
   if (typeof error === "string") return error;
@@ -79,11 +85,11 @@ async function write(io: BunCommandIO, target: "stdout" | "stderr", line: string
 function coerce(value: string, definition: BunCommandArgumentDefinition | BunCommandOptionDefinition): BunCommandValue {
   let result: BunCommandValue = value;
   if (definition.type === "number" || definition.type === "integer") {
-    if (value.trim() !== value || value.length === 0) throw new Error(`Value for "${definition.name}" must be a ${definition.type}.`);
+    if (value.trim() !== value || value.length === 0) throw new BunCommandUsageError(`Value for "${definition.name}" must be a ${definition.type}.`);
     result = Number(value);
-    if (!Number.isFinite(result) || (definition.type === "integer" && !Number.isSafeInteger(result))) throw new Error(`Value for "${definition.name}" must be a ${definition.type}.`);
+    if (!Number.isFinite(result) || (definition.type === "integer" && !Number.isSafeInteger(result))) throw new BunCommandUsageError(`Value for "${definition.name}" must be a ${definition.type}.`);
   }
-  if (definition.choices && !definition.choices.includes(result)) throw new Error(`Value for "${definition.name}" must be one of: ${definition.choices.join(", ")}.`);
+  if (definition.choices && !definition.choices.includes(result)) throw new BunCommandUsageError(`Value for "${definition.name}" must be one of: ${definition.choices.join(", ")}.`);
   return result;
 }
 
@@ -111,34 +117,60 @@ function parse(parameters: RegisteredCommand["parameters"], argv: readonly strin
     if (options && value === "--") { options = false; continue; }
     if (options && value.startsWith("--")) {
       const equals = value.indexOf("="); const name = value.slice(2, equals < 0 ? undefined : equals); const definition = byName.get(name);
-      if (!definition) throw new Error(`Unknown option "--${name}".`); if (values.has(definition.name)) throw new Error(`Option "--${name}" was supplied more than once.`);
-      if (definition.kind === "flag") { if (equals >= 0) throw new Error(`Flag "--${name}" does not accept a value.`); values.set(definition.name, true); continue; }
-      const raw = equals >= 0 ? value.slice(equals + 1) : argv[++index]; if (raw === undefined) throw new Error(`Option "--${name}" requires a value.`);
+      if (!definition) throw new BunCommandUsageError(`Unknown option "--${name}".`); if (values.has(definition.name)) throw new BunCommandUsageError(`Option "--${name}" was supplied more than once.`);
+      if (definition.kind === "flag") { if (equals >= 0) throw new BunCommandUsageError(`Flag "--${name}" does not accept a value.`); values.set(definition.name, true); continue; }
+      const raw = equals >= 0 ? value.slice(equals + 1) : argv[++index]; if (raw === undefined) throw new BunCommandUsageError(`Option "--${name}" requires a value.`);
       values.set(definition.name, coerce(raw, definition)); continue;
     }
     if (options && value.startsWith("-") && value !== "-") {
-      if (value.length !== 2) throw new Error(`Combined or malformed short option "${value}" is not supported.`);
-      const definition = byAlias.get(value[1]!); if (!definition) throw new Error(`Unknown option "${value}".`); if (values.has(definition.name)) throw new Error(`Option "${value}" was supplied more than once.`);
+      if (value.length !== 2) throw new BunCommandUsageError(`Combined or malformed short option "${value}" is not supported.`);
+      const definition = byAlias.get(value[1]!); if (!definition) throw new BunCommandUsageError(`Unknown option "${value}".`); if (values.has(definition.name)) throw new BunCommandUsageError(`Option "${value}" was supplied more than once.`);
       if (definition.kind === "flag") { values.set(definition.name, true); continue; }
-      const raw = argv[++index]; if (raw === undefined) throw new Error(`Option "${value}" requires a value.`); values.set(definition.name, coerce(raw, definition)); continue;
+      const raw = argv[++index]; if (raw === undefined) throw new BunCommandUsageError(`Option "${value}" requires a value.`); values.set(definition.name, coerce(raw, definition)); continue;
     }
     positional.push(value);
   }
-  if (positional.length > args.length) throw new Error(`Expected at most ${args.length} positional argument(s), received ${positional.length}.`);
+  if (positional.length > args.length) throw new BunCommandUsageError(`Expected at most ${args.length} positional argument(s), received ${positional.length}.`);
   const argumentValues: Record<string, BunCommandValue | undefined> = {}; const optionValues: Record<string, BunCommandValue | boolean | undefined> = {};
   for (let index = 0; index < args.length; index++) { const definition = args[index]!; const raw = positional[index];
-    const resolved = raw === undefined ? definition.default : coerce(raw, definition); if (resolved === undefined && definition.required) throw new Error(`Missing required argument "${definition.name}".`); argumentValues[definition.name] = resolved; values.set(definition.name, resolved as BunCommandValue); }
+    const resolved = raw === undefined ? definition.default : coerce(raw, definition); if (resolved === undefined && definition.required) throw new BunCommandUsageError(`Missing required argument "${definition.name}".`); argumentValues[definition.name] = resolved; values.set(definition.name, resolved as BunCommandValue); }
   for (const definition of named) { const resolved = values.has(definition.name) ? values.get(definition.name) : definition.kind === "flag" ? false : definition.default;
-    if (resolved === undefined && definition.kind === "option" && definition.required) throw new Error(`Missing required option "--${definition.name}".`); optionValues[definition.name] = resolved; values.set(definition.name, resolved as BunCommandValue | boolean); }
+    if (resolved === undefined && definition.kind === "option" && definition.required) throw new BunCommandUsageError(`Missing required option "--${definition.name}".`); optionValues[definition.name] = resolved; values.set(definition.name, resolved as BunCommandValue | boolean); }
   return Object.freeze({ arguments: Object.freeze(argumentValues), options: Object.freeze(optionValues) });
 }
 
 function usage(command: RegisteredCommand): string {
   const positional = command.parameters.filter((entry) => entry.kind === "argument").map((entry) => entry.required ? `<${entry.name}>` : `[${entry.name}]`);
-  return [`Usage: bunwire ${command.definition.name}${positional.length ? ` ${positional.join(" ")}` : ""} [options]`, command.definition.description ?? "", ...command.parameters.map((entry) => {
-    const name = entry.kind === "argument" ? entry.name : `${entry.alias ? `-${entry.alias}, ` : ""}--${entry.name}`;
-    return `  ${name}${entry.description ? `  ${entry.description}` : ""}`;
-  })].filter(Boolean).join("\n");
+  const lines = [`Usage: bunwire ${command.definition.name}${positional.length ? ` ${positional.join(" ")}` : ""} [options]`];
+  if (command.definition.description) lines.push("", command.definition.description);
+  if (command.parameters.length) {
+    lines.push("", "Inputs:");
+    for (const entry of command.parameters) {
+      const name = entry.kind === "argument" ? entry.name : `${entry.alias ? `-${entry.alias}, ` : ""}--${entry.name}`;
+      const details = entry.kind === "flag" ? ["flag"] : [entry.type, entry.required ? "required" : "optional",
+        ...(entry.default === undefined ? [] : [`default: ${String(entry.default)}`]),
+        ...(entry.choices === undefined ? [] : [`choices: ${entry.choices.join(", ")}`])];
+      lines.push(`  ${name}  ${details.join("; ")}${entry.description ? `  ${entry.description}` : ""}`);
+    }
+  }
+  if (command.definition.examples?.length) lines.push("", "Examples:", ...command.definition.examples.map((example) => `  ${example}`));
+  return lines.join("\n");
+}
+
+function wantsHelp(argv: readonly string[], parameters: RegisteredCommand["parameters"] = []): boolean {
+  const named = new Map<string, BunCommandOptionDefinition | BunCommandFlagDefinition>();
+  for (const parameter of parameters) {
+    if (parameter.kind === "argument") continue;
+    named.set(`--${parameter.name}`, parameter);
+    if (parameter.alias) named.set(`-${parameter.alias}`, parameter);
+  }
+  for (let index = 0; index < argv.length; index++) {
+    const value = argv[index]!;
+    if (value === "--") break;
+    if (value === "--help" || value === "-h") return true;
+    if (named.get(value)?.kind === "option") index++;
+  }
+  return false;
 }
 
 export class BunCommandRuntime {
@@ -171,32 +203,42 @@ export class BunCommandRuntime {
     }
   }
   beginShutdown(): void { if (!this.#controller.signal.aborted) { this.#controller.abort(new Error("Bun command runtime stopped.")); this.#resolveStopped(); } }
-  async run(argv: readonly string[], io: BunCommandIO = DEFAULT_IO): Promise<number> {
+  async run(argv: readonly string[], io: BunCommandIO = defaultBunCommandIO()): Promise<number> {
     if (this.#ran) { await write(io, "stderr", "Error: Bun command runtime may run only once."); return 1; } this.#ran = true;
-    if (!this.#registry || !this.#invocation || !Array.isArray(argv) || typeof io?.stdout !== "function" || typeof io?.stderr !== "function") { await write(io ?? DEFAULT_IO, "stderr", "Error: Bun command runtime is not initialized or received malformed input."); return 1; }
+    if (!this.#registry || !this.#invocation || !Array.isArray(argv) || typeof io?.stdout !== "function" || typeof io?.stderr !== "function"
+      || (io.input !== undefined && typeof io.input !== "function") || (io.interactive !== undefined && typeof io.interactive !== "boolean")) {
+      await write(io && typeof io.stderr === "function" ? io : defaultBunCommandIO(), "stderr", "Error: Bun command runtime is not initialized or received malformed input."); return 1;
+    }
     const [name, ...tail] = argv;
     if (!name || name === "list" || name === "--help" || name === "-h") { await this.#writeList(io); return 0; }
     if (name === "help") { const command = tail[0]; if (!command) { await this.#writeList(io); return 0; } return this.#writeHelp(command, io); }
     const applicationCommand = this.#commands.get(name); const framework = this.#framework(name);
     if (!applicationCommand && !framework) { await write(io, "stderr", `Unknown command "${name}".`); return 2; }
-    if (tail.includes("--help") || tail.includes("-h")) return applicationCommand ? (await write(io, "stdout", usage(applicationCommand)), 0) : this.#writeFrameworkHelp(name, io);
+    if (wantsHelp(tail, applicationCommand?.parameters)) return applicationCommand ? (await write(io, "stdout", usage(applicationCommand)), 0) : this.#writeFrameworkHelp(name, io);
     try {
       return await this.observer.run({ kind: "command", id: crypto.randomUUID(), command: name }, () => this.scopes.run("command", async (scope) => {
         if (applicationCommand) {
-          const parsed = parse(applicationCommand.parameters, tail); const context = Object.freeze({ name, argv: Object.freeze([...tail]), arguments: parsed.arguments, options: parsed.options, io, signal: this.#controller.signal, scope });
+          const parsed = parse(applicationCommand.parameters, tail); const context = Object.freeze({ name, argv: Object.freeze([...tail]), arguments: parsed.arguments, options: parsed.options, io: createBunCommandExecutionIO(io, this.#controller.signal), signal: this.#controller.signal, scope });
           scope.value(BUN_COMMAND_CONTEXT, context); const result = await this.application.invokeManagedMethod(applicationCommand.plan, [], { parentContainer: scope.container });
           if (result === undefined) return 0; if (!Number.isSafeInteger(result) || (result as number) < 0 || (result as number) > 255) throw new Error("Command handlers must return void or an integer exit code from 0 through 255."); return result as number;
         }
-        const context = Object.freeze({ name, argv: Object.freeze([...tail]), arguments: Object.freeze({}), options: Object.freeze({}), io, signal: this.#controller.signal, scope }); scope.value(BUN_COMMAND_CONTEXT, context);
+        const context = Object.freeze({ name, argv: Object.freeze([...tail]), arguments: Object.freeze({}), options: Object.freeze({}), io: createBunCommandExecutionIO(io, this.#controller.signal), signal: this.#controller.signal, scope }); scope.value(BUN_COMMAND_CONTEXT, context);
         return await framework!(tail, io);
       }));
-    } catch (error) { const usageFailure = error instanceof Error && /^(Unknown option|Option |Flag |Value |Expected |Missing required|Combined)/.test(error.message); await write(io, "stderr", errorText(error)); return usageFailure ? 2 : 1; }
+    } catch (error) {
+      await write(io, "stderr", errorText(error));
+      if (error instanceof BunCommandUsageError) {
+        await write(io, "stderr", `Run "bunwire help ${name}" for usage.`);
+        return 2;
+      }
+      return 1;
+    }
   }
-  async #writeList(io: BunCommandIO): Promise<void> { await write(io, "stdout", ["Usage: bunwire <command> [arguments] [options]", "", "Commands:", ...[...BUN_FRAMEWORK_COMMAND_NAMES, ...this.#commands.keys()].sort().map((name) => `  ${name}`)].join("\n")); }
+  async #writeList(io: BunCommandIO): Promise<void> { await write(io, "stdout", ["Usage: bunwire <command> [arguments] [options]", "", "Commands:", ...[...BUN_FRAMEWORK_COMMAND_NAMES, ...this.#commands.keys()].sort().map((name) => `  ${name}${(this.#commands.get(name)?.definition.description ?? FRAMEWORK_DESCRIPTIONS[name]) ? `  ${this.#commands.get(name)?.definition.description ?? FRAMEWORK_DESCRIPTIONS[name]}` : ""}`)].join("\n")); }
   async #writeHelp(name: string, io: BunCommandIO): Promise<number> { if (name === "list" || name === "help") { await this.#writeList(io); return 0; } const command = this.#commands.get(name); if (command) { await write(io, "stdout", usage(command)); return 0; } if (this.#framework(name)) return this.#writeFrameworkHelp(name, io); await write(io, "stderr", `Unknown command "${name}".`); return 2; }
-  async #writeFrameworkHelp(name: string, io: BunCommandIO): Promise<number> { const suffix: Record<string, string> = { "queue:retry": " <id>", "queue:forget": " <id>" }; await write(io, "stdout", `Usage: bunwire ${name}${suffix[name] ?? ""}`); return 0; }
+  async #writeFrameworkHelp(name: string, io: BunCommandIO): Promise<number> { const suffix: Record<string, string> = { "queue:retry": " <id>", "queue:forget": " <id>" }; await write(io, "stdout", `Usage: bunwire ${name}${suffix[name] ?? ""}\n\n${FRAMEWORK_DESCRIPTIONS[name]}`); return 0; }
   #framework(name: string): ((argv: readonly string[], io: BunCommandIO) => Promise<number>) | undefined {
-    const registry = this.#registry!; const exact = (argv: readonly string[], count: number) => { if (argv.length !== count) throw new Error(`Expected ${count} positional argument(s), received ${argv.length}.`); };
+    const registry = this.#registry!; const exact = (argv: readonly string[], count: number) => { if (argv.length !== count) throw new BunCommandUsageError(`Expected ${count} positional argument(s), received ${argv.length}.`); };
     switch (name) {
       case "serve": return async (argv) => { exact(argv, 0); await this.operations.serve(); return 0; };
       case "queue:work": return async (argv) => { exact(argv, 0); await this.operations.work(); return 0; };
@@ -218,7 +260,7 @@ export const bunCommandOptionResolver = defineParameterResolver({ id: "bun.comma
 export const bunCommandFlagResolver = defineParameterResolver({ id: "bun.command-flag", resolve({ context, parameter }) { return context.container.get(BUN_COMMAND_CONTEXT).options[(parameter.data as BunCommandFlagDefinition).name]; } });
 
 export async function runBunCli(application: Application, registry: RuntimeRegistry, options: BunCliRunOptions = {}): Promise<number> {
-  const io = options.io ?? DEFAULT_IO; let code = 1; let failure: unknown;
+  const io = options.io ?? defaultBunCommandIO(); let code = 1; let failure: unknown;
   try { await application.withRuntimeRegistry(registry).start(); code = await application.rootContainer.get(BUN_COMMAND_RUNTIME).run(options.argv ?? Bun.argv.slice(2), io); }
   catch (error) { failure = error; }
   try { await application.stop(); } catch (error) { failure = failure === undefined ? error : new AggregateError([failure, error], "Command startup/execution and cleanup failed."); }

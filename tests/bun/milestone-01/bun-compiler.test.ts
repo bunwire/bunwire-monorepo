@@ -35,6 +35,7 @@ describe("Bun Milestone 1 — compiler and generated-registry integration", () =
       "GuestMiddleware",
       "AuthorizeMiddleware",
       "SignedUrlMiddleware",
+      "ThrottleMiddleware",
       "EchoNormalizer",
       "EchoRequest",
       "HomeController",

@@ -51,6 +51,7 @@ import {
 import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
 import { BUN_SIGNED_URLS, type SignedUrlManager } from "./signed-urls.js";
 import { BUN_PAGINATION, BunPaginationContext, type BunPaginationOptions } from "./pagination.js";
+import type { BunRateLimitManager } from "./rate-limiting.js";
 import { BunHealthEndpoints, BunMaintenance, BunOperationalHttpError } from "./operational-http.js";
 import type { BunRuntimeContext } from "./runtime.js";
 import { BunPageResult, type BunPageManager } from "./pages.js";
@@ -92,6 +93,7 @@ export interface BunHttpRuntimeState {
   socketHandler: ReturnType<typeof bunNativeWebSocketHandler> | undefined;
   health: BunHealthEndpoints | undefined;
   maintenance: BunMaintenance | undefined;
+  rateLimitManager: BunRateLimitManager | undefined;
 }
 
 export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions, observer = new BunOperationObserver()): BunHttpRuntimeState {
@@ -106,6 +108,7 @@ export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions
     socketHandler: undefined,
     health: undefined,
     maintenance: undefined,
+    rateLimitManager: undefined,
   };
 }
 
@@ -234,6 +237,7 @@ async function invokeRoute(
           ...(oauth ? { oauth } : {}),
           ...(signedUrlManager ? { signedUrls: signedUrlManager } : {}),
           pagination,
+          ...(state.rateLimitManager ? { rateLimit: state.rateLimitManager } : {}),
         });
         httpContext = context;
         scope.value(BUN_HTTP_CONTEXT, context);

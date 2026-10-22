@@ -47,6 +47,7 @@ import { BUN_PAGE_MANAGER, BunPageManager } from "./pages.js";
 import { BUN_SIGNED_URLS, SignedUrlManager, SignedUrlMiddleware, validateBunSignedUrlOptions } from "./signed-urls.js";
 import { validateBunPaginationOptions } from "./pagination.js";
 import { BUN_MAINTENANCE, BunMaintenance, BunHealthEndpoints, validateBunHealthOptions, validateBunMaintenanceOptions } from "./operational-http.js";
+import { BUN_RATE_LIMIT_MANAGER, BunRateLimitManager, ThrottleMiddleware, validateBunRateLimitOptions } from "./rate-limiting.js";
 import {
   consumeBunFormRequestRegistry,
   createBunFormRequestResolver,
@@ -201,11 +202,17 @@ const bunValidationHook = defineAdapterValidationHook<"bun.validate", BunRuntime
 
 function validateBunSecurityMiddleware(state: BunRuntimeState, registry: Parameters<typeof validateBunHttpMiddleware>[1]): void {
   for (const plan of registry.methods) {
+    if (plan.kind !== BUN_HTTP_ROUTE_KIND && plan.middleware.some((attachment) => attachment.target === ThrottleMiddleware)) {
+      throw new BunAdapterError("The throttle middleware is supported only on Bun HTTP routes.");
+    }
     if (plan.kind !== BUN_HTTP_ROUTE_KIND && plan.middleware.some((attachment) => attachment.target === SignedUrlMiddleware)) {
       throw new BunAdapterError("The signed middleware is supported only on Bun HTTP routes.");
     }
   }
   for (const route of state.http.websocket.routes.values()) {
+    if (route.entry.middleware?.some((attachment) => attachment.target === ThrottleMiddleware)) {
+      throw new BunAdapterError("The throttle middleware is supported only on Bun HTTP routes.");
+    }
     if (route.entry.middleware?.some((attachment) => attachment.target === SignedUrlMiddleware)) {
       throw new BunAdapterError("The signed middleware is supported only on Bun HTTP routes.");
     }
@@ -243,6 +250,12 @@ function validateBunSecurityMiddleware(state: BunRuntimeState, registry: Paramet
       if (attachment.target === SignedUrlMiddleware) {
         if (!state.signedUrlManager) throw new BunAdapterError("The built-in signed middleware requires configured signed URLs.");
         if (attachment.parameters.length > 0) throw new BunAdapterError("The signed middleware does not accept parameters.");
+      }
+      if (attachment.target === ThrottleMiddleware) {
+        if (!state.http.rateLimitManager) throw new BunAdapterError("The throttle middleware requires configured Bun rate limiting.");
+        if (attachment.parameters.length !== 1 || !state.http.rateLimitManager.hasPolicy(attachment.parameters[0]!)) {
+          throw new BunAdapterError("The throttle middleware requires exactly one configured policy name.");
+        }
       }
     }
   }
@@ -339,6 +352,10 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       try { validateBunAuthorizationOptions(http.authorization); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
     }
+    if (http.rateLimiting !== undefined) {
+      try { validateBunRateLimitOptions(http.rateLimiting); }
+      catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
+    }
     if (http.signedUrls !== undefined) {
       try { validateBunSignedUrlOptions(http.signedUrls); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
@@ -422,6 +439,10 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
           }))),
         } as BunAuthorizationOptions<Principal>),
       }),
+      ...(http.rateLimiting === undefined ? {} : { rateLimiting: Object.freeze({
+        ...http.rateLimiting,
+        policies: Object.freeze(http.rateLimiting.policies.map((policy) => Object.freeze({ ...policy }))),
+      }) }),
       ...(http.pages === undefined ? {} : {
         pages: Object.freeze({
           ...http.pages,
@@ -471,6 +492,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
     const authorizationManager = this.#http.authorization
       ? new AuthorizationManager(this.#http.authorization)
       : undefined;
+    const rateLimitManager = this.#http.rateLimiting ? new BunRateLimitManager(this.#http.rateLimiting) : undefined;
     const oauthManager = this.#http.auth?.oauth && authManager
       ? new OAuthManager(this.#http.auth.oauth, authManager)
       : undefined;
@@ -481,11 +503,13 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
     if (csrfManager) scopeManager.applicationScope.value(BUN_CSRF_MANAGER, csrfManager);
     if (authManager) scopeManager.applicationScope.value(BUN_AUTH_MANAGER, authManager as AuthManager<unknown>);
     if (authorizationManager) scopeManager.applicationScope.value(BUN_AUTHORIZATION_MANAGER, authorizationManager as AuthorizationManager<unknown>);
+    if (rateLimitManager) scopeManager.applicationScope.value(BUN_RATE_LIMIT_MANAGER, rateLimitManager as BunRateLimitManager);
     if (oauthManager) scopeManager.applicationScope.value(BUN_OAUTH_MANAGER, oauthManager as OAuthManager<unknown>);
     if (pageManager) scopeManager.applicationScope.value(BUN_PAGE_MANAGER, pageManager as BunPageManager<unknown>);
     if (signedUrlManager) scopeManager.applicationScope.value(BUN_SIGNED_URLS, signedUrlManager);
     if (maintenance) scopeManager.applicationScope.value(BUN_MAINTENANCE, maintenance);
     const httpState = createBunHttpRuntimeState(this.#http.websocket as import("./websocket-runtime.js").BunWebSocketOptions | undefined, this.#observer);
+    httpState.rateLimitManager = rateLimitManager as BunRateLimitManager | undefined;
     httpState.health = this.#http.health ? new BunHealthEndpoints(this.#http.health,
       () => context.application.state === "running", () => httpState.listening, maintenance) : undefined;
     httpState.maintenance = maintenance;

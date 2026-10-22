@@ -1606,7 +1606,8 @@ Milestone 14 provides managed application commands through the `command` runtime
 Example:
 
 ```ts
-@Command({ name: "users:cleanup", description: "Remove inactive users." })
+@Command({ name: "users:cleanup", description: "Remove inactive users.",
+  examples: ["bunwire users:cleanup staff --days 30"] })
 export class CleanupUsers {
   constructor(
     private readonly users: UserService,
@@ -1627,6 +1628,8 @@ Arguments and options support explicit string, finite-number, and safe-integer c
 `runBunCli(app, registry)` is the normal entrypoint boundary. It uses `Bun.argv.slice(2)`, starts the Core Application, runs one isolated `command` scope, always awaits `app.stop()`, and returns an exit code for assignment to `process.exitCode`. It never calls `process.exit()`. The frozen `BUN_COMMAND_CONTEXT` exposes parsed values, raw arguments, injectable line-oriented IO, cancellation signal, and scope. `BunCommandRuntime.run()` remains the embedded/test escape hatch.
 
 Success is `0`; a handler may explicitly return any integer through `255`. Usage errors return `2`; startup, execution, or cleanup failures return `1`. Cleanup completes before the runner returns and simultaneous failures remain aggregated and deterministically rendered.
+
+Milestone 21 extends generated help with command descriptions, required inputs, types, defaults, choices, aliases, and declared examples. Command handlers may explicitly use `context.io.table()`, `progress()`, and `status()` for deterministic plain-text output. `context.io.prompt({ message, nonInteractiveValue? })` requests input only when called. Default I/O reads a TTY outside CI; noninteractive calls return an explicit fallback or usage code `2` without waiting on stdin. Existing `BunCommandIO` writers with only `stdout` and `stderr` remain valid; injected I/O can provide `interactive: true` and `input(message, signal)` for tests or custom hosts. Parsing and help detection honor `--`.
 
 Framework commands are:
 
@@ -1714,15 +1717,15 @@ message handlers
 
 Rate limiting belongs naturally in middleware.
 
-The existing middleware-parameter system makes syntax such as:
+The existing middleware-parameter system supports a named policy attachment:
 
 ```ts
-@Use("throttle:60,1m")
+@Use("throttle:api")
 ```
 
-a natural fit.
+Configure `api` through Bun's `http.rateLimiting.policies` with a limit, fixed-window duration, explicit request key callback, and backend-failure choice.
 
-Rate limiting should use a store abstraction:
+Rate limiting uses an atomic backend contract:
 
 ```text
 memory
@@ -1732,7 +1735,7 @@ custom
 
 rather than being tied to an application database.
 
-This can be implemented after the core HTTP architecture stabilizes without changing the middleware design.
+The default memory backend is process-local. Redis belongs in an optional package implementing the public backend interface.
 
 ---
 

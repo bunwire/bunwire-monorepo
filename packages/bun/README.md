@@ -2,7 +2,7 @@
 
 `@bunwire/bun` is Bunwire's first-party Bun host adapter and application runtime integration.
 
-Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–19 add authorization conveniences, signed URLs, pagination, file validation, health reporting, and maintenance control.
+Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–20 add authorization conveniences, signed URLs, pagination, file validation, health reporting, maintenance control, and rate limiting.
 
 ```ts
 // bootstrap.ts
@@ -424,7 +424,11 @@ User failures call `onError` or fall back to `console.error`, then continue by d
 Declare transient, compiler-discovered commands with constructor DI and explicit CLI parameter decorators:
 
 ```ts
-@Command({ name: "users:cleanup", description: "Remove inactive users." })
+@Command({
+  name: "users:cleanup",
+  description: "Remove inactive users.",
+  examples: ["bunwire users:cleanup staff --days 30"],
+})
 export class CleanupUsers {
   constructor(private readonly users: UserService) {}
 
@@ -448,6 +452,10 @@ process.exitCode = await runBunCli(app, registry);
 
 The runner starts the Core Application once, executes one `command` scope, always awaits `app.stop()`, and returns the final code without calling `process.exit()`. `void` means `0`; handlers may return an integer from `0` through `255`. Usage errors return `2`, while startup, execution, and cleanup failures return `1`. Advanced integrations can resolve `BUN_COMMAND_RUNTIME` and provide a `BunCommandIO`; the frozen `BUN_COMMAND_CONTEXT` is available through normal token injection.
 
+`bunwire list` shows command descriptions. `bunwire help <name>` and `<name> --help` read generated metadata to show required inputs, types, defaults, choices, aliases, and declared examples. A `--help` after `--` remains a positional value.
+
+Handlers can use `context.io.table(columns, rows)`, `context.io.progress(label, current, total)`, and `context.io.status(kind, message)` for plain, deterministic output. Existing custom I/O objects need only `stdout` and `stderr`; the command context supplies the helpers. For a prompt, a handler must explicitly call `await context.io.prompt({ message: "Continue?" })`. The default I/O reads from a terminal only when stdin and stdout are TTYs and CI is unset. In scripts, use `nonInteractiveValue` on that prompt or receive a usage error (exit code `2`). A custom I/O may opt in to interaction with `interactive: true` and an `input(message, signal)` callback, which also supports tests. Prompts do not fill missing CLI arguments automatically.
+
 Built-in commands are `help`, `list`, `serve`, `routes:list`, `events:list`, `jobs:list`, `queue:work`, `queue:failed`, `queue:retry`, `queue:forget`, `schedule:run`, and `schedule:list`. Their names are reserved. Introspection reads only the generated registry. The command role does not start HTTP, a worker, or the scheduler loop at application startup; `serve`, `queue:work`, and `schedule:run` activate only their required facilities. HTTP, worker, and scheduler options are therefore also valid on a command-role adapter.
 
 ## HTTP middleware
@@ -470,9 +478,42 @@ export class ExampleMiddleware {
 }
 ```
 
-`include` and `exclude` match the actual case-sensitive URL pathname with `*` for one segment and `**` for multiple segments. `only` and `except` accept uppercase HTTP methods. The frozen context exposes the native HTTP context plus `path`, `method`, `transport: "http"`, and attachment parameters. The aliases `auth`, `guest`, `can`, and `csrf` are reserved built-ins.
+`include` and `exclude` match the actual case-sensitive URL pathname with `*` for one segment and `**` for multiple segments. `only` and `except` accept uppercase HTTP methods. The frozen context exposes the native HTTP context plus `path`, `method`, `transport: "http"`, and attachment parameters. The aliases `auth`, `guest`, `can`, `csrf`, `signed`, and `throttle` are reserved built-ins.
 
 Global middleware, groups, nested groups, and Controller mappings use Core's `app.withMiddlewares()` policy. Generated attachments execute in `global → Controller mapping → Controller @Use → method @Use` order. Exact target-and-parameter duplicates run once; parameter-distinct attachments remain separate.
+
+## Rate limiting
+
+Configure named fixed-window policies on the Bun HTTP adapter and attach them through the built-in middleware alias:
+
+```ts
+import { BunAdapter } from "@bunwire/bun";
+import { Controller, Use } from "@bunwire/core";
+import { Get } from "@bunwire/bun";
+
+const adapter = new BunAdapter<{ id: string }>({ http: {
+  rateLimiting: { policies: [{
+    name: "api",
+    limit: 60,
+    windowMs: 60_000,
+    onBackendError: "closed",
+    key: (context) => context.auth?.principal
+      ? `user:${context.auth.principal.id}`
+      : `guest:${context.request.headers.get("x-client-id") ?? "shared"}`,
+  }] },
+} });
+
+@Controller("/api")
+class ApiController {
+  @Use("throttle:api")
+  @Get("/items")
+  items() { return { ok: true }; }
+}
+```
+
+The example's `x-client-id` is an application-chosen identity and is spoofable by callers. Use it only when that sharing model is acceptable. If limiting by client address, derive the key from a trusted server address source or explicitly configure which proxies may supply forwarded addresses. Bunwire never trusts forwarding headers implicitly. The key callback must return a non-empty string. Authentication is initialized before rate limit middleware executes, and policy names namespace identities. Policies also work in `app.withMiddlewares()` groups, global attachments, and Controller mappings. Unknown policy names fail at startup.
+
+The default `MemoryRateLimitBackend` is process-local and cannot enforce a shared limit across processes. Supply `rateLimiting.backend` to replace it. A backend implements `consume({ key, limit, windowMs })` as one atomic operation and returns `{ allowed, remaining, resetAtMs, retryAfterMs }`. Windows align to epoch multiples of `windowMs`; a rejected request does not consume quota. The backend owns the clock, returns reset time in epoch milliseconds and retry duration from that same clock, and expires buckets at their reset boundary. Concurrent calls for the same key/window must never allow more than `limit` requests. Distributed implementations should perform the decision and increment atomically on their authoritative clock. Backend errors follow each policy's required `onBackendError` choice: `open` continues, while `closed` returns safe HTTP 503. Exhausted quota returns HTTP 429 with a positive whole-second `Retry-After` and `Cache-Control: no-store`; backend details are not exposed.
 
 Core owns the terminal shutdown boundary:
 

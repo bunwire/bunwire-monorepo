@@ -32,6 +32,7 @@ const STATUS_MESSAGES: Readonly<Record<number, string>> = Object.freeze({
   405: "Method Not Allowed",
   419: "CSRF Token Mismatch",
   422: "Validation Failed",
+  429: "Too Many Requests",
   500: "Internal Server Error",
   502: "Bad Gateway",
 });

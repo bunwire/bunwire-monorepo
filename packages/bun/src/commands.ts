@@ -12,7 +12,8 @@ import {
 } from "@bunwire/core";
 import type { BunExecutionScope } from "./execution-scopes.js";
 
-export class BunCommandError extends Error { override readonly name = "BunCommandError"; }
+export class BunCommandError extends Error { override readonly name: string = "BunCommandError"; }
+export class BunCommandUsageError extends BunCommandError { override readonly name = "BunCommandUsageError"; }
 
 export type BunCommandValueType = "string" | "number" | "integer";
 export type BunCommandValue = string | number;
@@ -20,6 +21,7 @@ export type BunCommandValue = string | number;
 export interface BunCommandOptions {
   readonly name: string;
   readonly description?: string;
+  readonly examples?: readonly string[];
 }
 
 export interface BunCommandDefinition extends BunCommandOptions {}
@@ -65,6 +67,24 @@ export type BunCommandParameterDefinition = BunCommandArgumentDefinition | BunCo
 export interface BunCommandIO {
   readonly stdout: (line: string) => void | Promise<void>;
   readonly stderr: (line: string) => void | Promise<void>;
+  /** Explicit injected input capability. Never inferred from stdout/stderr. */
+  readonly input?: (message: string, signal: AbortSignal) => string | undefined | Promise<string | undefined>;
+  /** Set with input to enable simulated interaction in tests or a custom host. */
+  readonly interactive?: boolean;
+}
+
+export interface BunCommandPromptOptions {
+  readonly message: string;
+  readonly nonInteractiveValue?: string;
+}
+
+export type BunCommandStatus = "success" | "warning" | "error";
+
+export interface BunCommandExecutionIO extends BunCommandIO {
+  table(columns: readonly string[], rows: readonly (readonly string[])[]): Promise<void>;
+  progress(label: string, current: number, total: number): Promise<void>;
+  status(kind: BunCommandStatus, message: string): Promise<void>;
+  prompt(options: BunCommandPromptOptions): Promise<string>;
 }
 
 export interface BunCommandContext {
@@ -72,7 +92,7 @@ export interface BunCommandContext {
   readonly argv: readonly string[];
   readonly arguments: Readonly<Record<string, BunCommandValue | undefined>>;
   readonly options: Readonly<Record<string, BunCommandValue | boolean | undefined>>;
-  readonly io: BunCommandIO;
+  readonly io: BunCommandExecutionIO;
   readonly signal: AbortSignal;
   readonly scope: BunExecutionScope;
 }
@@ -104,11 +124,20 @@ function text(value: unknown, label: string): string {
 export function compiledCommandDefinition(input: string | BunCommandOptions): BunCommandDefinition {
   const value = typeof input === "string" ? { name: input } : input;
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new BunCommandError("@Command requires a command name or options object.");
-  ownKeys(value, ["name", "description"], "@Command options");
+  ownKeys(value, ["name", "description", "examples"], "@Command options");
   const name = text(value.name, "Command name");
   if (!COMMAND_NAME.test(name)) throw new BunCommandError("Command names may contain only letters, digits, '.', '_', ':', and '-'.");
   const description = value.description === undefined ? undefined : text(value.description, "Command description");
-  return Object.freeze({ name, ...(description === undefined ? {} : { description }) });
+  let examples: readonly string[] | undefined;
+  if (value.examples !== undefined) {
+    if (!Array.isArray(value.examples) || value.examples.length === 0) throw new BunCommandError("Command examples must be a non-empty array of command lines.");
+    examples = Object.freeze(value.examples.map((example) => {
+      const line = text(example, "Command example");
+      if (/[\r\n]/.test(line)) throw new BunCommandError("Command examples must each be one line.");
+      return line;
+    }));
+  }
+  return Object.freeze({ name, ...(description === undefined ? {} : { description }), ...(examples === undefined ? {} : { examples }) });
 }
 
 export const Command = defineManagedClassDecorator<string | BunCommandOptions, BunCommandDefinition, "bun.command-decorator">({

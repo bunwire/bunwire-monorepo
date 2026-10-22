@@ -51,7 +51,7 @@ describe("Bun Milestone 1 — adapter foundation and runtime roles", () => {
       (BUN_COMPILER_DESCRIPTOR.middlewareDefinitions ?? []).map(
         (definition) => definition.data.alias,
       ),
-    ).toEqual(["csrf", "auth", "guest", "can", "signed"]);
+    ).toEqual(["csrf", "auth", "guest", "can", "signed", "throttle"]);
     expect(Object.isFrozen(BUN_COMPILER_DESCRIPTOR)).toBe(true);
     expect(BunAdapter.compiler).toBe(BUN_COMPILER_DESCRIPTOR);
   });

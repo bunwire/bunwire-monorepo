@@ -228,7 +228,7 @@ Canonical class references are also valid:
 String references support Laravel-style parameters:
 
 ```ts
-@Use("auth:admin,user", "throttle:100,1m")
+@Use("auth:admin,user", "throttle:api")
 ```
 
 They compile to canonical attachments:
@@ -238,7 +238,7 @@ AuthMiddleware
 parameters: ["admin", "user"]
 
 ThrottleMiddleware
-parameters: ["100", "1m"]
+parameters: ["api"]
 ```
 
 Parsing rules for the first version are:
@@ -273,7 +273,7 @@ export default defineApp()
     registry.group("admin", [
       "auth:admin",
       "audit:security",
-      "throttle:100,1m",
+      "throttle:api",
     ]);
 
     registry.controllers({

@@ -25,6 +25,7 @@ import type { BunWebSocketOptions } from "./websocket-runtime.js";
 import type { BunSignedUrls, BunSignedUrlOptions } from "./signed-urls.js";
 import type { BunPaginationContext, BunPaginationOptions } from "./pagination.js";
 import type { BunHealthOptions, BunMaintenanceOptions } from "./operational-http.js";
+import type { BunRateLimitManager, BunRateLimitOptions } from "./rate-limiting.js";
 
 export const BUN_HTTP_METHODS = Object.freeze([
   "GET",
@@ -65,6 +66,7 @@ export interface BunHttpContext<Principal = unknown> {
   readonly oauth?: BunOAuthContext<Principal>;
   readonly signedUrls?: BunSignedUrls;
   readonly pagination: BunPaginationContext;
+  readonly rateLimit?: BunRateLimitManager<Principal>;
 }
 
 export type BunHttpServerCallback = (
@@ -88,6 +90,7 @@ export interface BunHttpServerOptions<Principal = unknown> {
   readonly pagination?: BunPaginationOptions;
   readonly health?: BunHealthOptions;
   readonly maintenance?: BunMaintenanceOptions;
+  readonly rateLimiting?: BunRateLimitOptions<Principal>;
 }
 
 export const BUN_HTTP_CONTEXT: Token<BunHttpContext> =

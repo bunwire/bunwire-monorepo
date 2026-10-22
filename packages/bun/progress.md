@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 19 — operational HTTP features (complete).
+Current milestone: Milestone 21 — command UX (complete).
 
 Overall status:
 
@@ -25,6 +25,8 @@ Overall status:
 - Milestone 17: Complete — [details](progress/milestone-17.md)
 - Milestone 18: Complete — [details](progress/milestone-18.md)
 - Milestone 19: Complete — [details](progress/milestone-19.md)
+- Milestone 20: Complete — [details](progress/milestone-20.md)
+- Milestone 21: Complete — [details](progress/milestone-21.md)
 
 ## Implemented
 
@@ -53,14 +55,16 @@ Overall status:
 - Milestone 17 adds request-scoped authorization allow/deny and named-policy helpers while preserving the existing manager and middleware behavior.
 - Milestone 18 adds signed URLs with generated verification middleware, bounded pagination, and shared native `File` validation rules.
 - Milestone 19 adds opt-in native health endpoints and runtime maintenance control with explicit operator bypass.
+- Milestone 20 adds named fixed-window rate limit policies, an atomic backend contract, and built-in HTTP middleware.
+- Milestone 21 adds generated command help details, deterministic display helpers, and explicit nonblocking prompts.
 
 ## Current Work
 
-- Milestone 19 is complete; [details](progress/milestone-19.md) record behavior and verification.
+- Milestone 21 is complete; [details](progress/milestone-21.md) record behavior and verification.
 
 ## Next
 
-- Milestone 20 — rate limiting in [the v2 plan](MILESTONES-v2.md).
+- Milestone 22 — advanced page protocol in [the v2 plan](MILESTONES-v2.md).
 
 ## Blockers
 
@@ -87,3 +91,5 @@ Overall status:
 - [Milestone 17](progress/milestone-17.md)
 - [Milestone 18](progress/milestone-18.md)
 - [Milestone 19](progress/milestone-19.md)
+- [Milestone 20](progress/milestone-20.md)
+- [Milestone 21](progress/milestone-21.md)

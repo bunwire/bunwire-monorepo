@@ -32,6 +32,10 @@
       "types": "./dist/react.d.ts",
       "import": "./dist/react.js"
     },
+    "./react/server": {
+      "types": "./dist/react-server.d.ts",
+      "import": "./dist/react-server.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"

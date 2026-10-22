@@ -14,6 +14,8 @@ The architecture separates:
 - **Build tooling** — primarily a Vite integration responsible for reading `bunwire.config.*`, source discovery, TypeScript symbol analysis, decorator analysis, generated registries, compiled invocation plans, validation, and generated RPC contracts.
 - **Platform adapters** — integrations such as Electrobun that contribute platform-specific managed class kinds, managed method kinds, parameter decorators/resolvers, transports, runtime registry consumers, lifecycle behavior, and compiler extensions.
 
+The Bun adapter owns its page HTTP protocol and request-scoped page work. Its version 2 partial/deferred capability is negotiated per navigation, while version 1 full responses remain valid. Optional SSR uses a separate Vite server bundle and an adapter renderer callback; neither the page protocol nor React rendering belongs in Core.
+
 Electrobun must not be embedded into Core.
 
 The initial target is Electrobun, but Core must expose enough generic machinery that another adapter can add new controller-like class kinds and route-like method kinds without requiring Core or Vite to hard-code them.

@@ -42,6 +42,7 @@ interface BunwirePluginHooks {
   configureServer(server: ViteDevServer): void;
   buildStart(this: BunwirePluginContext): Promise<void>;
   generateBundle(this: BunwirePluginContext, _options: unknown, bundle: Rollup.OutputBundle): Promise<void>;
+  writeBundle(): Promise<void>;
   resolveId(id: string): string | undefined;
   load(id: string): Promise<string | undefined>;
   watchChange(this: BunwirePluginContext, id: string): Promise<void>;
@@ -70,6 +71,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
   let refreshQueue: Promise<unknown> = Promise.resolve();
   let generatedPaths = resolveGeneratedArtifactPaths(viteRoot, options);
   let resolvedViteConfig: ResolvedConfig | undefined;
+  let pageServerManifest: { protocol: 1; serverEntry: string } | undefined;
 
   const outputPathIdentities = (): ReadonlySet<string> => new Set([
     generatedPaths.registry,
@@ -105,7 +107,8 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     application.config.bootstrap,
     ...application.config.sourceRoots,
     ...application.sourceFiles,
-    ...(application.config.pages ? [application.config.pages.root, application.config.pages.entry] : []),
+    ...(application.config.pages ? [application.config.pages.root, application.config.pages.entry,
+      ...(application.config.pages.ssrEntry ? [application.config.pages.ssrEntry] : [])] : []),
   ]);
 
   const registerWatchFiles = (
@@ -148,6 +151,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     return application.config.sourceRoots.some((root) => isWithin(root, resolved))
       || (application.config.pages !== undefined
         && (identity === canonicalCompilerPath(application.config.pages.entry)
+          || (application.config.pages.ssrEntry !== undefined && identity === canonicalCompilerPath(application.config.pages.ssrEntry))
           || isWithin(application.config.pages.root, resolved)));
   };
 
@@ -204,6 +208,15 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       const generated = await generateBunwirePageModule(application.config);
       if (!generated) return;
       const chunks = Object.values(bundle).filter((output): output is Rollup.OutputChunk => output.type === "chunk");
+      if (resolvedViteConfig.build.ssr) {
+        const ssrEntry = application.config.pages.ssrEntry;
+        if (!ssrEntry) throw new BunwireCompilerError("CONFIG_INVALID", "Vite page SSR build requires pages.ssrEntry in bunwire.config.");
+        const serverChunk = chunks.find((chunk) => chunk.isEntry && chunk.facadeModuleId
+          && canonicalCompilerPath(chunk.facadeModuleId) === canonicalCompilerPath(ssrEntry));
+        if (!serverChunk) throw new BunwireCompilerError("CONFIG_INVALID", `Vite SSR output does not contain configured page entry "${ssrEntry}".`);
+        pageServerManifest = { protocol: 1, serverEntry: path.resolve(resolvedViteConfig.root, resolvedViteConfig.build.outDir, serverChunk.fileName) };
+        return;
+      }
       const entry = chunks.find((chunk) => chunk.isEntry && chunk.facadeModuleId
         && canonicalCompilerPath(chunk.facadeModuleId) === canonicalCompilerPath(application.config.pages!.entry))
         ?? chunks.find((chunk) => chunk.isEntry);
@@ -221,7 +234,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
         protocol: 1, mode: "production", components: generated.pages.map(({ name }) => name),
         entry: `/${entry.fileName}`, ...(styles.length ? { styles: Object.freeze(styles) } : {}),
         version: versionHash.digest("hex"),
-        assetRoot: path.relative(application.config.root, resolvedViteConfig.build.outDir).replaceAll(path.sep, "/"),
+        assetRoot: path.relative(application.config.root, path.resolve(resolvedViteConfig.root, resolvedViteConfig.build.outDir)).replaceAll(path.sep, "/"),
         assets: Object.freeze(Object.values(bundle).map((output) => `/${output.fileName}`).sort()),
       });
       const code = renderBunwirePageManifest(manifest);
@@ -231,6 +244,12 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       try { current = await readFile(pagesPath, "utf8"); } catch {}
       if (current !== code) { await mkdir(path.dirname(pagesPath), { recursive: true }); await writeFile(pagesPath, code, "utf8"); }
       this.emitFile({ type: "asset", fileName: "bunwire-pages.json", source: JSON.stringify(manifest, null, 2) });
+    },
+    async writeBundle(): Promise<void> {
+      if (!pageServerManifest || !resolvedViteConfig) return;
+      const outputDirectory = path.resolve(resolvedViteConfig.root, resolvedViteConfig.build.outDir);
+      await mkdir(outputDirectory, { recursive: true });
+      await writeFile(path.join(outputDirectory, "bunwire-pages-server.json"), JSON.stringify(pageServerManifest, null, 2), "utf8");
     },
     resolveId(id): string | undefined {
       if (id === BUNWIRE_REGISTRY_MODULE_ID) return BUNWIRE_RESOLVED_REGISTRY_MODULE_ID;

@@ -1,5 +1,4 @@
 import {
-  createContext,
   createElement,
   useContext,
   useSyncExternalStore,
@@ -8,7 +7,7 @@ import {
   type MouseEvent,
   type ReactElement,
 } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import {
   BunPageClient,
   createBunwirePageClient,
@@ -18,6 +17,7 @@ import {
   type BunPageVisitOptions,
 } from "./client.js";
 import type { BunPageProps, BunwirePage } from "./page-protocol.js";
+import { ReactPageContext } from "./react-context.js";
 
 export type BunReactPageComponent = ComponentType<Record<string, unknown>>;
 
@@ -28,6 +28,8 @@ export interface BunwireReactAppOptions {
   readonly window?: Window;
   readonly document?: Document;
   readonly fetch?: typeof fetch;
+  readonly deferred?: boolean;
+  readonly onDeferredError?: (error: unknown, keys: readonly string[]) => void;
 }
 
 export interface BunwireReactApp {
@@ -36,24 +38,13 @@ export interface BunwireReactApp {
   unmount(): void;
 }
 
-interface ReactPageContextValue {
-  readonly client: BunPageClient<BunReactPageComponent>;
-}
-
-const ReactPageContext = createContext<ReactPageContextValue | undefined>(undefined);
-
-function useClient(): BunPageClient<BunReactPageComponent> {
-  const context = useContext(ReactPageContext);
-  if (!context) throw new Error("Bunwire React page hooks must be used beneath createBunwireReactApp().");
-  return context.client;
-}
-
 export function usePage<Props extends object = BunPageProps>(): BunwirePage<Props> {
-  const client = useClient();
+  const context = useContext(ReactPageContext);
+  if (!context) throw new Error("Bunwire React page hooks require a page renderer.");
   return useSyncExternalStore(
-    (listener) => client.subscribe(listener),
-    () => client.page as BunwirePage<Props>,
-    () => client.page as BunwirePage<Props>,
+    (listener) => context.client?.subscribe(listener) ?? (() => undefined),
+    () => (context.client?.page ?? context.page) as BunwirePage<Props>,
+    () => (context.page ?? context.client?.page) as BunwirePage<Props>,
   );
 }
 
@@ -63,17 +54,19 @@ export interface BunwireLinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorEl
 }
 
 export function Link({ href, visit, onClick, ...attributes }: BunwireLinkProps): ReactElement {
-  const client = useClient();
+  const client = useContext(ReactPageContext)?.client as BunPageClient<BunReactPageComponent> | undefined;
   const click = (event: MouseEvent<HTMLAnchorElement>): void => {
     onClick?.(event);
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    void client.visit(href, visit).catch((error) => { setTimeout(() => { throw error; }); });
+    if (client) {
+      event.preventDefault();
+      void client.visit(href, visit).catch((error) => { setTimeout(() => { throw error; }); });
+    }
   };
   return createElement("a", { ...attributes, href, onClick: click });
 }
 
-function PageHost({ client }: ReactPageContextValue): ReactElement | null {
+function PageHost({ client }: { client: BunPageClient<BunReactPageComponent> }): ReactElement | null {
   useSyncExternalStore(
     (listener) => client.subscribe(listener),
     () => client.page,
@@ -98,15 +91,18 @@ export async function createBunwireReactApp(options: BunwireReactAppOptions): Pr
     ...(options.window ? { window: options.window } : {}),
     document: browserDocument,
     ...(options.fetch ? { fetch: options.fetch } : {}),
+    ...(options.deferred ? { deferred: true } : {}),
+    ...(options.onDeferredError ? { onDeferredError: options.onDeferredError } : {}),
   };
   const client = createBunwirePageClient(clientOptions);
   await client.start();
-  const root = createRoot(element);
-  root.render(createElement(
+  const tree = createElement(
     ReactPageContext.Provider,
-    { value: Object.freeze({ client }) },
+    { value: Object.freeze({ client, page: initialPage }) },
     createElement(PageHost, { client }),
-  ));
+  );
+  const root = element.hasAttribute("data-bunwire-ssr") ? hydrateRoot(element, tree) : createRoot(element);
+  if (!element.hasAttribute("data-bunwire-ssr")) root.render(tree);
   return Object.freeze({
     client,
     root,

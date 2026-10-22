@@ -400,6 +400,7 @@
       "BunwireDiscoveryResult",
       "BunwireGeneratedArtifactPaths",
       "BunwirePageAssetManifest",
+      "BunwirePageServerManifest",
       "BunwirePagesConfig",
       "BunwireProgramContext",
       "BunwireProgramOptions",
@@ -548,8 +549,12 @@
       "BUN_MAINTENANCE",
       "BUN_OAUTH_CONTEXT",
       "BUN_OAUTH_MANAGER",
+      "BUN_PAGE_CAPABILITY_HEADER",
+      "BUN_PAGE_DEFERRED_PROPS_HEADER",
       "BUN_PAGE_LOCATION_HEADER",
       "BUN_PAGE_MANAGER",
+      "BUN_PAGE_PARTIAL_COMPONENT_HEADER",
+      "BUN_PAGE_PARTIAL_PROPS_HEADER",
       "BUN_PAGE_PROTOCOL_VERSION",
       "BUN_PAGE_REQUEST_HEADER",
       "BUN_PAGE_RESPONSE_HEADER",
@@ -588,6 +593,7 @@
       "BunCsrfError",
       "BunCsrfMismatchException",
       "BunDefaultHttpExceptionHandler",
+      "BunDeferredProp",
       "BunExecutionScope",
       "BunExecutionScopeError",
       "BunExecutionScopeManager",
@@ -656,16 +662,19 @@
       "ThrottleMiddleware",
       "WebSocket",
       "createBearerAuthGuard",
+      "createBunPageServerRenderer",
       "createOAuth2Provider",
       "createSessionAuthGuard",
       "cronMatches",
+      "defer",
       "defineQueueEventCodec",
       "page",
       "parseCronExpression",
       "redirect",
       "runBunCli",
       "validateBunPageManifest",
-      "validateTimeZone"
+      "validateTimeZone",
+      "withBunPageServerManifest"
     ],
     "declarations": [
       "Argument",
@@ -699,8 +708,12 @@
       "BUN_MAINTENANCE",
       "BUN_OAUTH_CONTEXT",
       "BUN_OAUTH_MANAGER",
+      "BUN_PAGE_CAPABILITY_HEADER",
+      "BUN_PAGE_DEFERRED_PROPS_HEADER",
       "BUN_PAGE_LOCATION_HEADER",
       "BUN_PAGE_MANAGER",
+      "BUN_PAGE_PARTIAL_COMPONENT_HEADER",
+      "BUN_PAGE_PARTIAL_PROPS_HEADER",
       "BUN_PAGE_PROTOCOL_VERSION",
       "BUN_PAGE_REQUEST_HEADER",
       "BUN_PAGE_RESPONSE_HEADER",
@@ -774,6 +787,7 @@
       "BunCsrfMismatchException",
       "BunCsrfOptions",
       "BunDefaultHttpExceptionHandler",
+      "BunDeferredProp",
       "BunExecutionScope",
       "BunExecutionScopeCreateOptions",
       "BunExecutionScopeDescriptor",
@@ -842,6 +856,8 @@
       "BunPageOptions",
       "BunPageProps",
       "BunPageResult",
+      "BunPageServerManifest",
+      "BunPageServerRenderer",
       "BunPageSharedPropsContext",
       "BunPageSharedPropsResolver",
       "BunPageShellRenderer",
@@ -962,16 +978,19 @@
       "ThrottleMiddleware",
       "WebSocket",
       "createBearerAuthGuard",
+      "createBunPageServerRenderer",
       "createOAuth2Provider",
       "createSessionAuthGuard",
       "cronMatches",
+      "defer",
       "defineQueueEventCodec",
       "page",
       "parseCronExpression",
       "redirect",
       "runBunCli",
       "validateBunPageManifest",
-      "validateTimeZone"
+      "validateTimeZone",
+      "withBunPageServerManifest"
     ]
   },
   "bunTesting": {
@@ -990,7 +1009,11 @@
   },
   "bunClient": {
     "runtime": [
+      "BUN_PAGE_CAPABILITY_HEADER",
+      "BUN_PAGE_DEFERRED_PROPS_HEADER",
       "BUN_PAGE_LOCATION_HEADER",
+      "BUN_PAGE_PARTIAL_COMPONENT_HEADER",
+      "BUN_PAGE_PARTIAL_PROPS_HEADER",
       "BUN_PAGE_REQUEST_HEADER",
       "BUN_PAGE_RESPONSE_HEADER",
       "BUN_PAGE_VERSION_HEADER",
@@ -1000,7 +1023,11 @@
       "readInitialBunwirePage"
     ],
     "declarations": [
+      "BUN_PAGE_CAPABILITY_HEADER",
+      "BUN_PAGE_DEFERRED_PROPS_HEADER",
       "BUN_PAGE_LOCATION_HEADER",
+      "BUN_PAGE_PARTIAL_COMPONENT_HEADER",
+      "BUN_PAGE_PARTIAL_PROPS_HEADER",
       "BUN_PAGE_REQUEST_HEADER",
       "BUN_PAGE_RESPONSE_HEADER",
       "BUN_PAGE_VERSION_HEADER",
@@ -1133,6 +1160,14 @@
       "setPath",
       "string",
       "url"
+    ]
+  },
+  "bunReactServer": {
+    "runtime": [
+      "renderBunwireReactPage"
+    ],
+    "declarations": [
+      "renderBunwireReactPage"
     ]
   }
 }

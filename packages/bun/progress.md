@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 21 — command UX (complete).
+Current milestone: Milestone 22 — advanced page protocol (complete).
 
 Overall status:
 
@@ -27,6 +27,7 @@ Overall status:
 - Milestone 19: Complete — [details](progress/milestone-19.md)
 - Milestone 20: Complete — [details](progress/milestone-20.md)
 - Milestone 21: Complete — [details](progress/milestone-21.md)
+- Milestone 22: Complete — [details](progress/milestone-22.md)
 
 ## Implemented
 
@@ -57,14 +58,15 @@ Overall status:
 - Milestone 19 adds opt-in native health endpoints and runtime maintenance control with explicit operator bypass.
 - Milestone 20 adds named fixed-window rate limit policies, an atomic backend contract, and built-in HTTP middleware.
 - Milestone 21 adds generated command help details, deterministic display helpers, and explicit nonblocking prompts.
+- Milestone 22 adds negotiated partial/deferred page responses and an optional separate SSR renderer bundle, with focused page, Vite, build, export, and release checks passing.
 
 ## Current Work
 
-- Milestone 21 is complete; [details](progress/milestone-21.md) record behavior and verification.
+- Milestone 22 is complete; [details](progress/milestone-22.md) record behavior and verification.
 
 ## Next
 
-- Milestone 22 — advanced page protocol in [the v2 plan](MILESTONES-v2.md).
+- Milestone 23 — WebSocket conveniences in [the v2 plan](MILESTONES-v2.md).
 
 ## Blockers
 
@@ -93,3 +95,4 @@ Overall status:
 - [Milestone 19](progress/milestone-19.md)
 - [Milestone 20](progress/milestone-20.md)
 - [Milestone 21](progress/milestone-21.md)
+- [Milestone 22](progress/milestone-22.md)

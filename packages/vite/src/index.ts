@@ -70,6 +70,7 @@ export {
   type DiscoveredBunwirePage,
   type GeneratedBunwirePageModule,
   type BunwirePageAssetManifest,
+  type BunwirePageServerManifest,
   renderBunwirePageManifest,
 } from "./page-generator.js";
 export {

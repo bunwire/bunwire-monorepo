@@ -41,9 +41,9 @@ for (const packageName of packageNames) {
   }
 }
 
-for (const [subpath, allowlistKey] of [["client", "bunClient"], ["react", "bunReact"], ["testing", "bunTesting"]]) {
-  const runtimePath = path.join(repositoryRoot, "packages/bun/dist", `${subpath}.js`);
-  const declarationPath = path.join(repositoryRoot, "packages/bun/dist", `${subpath}.d.ts`);
+for (const [subpath, allowlistKey, fileName] of [["client", "bunClient", "client"], ["react", "bunReact", "react"], ["react/server", "bunReactServer", "react-server"], ["testing", "bunTesting", "testing"]]) {
+  const runtimePath = path.join(repositoryRoot, "packages/bun/dist", `${fileName}.js`);
+  const declarationPath = path.join(repositoryRoot, "packages/bun/dist", `${fileName}.d.ts`);
   const runtime = await import(`${pathToFileURL(runtimePath).href}?audit=${Date.now()}`);
   const runtimeExports = Object.keys(runtime).sort();
   if (JSON.stringify(runtimeExports) !== JSON.stringify(allowlist[allowlistKey].runtime)) {

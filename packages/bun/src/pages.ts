@@ -1,9 +1,15 @@
 import { createToken, type Token } from "@bunwire/core";
+import { isAbsolute } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { BunAuthContext } from "./auth.js";
 import { BunValidationException } from "./exceptions.js";
 import type { BunHttpContext } from "./http.js";
 import {
   BUN_PAGE_LOCATION_HEADER,
+  BUN_PAGE_CAPABILITY_HEADER,
+  BUN_PAGE_PARTIAL_COMPONENT_HEADER,
+  BUN_PAGE_PARTIAL_PROPS_HEADER,
+  BUN_PAGE_DEFERRED_PROPS_HEADER,
   BUN_PAGE_PROTOCOL_VERSION,
   BUN_PAGE_REQUEST_HEADER,
   BUN_PAGE_RESPONSE_HEADER,
@@ -34,13 +40,59 @@ export type BunPageSharedPropsResolver<Principal = unknown> = (
 export type BunPageShellRenderer = (
   page: BunwirePage,
   manifest: BunPageManifest,
+  ssrHtml?: string,
 ) => string | Promise<string>;
+
+export type BunPageServerRenderer<Principal = unknown> = (
+  page: BunwirePage,
+  manifest: BunPageManifest,
+  context: BunHttpContext<Principal>,
+) => string | Promise<string>;
+
+export class BunDeferredProp<Value = BunPageJsonValue> {
+  constructor(readonly resolve: (context: BunHttpContext<any>) => Value | Promise<Value>) {
+    if (typeof resolve !== "function") throw new BunPageError("Deferred Bun page prop resolver must be callable.");
+    Object.freeze(this);
+  }
+}
+
+export function defer<Value = BunPageJsonValue>(
+  resolve: (context: BunHttpContext<any>) => Value | Promise<Value>,
+): BunDeferredProp<Value> {
+  return new BunDeferredProp(resolve);
+}
 
 export interface BunPageOptions<Principal = unknown> {
   readonly manifest: BunPageManifest;
   readonly shared?: BunPageSharedPropsResolver<Principal> | readonly BunPageSharedPropsResolver<Principal>[];
   readonly flash?: Readonly<Record<string, string>>;
   readonly shell?: BunPageShellRenderer;
+  readonly ssr?: BunPageServerRenderer<Principal>;
+}
+
+export interface BunPageServerManifest {
+  readonly protocol: 1;
+  readonly serverEntry: string;
+}
+
+export function withBunPageServerManifest(manifest: BunPageManifest, server: BunPageServerManifest): BunPageManifest {
+  validateBunPageManifest(manifest);
+  if (!server || server.protocol !== 1 || typeof server.serverEntry !== "string" || !server.serverEntry.trim()) {
+    throw new BunPageError("Invalid Bun page server manifest.");
+  }
+  return Object.freeze({ ...manifest, serverEntry: server.serverEntry });
+}
+
+export function createBunPageServerRenderer<Principal = unknown>(manifest: BunPageManifest): BunPageServerRenderer<Principal> {
+  if (!manifest.serverEntry) throw new BunPageError("Bun page manifest has no server entry.");
+  let load: Promise<unknown> | undefined;
+  return async (page, current, context) => {
+    const entry = manifest.serverEntry!;
+    load ??= import(/* @vite-ignore */ (isAbsolute(entry) ? pathToFileURL(entry).href : entry));
+    const module = await load as { renderPage?: BunPageServerRenderer<Principal> };
+    if (typeof module.renderPage !== "function") throw new BunPageError("Bun page server entry must export renderPage().");
+    return module.renderPage(page, current, context);
+  };
 }
 
 interface BunPageFlashState {
@@ -70,7 +122,16 @@ export class BunPageResult<Props extends Readonly<Record<string, unknown>> = Rea
       throw new BunPageError("Bun page props must be an object.");
     }
     this.component = component;
-    this.props = props(properties, "Bun page props") as Props;
+    const normalized: Record<string, unknown> = Object.create(null);
+    for (const key of Reflect.ownKeys(properties)) {
+      if (typeof key !== "string") throw new BunPageError("Bun page props must have string keys.");
+      const descriptor = Object.getOwnPropertyDescriptor(properties, key);
+      if (!descriptor || !("value" in descriptor) || !descriptor.enumerable) throw new BunPageError("Bun page props must be JSON-compatible own values.");
+      normalized[key] = descriptor.value instanceof BunDeferredProp
+        ? descriptor.value
+        : freezeJsonValue(descriptor.value, `Bun page prop ${JSON.stringify(key)}`);
+    }
+    this.props = Object.freeze(normalized) as Props;
     Object.freeze(this);
   }
 }
@@ -127,6 +188,11 @@ function props(value: unknown, label: string): BunPageProps {
   return freezeJson(value as BunPageJsonValue) as BunPageProps;
 }
 
+function freezeJsonValue(value: unknown, label: string): BunPageJsonValue {
+  if (!isPlainJson(value)) throw new BunPageError(`${label} must be JSON-compatible.`);
+  return freezeJson(value);
+}
+
 function assertAsset(value: unknown, label: string): asserts value is string {
   if (typeof value !== "string" || value.trim().length === 0 || /[\r\n]/.test(value)) {
     throw new BunPageError(`${label} must be a non-empty asset URL without line breaks.`);
@@ -149,6 +215,9 @@ export function validateBunPageManifest(value: BunPageManifest): void {
     throw new BunPageError("Bun page manifest components must be a non-empty array of unique names.");
   }
   assertAsset(value.entry, "Bun page manifest entry");
+  if (value.serverEntry !== undefined && (typeof value.serverEntry !== "string" || value.serverEntry.trim().length === 0)) {
+    throw new BunPageError("Bun page manifest server entry must be a non-empty path.");
+  }
   if (value.styles !== undefined && (!Array.isArray(value.styles) || value.styles.some((style) => {
     try { assertAsset(style, "Bun page manifest style"); return false; } catch { return true; }
   }))) throw new BunPageError("Bun page manifest styles must contain valid asset URLs.");
@@ -175,12 +244,12 @@ function escapeAttribute(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
-function defaultShell(current: BunwirePage, manifest: BunPageManifest): string {
+function defaultShell(current: BunwirePage, manifest: BunPageManifest, ssrHtml?: string): string {
   const styles = (manifest.styles ?? []).map((href) => `<link rel="stylesheet" href="${escapeAttribute(href)}">`).join("");
   const viteClient = manifest.mode === "development"
     ? `<script type="module" src="${escapeAttribute(new URL("/@vite/client", manifest.entry).href)}"></script>`
     : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}</head><body><div id="app"></div><script id="bunwire-page" type="application/json">${escapeHtmlJson(current)}</script>${viteClient}<script type="module" src="${escapeAttribute(manifest.entry)}"></script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${styles}</head><body><div id="app"${ssrHtml === undefined ? "" : ' data-bunwire-ssr="true"'}>${ssrHtml ?? ""}</div><script id="bunwire-page" type="application/json">${escapeHtmlJson(current)}</script>${viteClient}<script type="module" src="${escapeAttribute(manifest.entry)}"></script></body></html>`;
 }
 
 function appendVary(headers: Headers, value: string): void {
@@ -222,6 +291,7 @@ export class BunPageManager<Principal = unknown> {
   readonly #shared: readonly BunPageSharedPropsResolver<Principal>[];
   readonly #flash: Readonly<Record<string, string>>;
   readonly #shell: BunPageShellRenderer;
+  readonly #ssr: BunPageServerRenderer<Principal> | undefined;
 
   constructor(options: BunPageOptions<Principal>) {
     if (!options || typeof options !== "object" || Array.isArray(options)) throw new BunPageError("Bun page options must be an object.");
@@ -233,6 +303,7 @@ export class BunPageManager<Principal = unknown> {
       throw new BunPageError("Bun page flash mappings must map non-empty prop names to non-empty session keys.");
     }
     if (options.shell !== undefined && typeof options.shell !== "function") throw new BunPageError("Bun page shell must be callable.");
+    if (options.ssr !== undefined && typeof options.ssr !== "function") throw new BunPageError("Bun page SSR renderer must be callable.");
     this.manifest = Object.freeze({
       ...options.manifest,
       components: Object.freeze([...options.manifest.components]),
@@ -243,10 +314,16 @@ export class BunPageManager<Principal = unknown> {
     this.#shared = Object.freeze([...shared]);
     this.#flash = Object.freeze({ ...(options.flash ?? {}) });
     this.#shell = options.shell ?? defaultShell;
+    this.#ssr = options.ssr;
   }
 
   async resolve(result: BunPageResult, context: BunHttpContext<Principal>): Promise<Response> {
     if (!this.#components.has(result.component)) throw new BunPageComponentError(`Unknown Bun page component ${JSON.stringify(result.component)}.`);
+    const navigation = isPageRequest(context.request);
+    const requestedVersion = context.request.headers.get(BUN_PAGE_VERSION_HEADER);
+    if (navigation && context.request.method === "GET" && this.manifest.version && requestedVersion && requestedVersion !== this.manifest.version) {
+      return new Response(null, { status: 409, headers: { [BUN_PAGE_LOCATION_HEADER]: context.request.url, [BUN_PAGE_RESPONSE_HEADER]: "true", Vary: BUN_PAGE_REQUEST_HEADER } });
+    }
     let merged: Record<string, BunPageJsonValue> = {};
     const validation = context.session ? pageFlash(context.session) : undefined;
     if (validation) merged = { errors: props(validation.errors, "Bun page validation errors"), old: props(validation.old, "Bun page old input") };
@@ -263,27 +340,62 @@ export class BunPageManager<Principal = unknown> {
         if (value !== undefined) merged[property] = freezeJson(value);
       }
     }
-    merged = { ...merged, ...props(result.props, "Bun controller page props") };
+    const advanced = navigation && context.request.headers.get(BUN_PAGE_CAPABILITY_HEADER) === "2";
+    const requestedComponent = context.request.headers.get(BUN_PAGE_PARTIAL_COMPONENT_HEADER);
+    const requested = (header: string): readonly string[] | undefined => {
+      const raw = context.request.headers.get(header);
+      if (!raw) return undefined;
+      let names: unknown;
+      try { names = JSON.parse(raw); } catch { throw new BunPageError(`Invalid ${header} page prop selection.`); }
+      if (!Array.isArray(names) || names.length === 0 || names.some((name) => typeof name !== "string" || !name.length)
+        || new Set(names).size !== names.length) throw new BunPageError(`Invalid ${header} page prop selection.`);
+      return names;
+    };
+    const partialKeys = advanced && requestedComponent === result.component ? requested(BUN_PAGE_PARTIAL_PROPS_HEADER) : undefined;
+    const deferredKeys = advanced && requestedComponent === result.component ? requested(BUN_PAGE_DEFERRED_PROPS_HEADER) : undefined;
+    if (partialKeys && deferredKeys) throw new BunPageError("Partial and deferred prop selections cannot be combined.");
+    const selected = partialKeys ?? deferredKeys;
+    const available = new Set([...Object.keys(merged), ...Object.keys(result.props)]);
+    if (selected?.some((key) => !available.has(key))) throw new BunPageError("Requested Bun page prop is unavailable.");
+    const deferred: string[] = [];
+    const controller: Record<string, BunPageJsonValue> = Object.create(null);
+    for (const [key, value] of Object.entries(result.props)) {
+      if (value instanceof BunDeferredProp) {
+        if (selected?.includes(key) || !advanced) {
+          if (context.request.signal.aborted) throw new BunPageError("Deferred Bun page request was cancelled.");
+          controller[key] = freezeJsonValue(await value.resolve(context), `Deferred Bun page prop ${JSON.stringify(key)}`);
+          if (context.request.signal.aborted) throw new BunPageError("Deferred Bun page request was cancelled.");
+        } else { deferred.push(key); delete merged[key]; }
+      } else controller[key] = value as BunPageJsonValue;
+    }
+    merged = { ...merged, ...controller };
+    if (selected) merged = Object.fromEntries(Object.entries(merged).filter(([key]) => selected.includes(key)));
     const current = Object.freeze({
       component: result.component,
       props: Object.freeze(merged),
       url: requestUrl(context.request),
       ...(this.manifest.version ? { version: this.manifest.version } : {}),
+      ...(selected ? { partial: Object.freeze([...selected]) } : {}),
+      ...(advanced && !selected && deferred.length ? { deferred: Object.freeze(deferred) } : {}),
     }) as BunwirePage;
-    const navigation = isPageRequest(context.request);
-    const requestedVersion = context.request.headers.get(BUN_PAGE_VERSION_HEADER);
-    if (navigation && context.request.method === "GET" && this.manifest.version && requestedVersion && requestedVersion !== this.manifest.version) {
-      return new Response(null, { status: 409, headers: { [BUN_PAGE_LOCATION_HEADER]: context.request.url, [BUN_PAGE_RESPONSE_HEADER]: "true", Vary: BUN_PAGE_REQUEST_HEADER } });
-    }
     const headers = new Headers({ [BUN_PAGE_RESPONSE_HEADER]: "true" });
     if (this.manifest.version) headers.set(BUN_PAGE_VERSION_HEADER, this.manifest.version);
     appendVary(headers, BUN_PAGE_REQUEST_HEADER);
     if (navigation) {
+      appendVary(headers, BUN_PAGE_CAPABILITY_HEADER);
+      appendVary(headers, BUN_PAGE_PARTIAL_COMPONENT_HEADER);
+      appendVary(headers, BUN_PAGE_PARTIAL_PROPS_HEADER);
+      appendVary(headers, BUN_PAGE_DEFERRED_PROPS_HEADER);
+    }
+    if (navigation) {
       headers.set("Content-Type", "application/json; charset=utf-8");
+      if (advanced) headers.set(BUN_PAGE_CAPABILITY_HEADER, "2");
       return new Response(JSON.stringify(current), { headers });
     }
     headers.set("Content-Type", "text/html; charset=utf-8");
-    const shell = await this.#shell(current, this.manifest);
+    const ssrHtml = this.#ssr ? await this.#ssr(current, this.manifest, context) : undefined;
+    if (this.#ssr && typeof ssrHtml !== "string") throw new BunPageError("Bun page SSR renderer must return a string.");
+    const shell = await this.#shell(current, this.manifest, ssrHtml);
     if (typeof shell !== "string") throw new BunPageError("Bun page shell renderer must return a string.");
     return new Response(shell, { headers });
   }

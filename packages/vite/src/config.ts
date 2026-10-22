@@ -21,6 +21,7 @@ export interface BunwireConfig {
 export interface BunwirePagesConfig {
   readonly root: string;
   readonly entry: string;
+  readonly ssrEntry?: string;
   readonly devServer?: string;
   readonly extensions?: readonly string[];
 }
@@ -28,6 +29,7 @@ export interface BunwirePagesConfig {
 export interface ResolvedBunwirePagesConfig {
   readonly root: string;
   readonly entry: string;
+  readonly ssrEntry?: string;
   readonly devServer: string;
   readonly extensions: readonly string[];
 }
@@ -90,6 +92,7 @@ function validatePagesConfig(value: BunwirePagesConfig): void {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new BunwireCompilerError("CONFIG_INVALID", 'Bunwire config field "pages" must be an object.');
   assertNonEmptyRelativePath(value.root, "pages.root");
   assertNonEmptyRelativePath(value.entry, "pages.entry");
+  if (value.ssrEntry !== undefined) assertNonEmptyRelativePath(value.ssrEntry, "pages.ssrEntry");
   if (value.devServer !== undefined) {
     let url: URL;
     try { url = new URL(value.devServer); } catch { throw new BunwireCompilerError("CONFIG_INVALID", 'Bunwire config field "pages.devServer" must be an HTTP(S) origin.'); }
@@ -155,7 +158,7 @@ function readPages(expression: ts.Expression, filePath: string): BunwirePagesCon
   for (const property of value.properties) {
     if (!ts.isPropertyAssignment(property)) throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config in "${filePath}" may only contain explicit property assignments.`, { filePath });
     const name = propertyNameText(property.name);
-    if (!name || !["root", "entry", "devServer", "extensions"].includes(name)) throw new BunwireCompilerError("CONFIG_INVALID", `Unknown Bunwire pages config field "${name ?? property.name.getText()}" in "${filePath}".`, { filePath });
+    if (!name || !["root", "entry", "ssrEntry", "devServer", "extensions"].includes(name)) throw new BunwireCompilerError("CONFIG_INVALID", `Unknown Bunwire pages config field "${name ?? property.name.getText()}" in "${filePath}".`, { filePath });
     if (fields[name] !== undefined) throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config field "${name}" is declared more than once in "${filePath}".`, { filePath });
     if (name === "extensions") {
       const array = unwrapExpression(property.initializer);
@@ -166,6 +169,7 @@ function readPages(expression: ts.Expression, filePath: string): BunwirePagesCon
   if (typeof fields.root !== "string" || typeof fields.entry !== "string") throw new BunwireCompilerError("CONFIG_INVALID", `Bunwire pages config in "${filePath}" must declare root and entry.`, { filePath });
   return { root: fields.root, entry: fields.entry,
     ...(typeof fields.devServer === "string" ? { devServer: fields.devServer } : {}),
+    ...(typeof fields.ssrEntry === "string" ? { ssrEntry: fields.ssrEntry } : {}),
     ...(Array.isArray(fields.extensions) ? { extensions: fields.extensions } : {}) };
 }
 
@@ -417,8 +421,11 @@ export async function loadBunwireConfig(
     await assertExistingPath(pagesRoot, "directory", "SOURCE_ROOT_NOT_FOUND", "Bunwire pages root");
     const pagesEntry = await resolveContainedPath(root, parsed.pages.entry, "Pages entry");
     await assertExistingPath(pagesEntry, "file", "BOOTSTRAP_NOT_FOUND", "Bunwire pages entry");
+    const ssrEntry = parsed.pages.ssrEntry ? await resolveContainedPath(root, parsed.pages.ssrEntry, "Pages SSR entry") : undefined;
+    if (ssrEntry) await assertExistingPath(ssrEntry, "file", "BOOTSTRAP_NOT_FOUND", "Bunwire pages SSR entry");
     const canonicalPagesRoot = await realpath(pagesRoot);
     const canonicalPagesEntry = await realpath(pagesEntry);
+    const canonicalSsrEntry = ssrEntry ? await realpath(ssrEntry) : undefined;
     if (!isWithin(root, canonicalPagesRoot)) {
       throw new BunwireCompilerError(
         "CONFIG_PATH_OUTSIDE_ROOT",
@@ -433,8 +440,12 @@ export async function loadBunwireConfig(
         { filePath: pagesEntry },
       );
     }
+    if (canonicalSsrEntry && !isWithin(root, canonicalSsrEntry)) {
+      throw new BunwireCompilerError("CONFIG_PATH_OUTSIDE_ROOT", `Bunwire pages SSR entry "${canonicalSsrEntry}" resolves outside project root through a filesystem link.`, { filePath: canonicalSsrEntry });
+    }
     pages = Object.freeze({
       root: canonicalPagesRoot, entry: canonicalPagesEntry,
+      ...(canonicalSsrEntry ? { ssrEntry: canonicalSsrEntry } : {}),
       devServer: parsed.pages.devServer ?? "http://localhost:5173",
       extensions: Object.freeze([...(parsed.pages.extensions ?? [".tsx", ".ts", ".jsx", ".js"])]),
     });

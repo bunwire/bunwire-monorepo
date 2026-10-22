@@ -13,6 +13,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@bunwire/bun/client": fileURLToPath(new URL("./packages/bun/src/client.ts", import.meta.url)),
+      "@bunwire/bun/react/server": fileURLToPath(new URL("./packages/bun/src/react-server.ts", import.meta.url)),
       "@bunwire/bun/react": fileURLToPath(new URL("./packages/bun/src/react.ts", import.meta.url)),
       "@bunwire/bun/testing": fileURLToPath(new URL("./packages/bun/src/testing.ts", import.meta.url)),
       "@bunwire/bun": fileURLToPath(new URL("./packages/bun/src/index.ts", import.meta.url)),

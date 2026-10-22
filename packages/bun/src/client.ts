@@ -1,4 +1,8 @@
 import {
+  BUN_PAGE_CAPABILITY_HEADER,
+  BUN_PAGE_PARTIAL_COMPONENT_HEADER,
+  BUN_PAGE_PARTIAL_PROPS_HEADER,
+  BUN_PAGE_DEFERRED_PROPS_HEADER,
   BUN_PAGE_LOCATION_HEADER,
   BUN_PAGE_REQUEST_HEADER,
   BUN_PAGE_RESPONSE_HEADER,
@@ -25,6 +29,8 @@ export interface BunPageVisitOptions {
   readonly headers?: HeadersInit;
   readonly replace?: boolean;
   readonly preserveScroll?: boolean;
+  /** Refresh only these props when the destination keeps the current component. */
+  readonly only?: readonly string[];
 }
 
 export interface BunPageClientOptions<Component = unknown> {
@@ -34,6 +40,9 @@ export interface BunPageClientOptions<Component = unknown> {
   readonly window?: Window;
   readonly document?: Document;
   readonly fetch?: typeof fetch;
+  /** Request deferred props after a negotiated page navigation. */
+  readonly deferred?: boolean;
+  readonly onDeferredError?: (error: unknown, keys: readonly string[]) => void;
 }
 
 export type BunPageClientListener = () => void;
@@ -53,7 +62,9 @@ function assertPage(value: unknown): asserts value is BunwirePage {
   const candidate = value as Partial<BunwirePage>;
   if (typeof candidate.component !== "string" || !candidate.props || typeof candidate.props !== "object"
     || Array.isArray(candidate.props) || typeof candidate.url !== "string"
-    || (candidate.version !== undefined && typeof candidate.version !== "string")) {
+    || (candidate.version !== undefined && typeof candidate.version !== "string")
+    || (candidate.partial !== undefined && (!Array.isArray(candidate.partial) || candidate.partial.some((key) => typeof key !== "string")))
+    || (candidate.deferred !== undefined && (!Array.isArray(candidate.deferred) || candidate.deferred.some((key) => typeof key !== "string")))) {
     throw new BunPageClientError("Bun page response is malformed.");
   }
 }
@@ -76,8 +87,12 @@ export class BunPageClient<Component = unknown> {
   readonly #window: Window;
   readonly #document: Document;
   readonly #fetch: typeof fetch;
+  readonly #deferred: boolean;
+  readonly #onDeferredError: ((error: unknown, keys: readonly string[]) => void) | undefined;
   readonly #listeners = new Set<BunPageClientListener>();
   #started = false;
+  #generation = 0;
+  #pending?: AbortController;
 
   constructor(options: BunPageClientOptions<Component>) {
     if (!options || typeof options !== "object" || typeof options.resolvePage !== "function" || typeof options.render !== "function") {
@@ -93,6 +108,8 @@ export class BunPageClient<Component = unknown> {
     this.#window = browserWindow;
     this.#document = browserDocument;
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#deferred = options.deferred ?? false;
+    this.#onDeferredError = options.onDeferredError;
   }
 
   get page(): BunwirePage { return this.#page; }
@@ -110,18 +127,36 @@ export class BunPageClient<Component = unknown> {
   stop(): void {
     if (!this.#started) return;
     this.#started = false;
+    this.#generation++;
+    this.#pending?.abort();
     this.#document.removeEventListener("click", this.#click);
     this.#window.removeEventListener("popstate", this.#popstate);
   }
 
   async visit(url: string | URL, options: BunPageVisitOptions = {}): Promise<void> {
+    const generation = ++this.#generation;
+    this.#pending?.abort();
+    const pending = new AbortController();
+    this.#pending = pending;
     const target = new URL(url, this.#window.location.href);
     if (target.origin !== this.#window.location.origin) { this.#window.location.assign(target.href); return; }
     const method = (options.method ?? "GET").toUpperCase();
+    if (options.only && (method !== "GET" || target.pathname + target.search !== this.#page.url)) {
+      throw new BunPageClientError("Partial Bun page reloads require GET on the current page URL.");
+    }
     const headers = new Headers(options.headers);
     headers.set(BUN_PAGE_REQUEST_HEADER, "true");
+    if (this.#deferred || options.only) headers.set(BUN_PAGE_CAPABILITY_HEADER, "2");
+    if (options.only) {
+      if (!Array.isArray(options.only) || options.only.length === 0 || options.only.some((key) => typeof key !== "string" || !key)) {
+        throw new BunPageClientError("Partial page props must be a non-empty array of names.");
+      }
+      headers.set(BUN_PAGE_PARTIAL_COMPONENT_HEADER, this.#page.component);
+      headers.set(BUN_PAGE_PARTIAL_PROPS_HEADER, JSON.stringify(options.only));
+    }
     if (this.#page.version) headers.set(BUN_PAGE_VERSION_HEADER, this.#page.version);
-    const response = await this.#fetch(target.href, { method, headers, body: method === "GET" || method === "HEAD" ? null : options.body ?? null, redirect: "follow" });
+    const response = await this.#fetch(target.href, { method, headers, body: method === "GET" || method === "HEAD" ? null : options.body ?? null, redirect: "follow", signal: pending.signal });
+    if (generation !== this.#generation || pending.signal.aborted) return;
     if (response.status === 409) {
       const location = response.headers.get(BUN_PAGE_LOCATION_HEADER);
       if (!location) throw new BunPageClientError("Bun page version mismatch response is missing its location.");
@@ -132,15 +167,27 @@ export class BunPageClient<Component = unknown> {
       throw new BunPageClientError(`Bun page navigation failed with HTTP ${response.status}.`);
     }
     const value: unknown = await response.json();
+    if (generation !== this.#generation || pending.signal.aborted) return;
     assertPage(value);
-    await this.#commit(value, options.replace ?? false, options.preserveScroll ?? false);
+    if ((value.partial || value.deferred) && response.headers.get(BUN_PAGE_CAPABILITY_HEADER) !== "2") {
+      throw new BunPageClientError("Advanced Bun page response was not negotiated.");
+    }
+    await this.#commit(value, options.replace ?? false, options.preserveScroll ?? false, generation);
+    if (generation === this.#generation && this.#deferred && value.deferred?.length) {
+      void this.#loadDeferred(value.deferred, generation, pending.signal);
+    }
   }
 
-  async #commit(page: BunwirePage, replace: boolean, preserveScroll: boolean): Promise<void> {
+  async #commit(page: BunwirePage, replace: boolean, preserveScroll: boolean, generation = this.#generation): Promise<void> {
+    const previous = this.#page;
+    if (page.partial && (page.component !== previous.component || page.partial.some((key) => !(key in page.props)))) {
+      throw new BunPageClientError("Partial Bun page response does not match the current component or selected props.");
+    }
     const resolved = await this.#resolvePage(page.component);
+    if (generation !== this.#generation) return;
     const component = moduleValue(resolved);
     if (component === undefined || component === null) throw new BunPageClientError(`Unable to resolve Bun page component ${JSON.stringify(page.component)}.`);
-    this.#page = Object.freeze({ ...page, props: Object.freeze({ ...page.props }) });
+    this.#page = Object.freeze({ ...page, props: Object.freeze(page.partial ? { ...previous.props, ...page.props } : { ...page.props }) });
     this.#component = component;
     if (this.#window.location.pathname + this.#window.location.search !== page.url) {
       (replace ? this.#window.history.replaceState : this.#window.history.pushState).call(this.#window.history, { bunwire: true }, "", page.url);
@@ -148,6 +195,40 @@ export class BunPageClient<Component = unknown> {
     if (!preserveScroll) this.#window.scrollTo(0, 0);
     await this.#render(Object.freeze({ page: this.#page, component }));
     for (const listener of this.#listeners) listener();
+  }
+
+  async #loadDeferred(keys: readonly string[], generation: number, signal: AbortSignal): Promise<void> {
+    try {
+      const headers = new Headers({
+        [BUN_PAGE_REQUEST_HEADER]: "true",
+        [BUN_PAGE_CAPABILITY_HEADER]: "2",
+        [BUN_PAGE_PARTIAL_COMPONENT_HEADER]: this.#page.component,
+        [BUN_PAGE_DEFERRED_PROPS_HEADER]: JSON.stringify(keys),
+      });
+      if (this.#page.version) headers.set(BUN_PAGE_VERSION_HEADER, this.#page.version);
+      const response = await this.#fetch(new URL(this.#page.url, this.#window.location.href).href, { headers, signal });
+      if (signal.aborted || generation !== this.#generation) return;
+      if (response.status === 409) {
+        const location = response.headers.get(BUN_PAGE_LOCATION_HEADER);
+        if (location) { this.#window.location.assign(location); return; }
+      }
+      if (!response.ok || response.headers.get(BUN_PAGE_CAPABILITY_HEADER) !== "2") {
+        throw new BunPageClientError(`Deferred Bun page request failed with HTTP ${response.status}.`);
+      }
+      const value: unknown = await response.json();
+      if (signal.aborted || generation !== this.#generation) return;
+      assertPage(value);
+      if (!value.partial || value.component !== this.#page.component || value.url !== this.#page.url
+        || keys.some((key) => !value.partial!.includes(key))) {
+        throw new BunPageClientError("Deferred Bun page response does not match its navigation.");
+      }
+      await this.#commit(value, true, true, generation);
+    } catch (error) {
+      if (!signal.aborted && generation === this.#generation) {
+        if (this.#onDeferredError) this.#onDeferredError(error, keys);
+        else setTimeout(() => { throw error; });
+      }
+    }
   }
 
   readonly #click = (event: MouseEvent): void => {
@@ -178,6 +259,10 @@ export type {
 } from "./page-protocol.js";
 export {
   BUN_PAGE_LOCATION_HEADER,
+  BUN_PAGE_CAPABILITY_HEADER,
+  BUN_PAGE_PARTIAL_COMPONENT_HEADER,
+  BUN_PAGE_PARTIAL_PROPS_HEADER,
+  BUN_PAGE_DEFERRED_PROPS_HEADER,
   BUN_PAGE_REQUEST_HEADER,
   BUN_PAGE_RESPONSE_HEADER,
   BUN_PAGE_VERSION_HEADER,

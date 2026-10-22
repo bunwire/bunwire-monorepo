@@ -12,6 +12,7 @@
     "noEmit": true,
     "paths": {
       "@bunwire/bun/client": ["packages/bun/src/client.ts"],
+      "@bunwire/bun/react/server": ["packages/bun/src/react-server.ts"],
       "@bunwire/bun/react": ["packages/bun/src/react.ts"],
       "@bunwire/bun": ["packages/bun/src/index.ts"],
       "@bunwire/core": ["packages/core/src/index.ts"],

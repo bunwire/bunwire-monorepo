@@ -263,7 +263,30 @@ Page-aware Form Request validation uses a `303` redirect when a session is avail
 
 `@bunwire/bun/client` provides the framework-neutral navigation/history runtime. `@bunwire/bun/react` adds `createBunwireReactApp()`, `Link`, and `usePage()` without pulling server modules into the browser bundle. React and React DOM are optional peer dependencies.
 
-Production manifests list exact generated assets, which the Bun runtime serves without filesystem scanning. Stale navigation versions receive `409` plus `X-Bunwire-Location`; development manifests omit version enforcement so Vite HMR stays active. SSR and deferred/partial props remain later extensions.
+Production manifests list exact generated assets, which the Bun runtime serves without filesystem scanning. Stale navigation versions receive `409` plus `X-Bunwire-Location`; development manifests omit version enforcement so Vite HMR stays active.
+
+Milestone 22 adds an opt-in version 2 navigation capability. Version 1 clients still receive complete page props. A client can refresh selected props of its current page without discarding omitted values:
+
+```ts
+await app.client.visit("/dashboard", { only: ["activity"] });
+```
+
+Deferred props are marked in the Controller and fetched by the client in a fresh, authorized GET request. Every resolver finishes inside that request's scope; aborted or stale responses cannot update a newer navigation. `onDeferredError` receives failures while the existing props stay intact.
+
+```ts
+return page("Dashboard", {
+  title: "Dashboard",
+  activity: defer(async (http) => loadActivity(http.auth?.principal)),
+});
+
+const app = await createBunwireReactApp({
+  resolvePage,
+  deferred: true,
+  onDeferredError(error, keys) { console.error(keys, error); },
+});
+```
+
+SSR is independent of partial and deferred props. Configure `pages.ssrEntry` in `bunwire.config.ts`, export `renderPage(page)` from that entry, and build it separately with `vite build --ssr src/page-server.ts --outDir dist/server`. The SSR build writes `bunwire-pages-server.json`; combine it with the browser manifest using `withBunPageServerManifest(browserManifest, serverManifest)`, then pass `ssr: createBunPageServerRenderer(manifest)` in `http.pages`. A React server entry can call `renderBunwireReactPage(page, resolvePage)` from `@bunwire/bun/react/server`. The browser app hydrates when the default shell carries SSR markup and mounts normally otherwise. Custom shells receive the rendered HTML as their third argument and must place it inside `#app` with `data-bunwire-ssr="true"` for React hydration.
 
 ## Core events and managed listeners
 

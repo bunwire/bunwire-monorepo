@@ -46,6 +46,7 @@ import { BUN_OAUTH_MANAGER, OAuthManager, validateBunOAuthOptions } from "./oaut
 import { BUN_PAGE_MANAGER, BunPageManager } from "./pages.js";
 import { BUN_SIGNED_URLS, SignedUrlManager, SignedUrlMiddleware, validateBunSignedUrlOptions } from "./signed-urls.js";
 import { validateBunPaginationOptions } from "./pagination.js";
+import { BUN_MAINTENANCE, BunMaintenance, BunHealthEndpoints, validateBunHealthOptions, validateBunMaintenanceOptions } from "./operational-http.js";
 import {
   consumeBunFormRequestRegistry,
   createBunFormRequestResolver,
@@ -346,6 +347,14 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       try { validateBunPaginationOptions(http.pagination); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
     }
+    if (http.health !== undefined) {
+      try { validateBunHealthOptions(http.health); }
+      catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
+    }
+    if (http.maintenance !== undefined) {
+      try { validateBunMaintenanceOptions(http.maintenance); }
+      catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
+    }
     if (http.pages !== undefined) {
       try { new BunPageManager(http.pages); }
       catch (error) { throw new BunAdapterError(error instanceof Error ? error.message : String(error)); }
@@ -431,6 +440,10 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       ...(http.websocket === undefined ? {} : { websocket: Object.freeze({ ...http.websocket }) }),
       ...(http.signedUrls === undefined ? {} : { signedUrls: Object.freeze({ ...http.signedUrls }) }),
       ...(http.pagination === undefined ? {} : { pagination: Object.freeze({ ...http.pagination }) }),
+      ...(http.health === undefined ? {} : { health: Object.freeze({ ...http.health,
+        ...(http.health.checks === undefined ? {} : { checks: Object.freeze({ ...http.health.checks }) }),
+      }) }),
+      ...(http.maintenance === undefined ? {} : { maintenance: Object.freeze({ ...http.maintenance }) }),
       mode: http.mode ?? "production",
       responseResolvers: Object.freeze([...(http.responseResolvers ?? [])]),
     });
@@ -463,6 +476,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       : undefined;
     const pageManager = this.#http.pages ? new BunPageManager(this.#http.pages) : undefined;
     const signedUrlManager = this.#http.signedUrls ? await SignedUrlManager.create(this.#http.signedUrls) : undefined;
+    const maintenance = this.#http.maintenance ? new BunMaintenance(this.#http.maintenance) : undefined;
     if (sessionManager) scopeManager.applicationScope.value(BUN_SESSION_MANAGER, sessionManager);
     if (csrfManager) scopeManager.applicationScope.value(BUN_CSRF_MANAGER, csrfManager);
     if (authManager) scopeManager.applicationScope.value(BUN_AUTH_MANAGER, authManager as AuthManager<unknown>);
@@ -470,6 +484,11 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
     if (oauthManager) scopeManager.applicationScope.value(BUN_OAUTH_MANAGER, oauthManager as OAuthManager<unknown>);
     if (pageManager) scopeManager.applicationScope.value(BUN_PAGE_MANAGER, pageManager as BunPageManager<unknown>);
     if (signedUrlManager) scopeManager.applicationScope.value(BUN_SIGNED_URLS, signedUrlManager);
+    if (maintenance) scopeManager.applicationScope.value(BUN_MAINTENANCE, maintenance);
+    const httpState = createBunHttpRuntimeState(this.#http.websocket as import("./websocket-runtime.js").BunWebSocketOptions | undefined, this.#observer);
+    httpState.health = this.#http.health ? new BunHealthEndpoints(this.#http.health,
+      () => context.application.state === "running", () => httpState.listening, maintenance) : undefined;
+    httpState.maintenance = maintenance;
     const state: BunRuntimeState = {
       worker,
       scheduler,
@@ -478,7 +497,7 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       observer: this.#observer,
       registryConsumed: false,
       scopeManager,
-      http: createBunHttpRuntimeState(this.#http.websocket as import("./websocket-runtime.js").BunWebSocketOptions | undefined, this.#observer),
+      http: httpState,
       requests: createBunFormRequestRuntimeState(),
       signal: undefined,
       signalHandlers: undefined,

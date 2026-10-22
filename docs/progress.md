@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: `@bunwire/bun` Milestone 18 — HTTP input and response conveniences (complete).
+Current milestone: `@bunwire/bun` Milestone 19 — operational HTTP features (complete).
 
 Overall status:
 
@@ -46,6 +46,7 @@ Overall status:
 - `@bunwire/bun` Milestone 16: Complete — [details](../packages/bun/progress/milestone-16.md)
 - `@bunwire/bun` Milestone 17: Complete — [details](../packages/bun/progress/milestone-17.md)
 - `@bunwire/bun` Milestone 18: Complete — [details](../packages/bun/progress/milestone-18.md)
+- `@bunwire/bun` Milestone 19: Complete — [details](../packages/bun/progress/milestone-19.md)
 
 ## Implemented
 
@@ -96,12 +97,12 @@ Overall status:
 
 ## Current Work
 
-- `@bunwire/bun` Milestone 18 completed signed URLs, bounded pagination, and shared native `File` validation rules.
+- `@bunwire/bun` Milestone 19 completed opt-in health endpoints and runtime maintenance controls.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- `@bunwire/bun` Milestone 19 — operational HTTP features in [the Bun v2 plan](../packages/bun/MILESTONES-v2.md).
+- `@bunwire/bun` Milestone 20 — rate limiting in [the Bun v2 plan](../packages/bun/MILESTONES-v2.md).
 
 ## Blockers
 
@@ -149,3 +150,4 @@ Overall status:
 - [`@bunwire/bun` Milestone 16](../packages/bun/progress/milestone-16.md)
 - [`@bunwire/bun` Milestone 17](../packages/bun/progress/milestone-17.md)
 - [`@bunwire/bun` Milestone 18](../packages/bun/progress/milestone-18.md)
+- [`@bunwire/bun` Milestone 19](../packages/bun/progress/milestone-19.md)

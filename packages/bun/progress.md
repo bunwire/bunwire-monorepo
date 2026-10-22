@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 18 — HTTP input and response conveniences (complete).
+Current milestone: Milestone 19 — operational HTTP features (complete).
 
 Overall status:
 
@@ -24,6 +24,7 @@ Overall status:
 - Milestone 16: Complete — [details](progress/milestone-16.md)
 - Milestone 17: Complete — [details](progress/milestone-17.md)
 - Milestone 18: Complete — [details](progress/milestone-18.md)
+- Milestone 19: Complete — [details](progress/milestone-19.md)
 
 ## Implemented
 
@@ -51,14 +52,15 @@ Overall status:
 - Post-completion regressions fixed: special session keys persist across store normalization, and unresolved WebSocket handlers no longer hold shutdown past its grace period; details remain with Milestones 7 and 15.
 - Milestone 17 adds request-scoped authorization allow/deny and named-policy helpers while preserving the existing manager and middleware behavior.
 - Milestone 18 adds signed URLs with generated verification middleware, bounded pagination, and shared native `File` validation rules.
+- Milestone 19 adds opt-in native health endpoints and runtime maintenance control with explicit operator bypass.
 
 ## Current Work
 
-- Milestone 18 is complete; [details](progress/milestone-18.md) record tests and behavior.
+- Milestone 19 is complete; [details](progress/milestone-19.md) record behavior and verification.
 
 ## Next
 
-- Milestone 19 — operational HTTP features in [the v2 plan](MILESTONES-v2.md).
+- Milestone 20 — rate limiting in [the v2 plan](MILESTONES-v2.md).
 
 ## Blockers
 
@@ -84,3 +86,4 @@ Overall status:
 - [Milestone 16](progress/milestone-16.md)
 - [Milestone 17](progress/milestone-17.md)
 - [Milestone 18](progress/milestone-18.md)
+- [Milestone 19](progress/milestone-19.md)

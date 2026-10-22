@@ -2,7 +2,7 @@
 
 `@bunwire/bun` is Bunwire's first-party Bun host adapter and application runtime integration.
 
-Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–18 add authorization conveniences, signed URLs, pagination, and file validation.
+Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–19 add authorization conveniences, signed URLs, pagination, file validation, health reporting, and maintenance control.
 
 ```ts
 // bootstrap.ts
@@ -125,6 +125,39 @@ return context.pagination.result(items, total);
 ```
 
 Both helpers are request scoped through `BUN_SIGNED_URLS` (when configured) and `BUN_PAGINATION` for explicit injection.
+
+## Health and maintenance
+
+Opt in to native health routes and maintenance control through the existing HTTP server:
+
+```ts
+new BunAdapter({ http: {
+  health: {
+    // Defaults: /health/live and /health/ready
+    timeoutMs: 2_000,
+    checks: {
+      database: async (signal) => database.ping({ signal }),
+    },
+  },
+  maintenance: {
+    retryAfterSeconds: 60,
+    authorizeBypass: (request) => verifyOperatorRequest(request),
+  },
+} });
+
+// After app.start(), from an operator-controlled application path:
+const maintenance = app.rootContainer.get(BUN_MAINTENANCE);
+maintenance.enable();
+maintenance.disable();
+```
+
+Import `BUN_MAINTENANCE` from `@bunwire/bun`. The control exists only when `http.maintenance` is configured. `initiallyEnabled: true` starts in maintenance mode; `enable(retryAfterSeconds?)` may override the configured retry interval. This state is local to one application process; operators must coordinate multiple instances themselves.
+
+Liveness reports whether the native host server is listening. Readiness requires a running application, no maintenance, and every configured check to return `true`. Checks run concurrently on each readiness request, receive an `AbortSignal`, and share a 2-second deadline by default. A `false` result, thrown error, or timeout yields HTTP 503. If no checks are configured, readiness reflects application and maintenance state. Readiness becomes unavailable as shutdown begins, before the server stops. Neither endpoint reruns startup or Provider registration.
+
+Health endpoints accept GET and HEAD; other methods return 405. Public responses contain only `{ "status": "ok" }` or `{ "status": "unavailable" }`, never check names or errors, and set `Cache-Control: no-store`. A custom `livenessPath` or `readinessPath` must be a distinct static root-relative path and cannot overlap a generated HTTP or WebSocket route.
+
+Maintenance returns HTTP 503 for ordinary routes, page assets, unknown paths, and WebSocket upgrades. It includes a numeric `Retry-After` when configured. Health remains accessible: liveness returns 200 while the server listens, and readiness returns 503. `authorizeBypass(request)` is the sole bypass decision. It must explicitly verify operator authority using application-controlled credentials or identity; Bunwire does not trust any request header by itself. A callback returning anything but `true`, throwing, or exceeding `bypassTimeoutMs` (default 2 seconds) fails closed.
 
 ## Sessions, cookies, and CSRF
 

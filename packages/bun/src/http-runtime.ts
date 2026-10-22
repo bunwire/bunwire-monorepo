@@ -51,6 +51,7 @@ import {
 import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
 import { BUN_SIGNED_URLS, type SignedUrlManager } from "./signed-urls.js";
 import { BUN_PAGINATION, BunPaginationContext, type BunPaginationOptions } from "./pagination.js";
+import { BunHealthEndpoints, BunMaintenance, BunOperationalHttpError } from "./operational-http.js";
 import type { BunRuntimeContext } from "./runtime.js";
 import { BunPageResult, type BunPageManager } from "./pages.js";
 import {
@@ -85,9 +86,12 @@ export interface BunHttpRuntimeState {
   readonly routes: Map<string, Map<BunHttpMethod, CompiledHttpRoute>>;
   invocation: RuntimeRegistryConsumerContext<BunRuntimeContext> | undefined;
   server: BunHttpServer | undefined;
+  listening: boolean;
   middlewareDefinitions: ReadonlyMap<MiddlewareConstructor, BunMiddlewareRuntimeDefinition>;
   readonly websocket: BunWebSocketRuntimeState;
   socketHandler: ReturnType<typeof bunNativeWebSocketHandler> | undefined;
+  health: BunHealthEndpoints | undefined;
+  maintenance: BunMaintenance | undefined;
 }
 
 export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions, observer = new BunOperationObserver()): BunHttpRuntimeState {
@@ -96,9 +100,12 @@ export function createBunHttpRuntimeState(websocketOptions?: BunWebSocketOptions
     routes: new Map(),
     invocation: undefined,
     server: undefined,
+    listening: false,
     middlewareDefinitions: new Map(),
     websocket: createBunWebSocketRuntimeState(websocketOptions, observer),
     socketHandler: undefined,
+    health: undefined,
+    maintenance: undefined,
   };
 }
 
@@ -339,7 +346,68 @@ function nativeRoutes(
     );
     routes[path] = methods;
   }
+  if (state.health) {
+    const health = state.health;
+    for (const path of [health.livenessPath, health.readinessPath]) {
+      for (const routePath of Object.keys(routes)) {
+        if (routePatternMatches(routePath, path)) {
+          throw new BunOperationalHttpError(`Health path ${JSON.stringify(path)} conflicts with Bun route ${JSON.stringify(routePath)}.`);
+        }
+      }
+    }
+  }
+  if (state.maintenance) {
+    for (const methods of Object.values(routes)) {
+      for (const method of BUN_HTTP_METHODS) {
+        const handler = methods[method];
+        if (handler) methods[method] = async (request, server) => {
+          const blocked = await state.maintenance!.gate(request);
+          return blocked ?? handler(request, server);
+        };
+      }
+    }
+  }
+  if (state.health) {
+    const health = state.health;
+    for (const [path, serve] of [
+      [health.livenessPath, (method: string) => health.liveness(method)],
+      [health.readinessPath, (method: string) => health.readiness(method)],
+    ] as const) {
+      const methods: NativeRouteMethods = {};
+      for (const method of BUN_HTTP_METHODS) {
+        methods[method] = (request) => method === "GET" || method === "HEAD"
+          ? serve(request.method)
+          : healthMethodNotAllowed();
+      }
+      routes[path] = methods;
+    }
+  }
   return routes;
+}
+
+function routePatternMatches(pattern: string, path: string): boolean {
+  const patternSegments = pattern.split("/").filter(Boolean);
+  const pathSegments = path.split("/").filter(Boolean);
+  for (let index = 0; index < patternSegments.length; index++) {
+    const segment = patternSegments[index]!;
+    if (segment === "*") return true;
+    if (index >= pathSegments.length) return false;
+    if (!segment.startsWith(":") && segment !== pathSegments[index]) return false;
+  }
+  return patternSegments.length === pathSegments.length;
+}
+
+function healthMethodNotAllowed(): Response {
+  return new Response(null, { status: 405, headers: { Allow: "GET, HEAD", "Cache-Control": "no-store" } });
+}
+
+function healthFallback(state: BunHttpRuntimeState, request: BunHttpRequest): Response | Promise<Response> | undefined {
+  const health = state.health;
+  if (!health) return undefined;
+  const pathname = new URL(request.url).pathname;
+  if (pathname !== health.livenessPath && pathname !== health.readinessPath) return undefined;
+  if (request.method !== "GET" && request.method !== "HEAD") return healthMethodNotAllowed();
+  return pathname === health.livenessPath ? health.liveness(request.method) : health.readiness(request.method);
 }
 
 export async function startBunHttpServer(
@@ -376,11 +444,17 @@ export async function startBunHttpServer(
       state, manager, pipeline, sessions, csrfManager,
       authManager, authorizationManager, oauthManager, pageManager, signedUrlManager, options.pagination,
     ),
-    fetch: (request, server) => pageManager?.asset(request) ?? handleBunHttpException(
-      new BunNotFoundException(),
-      createBunHttpExceptionContext(request as BunHttpRequest, server as BunHttpServer, pipeline.mode),
-      pipeline.exceptionHandler,
-    ),
+    fetch: async (request, server) => {
+      const health = healthFallback(state, request as BunHttpRequest);
+      if (health) return health;
+      const blocked = await state.maintenance?.gate(request);
+      if (blocked) return blocked;
+      return pageManager?.asset(request) ?? handleBunHttpException(
+        new BunNotFoundException(),
+        createBunHttpExceptionContext(request as BunHttpRequest, server as BunHttpServer, pipeline.mode),
+        pipeline.exceptionHandler,
+      );
+    },
     error: () => bunInternalServerError(),
     ...(socketHandler ? { websocket: {
       open: socketHandler.open,
@@ -391,6 +465,7 @@ export async function startBunHttpServer(
     } } : {}),
   });
   state.server = server as BunHttpServer;
+  state.listening = true;
   await options.onServer?.(state.server);
 }
 
@@ -398,15 +473,17 @@ export async function stopBunHttpServer(state: BunHttpRuntimeState): Promise<voi
   const server = state.server;
   if (!server) return;
   state.server = undefined;
-  const hadSockets = state.socketHandler !== undefined;
-  await state.socketHandler?.shutdown();
-  state.socketHandler = undefined;
-  if (!hadSockets) { await server.stop(false); return; }
-  const stop = server.stop(true);
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    await Promise.race([stop, new Promise<void>((resolve) => { timeout = setTimeout(resolve, 1000); })]);
-  } finally { if (timeout) clearTimeout(timeout); }
+    const hadSockets = state.socketHandler !== undefined;
+    await state.socketHandler?.shutdown();
+    state.socketHandler = undefined;
+    if (!hadSockets) { await server.stop(false); return; }
+    const stop = server.stop(true);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([stop, new Promise<void>((resolve) => { timeout = setTimeout(resolve, 1000); })]);
+    } finally { if (timeout) clearTimeout(timeout); }
+  } finally { state.listening = false; }
 }
 
 export const bunHttpContextResolver = defineParameterResolver({

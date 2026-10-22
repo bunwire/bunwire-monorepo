@@ -1,6 +1,7 @@
 export { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
 export { BUN_SIGNED_URLS, BunSignedUrlError, SignedUrlManager, SignedUrlMiddleware, type BunSignedUrlOptions, type BunSignUrlOptions, type BunSignedUrls } from "./signed-urls.js";
 export { BUN_PAGINATION, BunPaginationContext, BunPaginationError, type BunPaginationOptions, type BunPaginationInput, type BunPaginationResult, type BunPaginationLinks } from "./pagination.js";
+export { BUN_MAINTENANCE, BunMaintenance, BunOperationalHttpError, type BunHealthOptions, type BunReadinessCheck, type BunMaintenanceOptions } from "./operational-http.js";
 export type { BunObservationHook, BunOperationRecord, BunOperationKind, BunOperationPhase } from "./observability.js";
 export {
   WebSocket,

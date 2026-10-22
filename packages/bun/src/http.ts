@@ -24,6 +24,7 @@ import type { BunPageOptions } from "./pages.js";
 import type { BunWebSocketOptions } from "./websocket-runtime.js";
 import type { BunSignedUrls, BunSignedUrlOptions } from "./signed-urls.js";
 import type { BunPaginationContext, BunPaginationOptions } from "./pagination.js";
+import type { BunHealthOptions, BunMaintenanceOptions } from "./operational-http.js";
 
 export const BUN_HTTP_METHODS = Object.freeze([
   "GET",
@@ -85,6 +86,8 @@ export interface BunHttpServerOptions<Principal = unknown> {
   readonly websocket?: BunWebSocketOptions<Principal>;
   readonly signedUrls?: BunSignedUrlOptions;
   readonly pagination?: BunPaginationOptions;
+  readonly health?: BunHealthOptions;
+  readonly maintenance?: BunMaintenanceOptions;
 }
 
 export const BUN_HTTP_CONTEXT: Token<BunHttpContext> =

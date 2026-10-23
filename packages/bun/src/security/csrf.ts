@@ -4,8 +4,8 @@ import {
   type MiddlewareNext,
   type Token,
 } from "@bunwire/core";
-import { BunCsrfMismatchException } from "./exceptions.js";
-import type { BunMiddlewareContext } from "./middleware.js";
+import { BunCsrfMismatchException } from "../http/exceptions.js";
+import type { BunMiddlewareContext } from "../http/middleware.js";
 import { Session, SessionManager } from "./sessions.js";
 
 export interface BunCsrfOptions {

@@ -33,13 +33,13 @@ import {
   BunCommandUsageError,
 } from "./commands.js";
 import { createBunCommandExecutionIO, defaultBunCommandIO } from "./command-io.js";
-import { BUN_HTTP_ROUTE_KIND, bunHttpCompiledRoute } from "./http.js";
-import { BUN_JOB_KIND, type BunJobDefinition } from "./jobs.js";
-import type { BunExecutionScopeManager } from "./execution-scopes.js";
-import type { QueueManager } from "./queue-manager.js";
-import type { BunScheduler } from "./scheduler.js";
-import { Queue } from "./queued-listeners.js";
-import { BunOperationObserver } from "./observability.js";
+import { BUN_HTTP_ROUTE_KIND, bunHttpCompiledRoute } from "../http/http.js";
+import { BUN_JOB_KIND, type BunJobDefinition } from "../jobs/jobs.js";
+import type { BunExecutionScopeManager } from "../foundation/execution-scopes.js";
+import type { QueueManager } from "../jobs/queue-manager.js";
+import type { BunScheduler } from "../scheduling/scheduler.js";
+import { Queue } from "../jobs/queued-listeners.js";
+import { BunOperationObserver } from "../foundation/observability.js";
 
 export interface BunCliRunOptions {
   readonly argv?: readonly string[];

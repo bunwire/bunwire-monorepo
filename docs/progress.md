@@ -4,6 +4,8 @@
 
 Current milestone: `@bunwire/bun` Milestone 24 — cross-feature hardening (complete).
 
+Post-completion Bun maintenance: [source layout reorganization](../packages/bun/progress/source-layout-2026-10-23.md); all public entrypoints remain available.
+
 Overall status:
 
 - Milestone 0: Complete — [details](progress/milestone-00.md)

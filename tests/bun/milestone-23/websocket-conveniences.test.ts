@@ -1,11 +1,11 @@
 import { Container } from "@bunwire/core";
 import { describe, expect, it, vi } from "vitest";
-import { BunExecutionScopeManager } from "../../../packages/bun/src/execution-scopes.js";
+import { BunExecutionScopeManager } from "../../../packages/bun/src/foundation/execution-scopes.js";
 import {
   BUN_WEBSOCKET_CHANNELS, BunWebSocketMalformedMessageError, defineBunWebSocketMessages,
   type BunWebSocketChannels,
-} from "../../../packages/bun/src/websocket-conveniences.js";
-import { bunNativeWebSocketHandler, createBunWebSocketRuntimeState } from "../../../packages/bun/src/websocket-runtime.js";
+} from "../../../packages/bun/src/websocket/websocket-conveniences.js";
+import { bunNativeWebSocketHandler, createBunWebSocketRuntimeState } from "../../../packages/bun/src/websocket/websocket-runtime.js";
 
 const messages = defineBunWebSocketMessages({
   chat: (value: unknown): value is { text: string } => typeof value === "object" && value !== null

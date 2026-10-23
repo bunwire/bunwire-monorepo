@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { bunNativeWebSocketHandler, createBunWebSocketRuntimeState, snapshotBunWebSocketIdentity } from "../../../packages/bun/src/websocket-runtime.js";
-import { BunOperationObserver, type BunOperationRecord } from "../../../packages/bun/src/observability.js";
-import { BunExecutionScopeManager } from "../../../packages/bun/src/execution-scopes.js";
+import { bunNativeWebSocketHandler, createBunWebSocketRuntimeState, snapshotBunWebSocketIdentity } from "../../../packages/bun/src/websocket/websocket-runtime.js";
+import { BunOperationObserver, type BunOperationRecord } from "../../../packages/bun/src/foundation/observability.js";
+import { BunExecutionScopeManager } from "../../../packages/bun/src/foundation/execution-scopes.js";
 import { Container } from "@bunwire/core";
 
 describe("WebSocket upgrade identity boundary", () => {

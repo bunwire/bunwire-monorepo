@@ -8,7 +8,7 @@ import {
   type BunHttpRequest,
 } from "@bunwire/bun";
 import { describe, expect, it } from "vitest";
-import { BUN_SESSION_FRAMEWORK_GET, BUN_SESSION_FRAMEWORK_SET } from "../../../packages/bun/src/sessions.js";
+import { BUN_SESSION_FRAMEWORK_GET, BUN_SESSION_FRAMEWORK_SET } from "../../../packages/bun/src/security/sessions.js";
 
 function request(cookie?: string): BunHttpRequest {
   return Object.assign(new Request("http://local/session", {

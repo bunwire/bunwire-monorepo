@@ -2,12 +2,12 @@ import { createToken, type Application, type ManagedMethodPlan, type RuntimeRegi
 import { BunScheduleError, cronMatches, parseCronExpression, validateTimeZone, type BunCronExpression } from "./cron.js";
 import { BUN_SCHEDULE_CONTEXT } from "./schedule-context.js";
 import { BUN_SCHEDULED_TASK_HANDLE_KIND, BUN_SCHEDULED_TASK_KIND } from "./scheduled-tasks.js";
-import { BUN_JOB_KIND } from "./jobs.js";
-import { JsonJobSerializer } from "./job-serializer.js";
-import type { BunExecutionScopeManager } from "./execution-scopes.js";
-import type { QueueManager } from "./queue-manager.js";
+import { BUN_JOB_KIND } from "../jobs/jobs.js";
+import { JsonJobSerializer } from "../jobs/job-serializer.js";
+import type { BunExecutionScopeManager } from "../foundation/execution-scopes.js";
+import type { QueueManager } from "../jobs/queue-manager.js";
 import { MemoryScheduleLockProvider, type ScheduleExecutionOutcome, type ScheduleLockLease, type ScheduleLockProvider } from "./schedule-lock.js";
-import { BunOperationObserver } from "./observability.js";
+import { BunOperationObserver } from "../foundation/observability.js";
 
 export interface BunSchedulerClock { now(): number; waitUntil(timestamp: number, signal: AbortSignal): Promise<void> }
 export interface BunSchedulerErrorContext { readonly error: unknown; readonly definition: RuntimeScheduleDefinition; readonly scheduledAt: number }

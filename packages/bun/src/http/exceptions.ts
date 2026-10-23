@@ -3,7 +3,7 @@ import type {
   BunHttpRequest,
   BunHttpServer,
 } from "./http.js";
-import type { BunSessionValue } from "./sessions.js";
+import type { BunSessionValue } from "../security/sessions.js";
 
 export type BunHttpMode = "production" | "development";
 export type BunValidationErrors = Readonly<Record<string, readonly string[]>>;

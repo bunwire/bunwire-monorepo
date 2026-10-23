@@ -1,5 +1,5 @@
 import { createToken } from "@bunwire/core";
-import type { BunExecutionScope } from "./execution-scopes.js";
+import type { BunExecutionScope } from "../foundation/execution-scopes.js";
 import type { QueueEnvelope } from "./queue-driver.js";
 
 export interface BunJobContext {

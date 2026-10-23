@@ -2,6 +2,12 @@
 
 `@bunwire/bun` is Bunwire's first-party Bun host adapter and application runtime integration.
 
+## Source layout
+
+The package keeps its public entrypoints at `src/index.ts`, `src/client.ts`, `src/react.ts`, `src/react-server.ts`, and `src/testing.ts`. Their package exports remain `@bunwire/bun`, `@bunwire/bun/client`, `@bunwire/bun/react`, `@bunwire/bun/react/server`, and `@bunwire/bun/testing`.
+
+Implementation files are grouped by responsibility under `src/`: `foundation/` (adapter, definitions, scopes, observability), `http/` (routes, requests, responses, middleware, and HTTP conveniences), `security/` (sessions, authentication, authorization, CSRF, OAuth), `pages/` (page protocol and browser/React support), `jobs/` (queues and workers), `scheduling/`, `commands/`, `websocket/`, and `testing/`. Consumers should import from the public package entrypoints rather than these internal paths.
+
 Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–23 add authorization conveniences, signed URLs, pagination, file validation, health reporting, maintenance control, rate limiting, command UX, advanced page responses, and WebSocket conveniences.
 
 The [Bun example](../../examples/bun-app/README.md) combines the v2 features with the existing bootstrap, generated registry, and native host. It includes signed authenticated routes with rate limiting, bounded pagination, file validation with page errors, protected partial/deferred pages, optional SSR, operational endpoints, registry inspection commands, and authorized channels. The current page wire format remains version 1 by default; partial/deferred responses require the explicit protocol 2 navigation capability. Queue envelopes, session persistence, and generated registry schemas retain their existing formats.

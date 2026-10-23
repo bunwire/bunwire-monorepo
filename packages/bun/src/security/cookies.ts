@@ -1,5 +1,5 @@
 import { createToken, type Token } from "@bunwire/core";
-import type { BunHttpRequest } from "./http.js";
+import type { BunHttpRequest } from "../http/http.js";
 
 export type BunCookieSameSite = "strict" | "lax" | "none";
 

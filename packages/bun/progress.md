@@ -64,6 +64,7 @@ Overall status:
 - Milestone 23 adds opt-in validated WebSocket envelopes, identity-authorized channel joins, targeted send/broadcast helpers, bounded subscriptions, and deterministic cleanup.
 - Milestone 24 verifies the v2 features together in a real Bun example, reviews their security and compatibility boundaries, and corrects an outgoing WebSocket codec edge case. The broad Bun checkpoint had two failures that passed after a focused fixture update and isolated rerun; see its record.
 - Post-completion review fixes for Milestones 19 and 22 prevent overlapping readiness checks and out-of-order async page renders; their milestone records contain the focused verification.
+- Post-completion source organization groups Bun implementation files by feature while preserving all public package entrypoints; see [source layout maintenance](progress/source-layout-2026-10-23.md).
 
 ## Current Work
 

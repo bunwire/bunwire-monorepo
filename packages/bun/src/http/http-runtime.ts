@@ -19,7 +19,7 @@ import {
   type BunHttpServer,
   type BunHttpServerOptions,
 } from "./http.js";
-import type { BunExecutionScopeManager } from "./execution-scopes.js";
+import type { BunExecutionScopeManager } from "../foundation/execution-scopes.js";
 import {
   BunDefaultHttpExceptionHandler,
   BunMethodNotAllowedException,
@@ -36,32 +36,32 @@ import {
   selectBunMiddleware,
   type BunMiddlewareRuntimeDefinition,
 } from "./middleware.js";
-import { BUN_COOKIES, BunCookieJar } from "./cookies.js";
-import { BUN_CSRF_CONTEXT, type CsrfManager } from "./csrf.js";
-import { BUN_SESSION, type SessionManager } from "./sessions.js";
+import { BUN_COOKIES, BunCookieJar } from "../security/cookies.js";
+import { BUN_CSRF_CONTEXT, type CsrfManager } from "../security/csrf.js";
+import { BUN_SESSION, type SessionManager } from "../security/sessions.js";
 import {
   BUN_AUTH_CONTEXT,
   BUN_AUTH_INITIALIZE,
   type AuthManager,
-} from "./auth.js";
+} from "../security/auth.js";
 import {
   BUN_AUTHORIZATION_CONTEXT,
   type AuthorizationManager,
-} from "./authorization.js";
-import { BUN_OAUTH_CONTEXT, type OAuthManager } from "./oauth.js";
+} from "../security/authorization.js";
+import { BUN_OAUTH_CONTEXT, type OAuthManager } from "../security/oauth.js";
 import { BUN_SIGNED_URLS, type SignedUrlManager } from "./signed-urls.js";
 import { BUN_PAGINATION, BunPaginationContext, type BunPaginationOptions } from "./pagination.js";
 import type { BunRateLimitManager } from "./rate-limiting.js";
 import { BunHealthEndpoints, BunMaintenance, BunOperationalHttpError } from "./operational-http.js";
-import type { BunRuntimeContext } from "./runtime.js";
-import { BunPageResult, type BunPageManager } from "./pages.js";
+import type { BunRuntimeContext } from "../foundation/runtime.js";
+import { BunPageResult, type BunPageManager } from "../pages/pages.js";
 import {
   resolveBunHttpResponse,
   type BunHttpResponseResolver,
 } from "./response.js";
 import { prepareBunFormRequestInput } from "./request-runtime.js";
-import { bunNativeWebSocketHandler, consumeBunWebSocketRegistry, createBunWebSocketRuntimeState, upgradeBunWebSocket, type BunWebSocketOptions, type BunWebSocketRuntimeState } from "./websocket-runtime.js";
-import { BunOperationObserver } from "./observability.js";
+import { bunNativeWebSocketHandler, consumeBunWebSocketRegistry, createBunWebSocketRuntimeState, upgradeBunWebSocket, type BunWebSocketOptions, type BunWebSocketRuntimeState } from "../websocket/websocket-runtime.js";
+import { BunOperationObserver } from "../foundation/observability.js";
 
 type NativeRouteHandler = (
   request: BunHttpRequest,

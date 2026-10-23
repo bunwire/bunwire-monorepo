@@ -1,4 +1,4 @@
-import { BunHealthEndpoints, BunMaintenance, validateBunHealthOptions, validateBunMaintenanceOptions } from "../../../packages/bun/src/operational-http.js";
+import { BunHealthEndpoints, BunMaintenance, validateBunHealthOptions, validateBunMaintenanceOptions } from "../../../packages/bun/src/http/operational-http.js";
 import { describe, expect, it, vi } from "vitest";
 
 describe("Bun Milestone 19 — operational HTTP state", () => {

@@ -4,9 +4,9 @@ import {
   type MiddlewareNext,
   type Token,
 } from "@bunwire/core";
-import { BunAuthorizationException, BunUnauthenticatedException } from "./exceptions.js";
-import type { BunHttpContext } from "./http.js";
-import type { BunMiddlewareContext } from "./middleware.js";
+import { BunAuthorizationException, BunUnauthenticatedException } from "../http/exceptions.js";
+import type { BunHttpContext } from "../http/http.js";
+import type { BunMiddlewareContext } from "../http/middleware.js";
 import type { BunOAuthOptions } from "./oauth.js";
 import {
   BUN_SESSION_FRAMEWORK_DELETE,

@@ -8,8 +8,8 @@ import {
   type Token,
 } from "@bunwire/core";
 import type { ServerWebSocket } from "bun";
-import type { BunExecutionScope } from "./execution-scopes.js";
-import { BUN_HTTP_ROUTE_KIND, bunHttpCompiledRoute, bunHttpRouteConflictIdentity, normalizeBunHttpPath } from "./http.js";
+import type { BunExecutionScope } from "../foundation/execution-scopes.js";
+import { BUN_HTTP_ROUTE_KIND, bunHttpCompiledRoute, bunHttpRouteConflictIdentity, normalizeBunHttpPath } from "../http/http.js";
 
 export interface BunWebSocketDefinition { readonly path: string }
 export interface BunWebSocketConnectionContext<Identity = unknown> {

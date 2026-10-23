@@ -2,26 +2,26 @@
 import { createParameterResolverId, defineManagedMethodPlan, defineMiddlewareDefinition, defineRuntimeRegistry } from "@bunwire/core";
 import { GreetCommand as __bunwire_import_0 } from "../src/commands.js";
 import { GreetingService as __bunwire_import_2 } from "../src/commands.js";
-import { AuthenticateMiddleware as __bunwire_import_4 } from "@bunwire/bun";
-import { AuthorizeMiddleware as __bunwire_import_6 } from "@bunwire/bun";
+import { AuthenticateMiddleware as __bunwire_import_6 } from "@bunwire/bun";
+import { AuthorizeMiddleware as __bunwire_import_8 } from "@bunwire/bun";
 import { BUN_COMMAND_HANDLE_KIND as __bunwire_import_10 } from "@bunwire/bun";
 import { Command as __bunwire_import_1 } from "@bunwire/bun";
-import { CsrfMiddleware as __bunwire_import_7 } from "@bunwire/bun";
-import { GuestMiddleware as __bunwire_import_5 } from "@bunwire/bun";
-import { SignedUrlMiddleware as __bunwire_import_9 } from "@bunwire/bun";
-import { ThrottleMiddleware as __bunwire_import_8 } from "@bunwire/bun";
+import { CsrfMiddleware as __bunwire_import_9 } from "@bunwire/bun";
+import { GuestMiddleware as __bunwire_import_7 } from "@bunwire/bun";
+import { SignedUrlMiddleware as __bunwire_import_5 } from "@bunwire/bun";
+import { ThrottleMiddleware as __bunwire_import_4 } from "@bunwire/bun";
 import { Service as __bunwire_import_3 } from "@bunwire/core";
 
 export const applicationRegistry = defineRuntimeRegistry({
   classes: [
     { kind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, data: { "description": "Print a generated, DI-managed greeting.", "name": "greet" }, scope: "transient", dependencies: [{ index: 0, token: __bunwire_import_2 }] },
     { kind: __bunwire_import_3.definition.kind, target: __bunwire_import_2, data: { "scope": "singleton" }, scope: "singleton", dependencies: [] },
-    defineMiddlewareDefinition({ target: __bunwire_import_4, data: { "alias": "auth" }, dependencies: [] }),
-    defineMiddlewareDefinition({ target: __bunwire_import_5, data: { "alias": "guest" }, dependencies: [] }),
-    defineMiddlewareDefinition({ target: __bunwire_import_6, data: { "alias": "can" }, dependencies: [] }),
-    defineMiddlewareDefinition({ target: __bunwire_import_7, data: { "alias": "csrf" }, dependencies: [] }),
-    defineMiddlewareDefinition({ target: __bunwire_import_8, data: { "alias": "throttle" }, dependencies: [] }),
-    defineMiddlewareDefinition({ target: __bunwire_import_9, data: { "alias": "signed" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_4, data: { "alias": "throttle" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_5, data: { "alias": "signed" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_6, data: { "alias": "auth" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_7, data: { "alias": "guest" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_8, data: { "alias": "can" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_9, data: { "alias": "csrf" }, dependencies: [] }),
   ],
   providers: [
   ],
@@ -33,5 +33,5 @@ export const applicationRegistry = defineRuntimeRegistry({
   eventAliases: [
   ],
 });
-export const BUNWIRE_REGISTRY_HASH = "afa36ca6b42fe149da30eb17f6de5783cbae4cd04dc766cb5aaa9ed0db6b07c3";
+export const BUNWIRE_REGISTRY_HASH = "91f65174142e1545d041822dd6d320fe1e2d00009bccd47ac41a30db7c982018";
 export default applicationRegistry;

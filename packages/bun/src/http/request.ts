@@ -16,7 +16,7 @@ import {
   type ValidationResult,
 } from "@bunwire/validation";
 import type { BunHttpContext } from "./http.js";
-import type { BunSessionValue } from "./sessions.js";
+import type { BunSessionValue } from "../security/sessions.js";
 
 export type BunFormRequestInput = Readonly<Record<string, unknown>>;
 export type BunFormRequestQueryInput = Readonly<Record<string, string | readonly string[]>>;

@@ -1,9 +1,9 @@
-export { BUN_COMPILER_DESCRIPTOR } from "./definitions.js";
-export { BUN_RATE_LIMIT_MANAGER, BunRateLimitError, BunRateLimitManager, MemoryRateLimitBackend, ThrottleMiddleware, type BunRateLimitBackend, type BunRateLimitConsumption, type BunRateLimitRequest, type BunRateLimitPolicy, type BunRateLimitOptions } from "./rate-limiting.js";
-export { BUN_SIGNED_URLS, BunSignedUrlError, SignedUrlManager, SignedUrlMiddleware, type BunSignedUrlOptions, type BunSignUrlOptions, type BunSignedUrls } from "./signed-urls.js";
-export { BUN_PAGINATION, BunPaginationContext, BunPaginationError, type BunPaginationOptions, type BunPaginationInput, type BunPaginationResult, type BunPaginationLinks } from "./pagination.js";
-export { BUN_MAINTENANCE, BunMaintenance, BunOperationalHttpError, type BunHealthOptions, type BunReadinessCheck, type BunMaintenanceOptions } from "./operational-http.js";
-export type { BunObservationHook, BunOperationRecord, BunOperationKind, BunOperationPhase } from "./observability.js";
+export { BUN_COMPILER_DESCRIPTOR } from "./foundation/definitions.js";
+export { BUN_RATE_LIMIT_MANAGER, BunRateLimitError, BunRateLimitManager, MemoryRateLimitBackend, ThrottleMiddleware, type BunRateLimitBackend, type BunRateLimitConsumption, type BunRateLimitRequest, type BunRateLimitPolicy, type BunRateLimitOptions } from "./http/rate-limiting.js";
+export { BUN_SIGNED_URLS, BunSignedUrlError, SignedUrlManager, SignedUrlMiddleware, type BunSignedUrlOptions, type BunSignUrlOptions, type BunSignedUrls } from "./http/signed-urls.js";
+export { BUN_PAGINATION, BunPaginationContext, BunPaginationError, type BunPaginationOptions, type BunPaginationInput, type BunPaginationResult, type BunPaginationLinks } from "./http/pagination.js";
+export { BUN_MAINTENANCE, BunMaintenance, BunOperationalHttpError, type BunHealthOptions, type BunReadinessCheck, type BunMaintenanceOptions } from "./http/operational-http.js";
+export type { BunObservationHook, BunOperationRecord, BunOperationKind, BunOperationPhase } from "./foundation/observability.js";
 export {
   WebSocket,
   BUN_WEBSOCKET_KIND,
@@ -16,13 +16,13 @@ export {
   type BunWebSocketDefinition,
   type BunWebSocketConnectionContext,
   type BunWebSocketMessageContext,
-} from "./websocket.js";
-export type { BunWebSocketIdentity, BunWebSocketOptions } from "./websocket-runtime.js";
+} from "./websocket/websocket.js";
+export type { BunWebSocketIdentity, BunWebSocketOptions } from "./websocket/websocket-runtime.js";
 export {
   BUN_WEBSOCKET_CHANNELS, BunWebSocketMalformedMessageError, defineBunWebSocketMessages,
   type BunWebSocketChannels, type BunWebSocketChannelAuthorization,
   type BunWebSocketDelivery, type BunWebSocketFrame, type BunWebSocketPayloadValidator,
-} from "./websocket-conveniences.js";
+} from "./websocket/websocket-conveniences.js";
 export {
   Argument,
   Command,
@@ -50,13 +50,13 @@ export {
   type BunCommandParameterDefinition,
   type BunCommandValue,
   type BunCommandValueType,
-} from "./commands.js";
-export { BUN_COMMAND_RUNTIME, BunCommandRuntime, runBunCli, type BunCliRunOptions } from "./command-runtime.js";
-export { Schedule, BUN_SCHEDULED_TASK_KIND, BUN_SCHEDULED_TASK_HANDLE_KIND, type BunScheduleOptions, type BunScheduledTaskDefinition, type ScheduledTaskConstructor } from "./scheduled-tasks.js";
-export { BunScheduleError, parseCronExpression, cronMatches, validateTimeZone, type BunCronExpression } from "./cron.js";
-export { BUN_SCHEDULE_CONTEXT, type BunScheduledTaskContext } from "./schedule-context.js";
-export { BUN_SCHEDULER, BunScheduler, type BunSchedulerOptions, type BunSchedulerClock, type BunSchedulerErrorContext, type BunSchedulerState } from "./scheduler.js";
-export { MemoryScheduleLockProvider, type ScheduleLockProvider, type ScheduleLockLease, type ScheduleLockRequest, type ScheduleLockMode, type ScheduleExecutionOutcome } from "./schedule-lock.js";
+} from "./commands/commands.js";
+export { BUN_COMMAND_RUNTIME, BunCommandRuntime, runBunCli, type BunCliRunOptions } from "./commands/command-runtime.js";
+export { Schedule, BUN_SCHEDULED_TASK_KIND, BUN_SCHEDULED_TASK_HANDLE_KIND, type BunScheduleOptions, type BunScheduledTaskDefinition, type ScheduledTaskConstructor } from "./scheduling/scheduled-tasks.js";
+export { BunScheduleError, parseCronExpression, cronMatches, validateTimeZone, type BunCronExpression } from "./scheduling/cron.js";
+export { BUN_SCHEDULE_CONTEXT, type BunScheduledTaskContext } from "./scheduling/schedule-context.js";
+export { BUN_SCHEDULER, BunScheduler, type BunSchedulerOptions, type BunSchedulerClock, type BunSchedulerErrorContext, type BunSchedulerState } from "./scheduling/scheduler.js";
+export { MemoryScheduleLockProvider, type ScheduleLockProvider, type ScheduleLockLease, type ScheduleLockRequest, type ScheduleLockMode, type ScheduleExecutionOutcome } from "./scheduling/schedule-lock.js";
 export {
   BUN_AUTH_CONTEXT,
   BUN_AUTH_MANAGER,
@@ -72,7 +72,7 @@ export {
   type BunAuthenticationOptions,
   type BunBearerAuthGuardOptions,
   type BunSessionAuthGuardOptions,
-} from "./auth.js";
+} from "./security/auth.js";
 export {
   BUN_AUTHORIZATION_CONTEXT,
   BUN_AUTHORIZATION_MANAGER,
@@ -87,14 +87,14 @@ export {
   type BunAuthorizationOptions,
   type BunAuthorizationPolicy,
   type BunAuthorizationPolicyCheck,
-} from "./authorization.js";
+} from "./security/authorization.js";
 export {
   BUN_COOKIES,
   BunCookieError,
   BunCookieJar,
   type BunCookieOptions,
   type BunCookieSameSite,
-} from "./cookies.js";
+} from "./security/cookies.js";
 export {
   BUN_CSRF_CONTEXT,
   BUN_CSRF_MANAGER,
@@ -103,7 +103,7 @@ export {
   CsrfMiddleware,
   type BunCsrfContext,
   type BunCsrfOptions,
-} from "./csrf.js";
+} from "./security/csrf.js";
 export {
   BUN_EXECUTION_SCOPE,
   BUN_EXECUTION_SCOPE_DESCRIPTORS,
@@ -123,7 +123,7 @@ export {
   type BunScopedDisposer,
   type BunScopedFactory,
   type BunScopedResourceOptions,
-} from "./execution-scopes.js";
+} from "./foundation/execution-scopes.js";
 export {
   BunAuthorizationException,
   BunCsrfMismatchException,
@@ -138,7 +138,7 @@ export {
   type BunHttpExceptionOptions,
   type BunHttpMode,
   type BunValidationErrors,
-} from "./exceptions.js";
+} from "./http/exceptions.js";
 export {
   BUN_HTTP_CONTEXT,
   BUN_HTTP_CONTEXT_RESOLVER_ID,
@@ -159,8 +159,8 @@ export {
   type BunHttpServer,
   type BunHttpServerCallback,
   type BunHttpServerOptions,
-} from "./http.js";
-export type { BunMiddlewareContext } from "./middleware.js";
+} from "./http/http.js";
+export type { BunMiddlewareContext } from "./http/middleware.js";
 export {
   BunRedirectResult,
   BunUnsupportedResponseError,
@@ -168,7 +168,7 @@ export {
   type BunHttpResponseResolver,
   type BunJsonValue,
   type BunRedirectStatus,
-} from "./response.js";
+} from "./http/response.js";
 export {
   BUN_FORM_REQUEST_RESOLVER_ID,
   BUN_REQUEST_KIND,
@@ -181,7 +181,7 @@ export {
   type BunFormRequestRouteInput,
   type BunFormRequestSources,
   type BunRequestClassMetadata,
-} from "./request.js";
+} from "./http/request.js";
 export {
   BUN_OAUTH_CONTEXT,
   BUN_OAUTH_MANAGER,
@@ -200,7 +200,7 @@ export {
   type BunOAuthProvider,
   type BunOAuthTokenEndpointAuthMethod,
   type BunOAuthTokenSet,
-} from "./oauth.js";
+} from "./security/oauth.js";
 export {
   BUN_PAGE_MANAGER,
   BunPageComponentError,
@@ -219,7 +219,7 @@ export {
   type BunPageShellRenderer,
   type BunPageServerRenderer,
   type BunPageServerManifest,
-} from "./pages.js";
+} from "./pages/pages.js";
 export {
   BUN_PAGE_LOCATION_HEADER,
   BUN_PAGE_CAPABILITY_HEADER,
@@ -234,14 +234,14 @@ export {
   type BunPageManifest,
   type BunPageProps,
   type BunwirePage,
-} from "./page-protocol.js";
+} from "./pages/page-protocol.js";
 export {
   BunAdapter,
   BunAdapterError,
   type BunAdapterOptions,
   type BunRuntimeContext,
   type BunRuntimeRole,
-} from "./runtime.js";
+} from "./foundation/runtime.js";
 export {
   BUN_SESSION,
   BUN_SESSION_MANAGER,
@@ -255,13 +255,13 @@ export {
   type BunSessionStoreRecord,
   type BunSessionValue,
   type SessionStore,
-} from "./sessions.js";
-export { Job, BUN_JOB_KIND, BUN_JOB_HANDLE_KIND, BunQueueError, type BunJobOptions, type BunJobDefinition, type JobPolicy, type JobConstructor, type JobArguments } from "./jobs.js";
-export { JsonJobSerializer, type JobSerializer } from "./job-serializer.js";
-export { BUN_JOB_CONTEXT, BunJobFatalError, type BunJobContext } from "./job-context.js";
-export { BUN_QUEUE_WORKER, QueueWorker, type BunQueueWorkerOptions, type QueueWorkerState } from "./queue-worker.js";
-export { Queue, type BunQueuedListenerOptions, type BunQueuedListenerDefinition } from "./queued-listeners.js";
-export { defineQueueEventCodec, type QueueEventCodec } from "./queue-event-codec.js";
-export { MemoryFailedJobStore, type FailedJobStore, type FailedJobRecord, type FailedJobError, type FailedJobReason } from "./failed-jobs.js";
-export { SyncQueueDriver, MemoryQueueDriver, type QueueDriver, type QueueDriverContext, type QueueEnvelope, type QueueReservation } from "./queue-driver.js";
-export { QueueManager, JobDispatchBuilder, BUN_QUEUE_MANAGER, type BunQueueOptions, type JobDispatchOptions, type JobDispatchReceipt } from "./queue-manager.js";
+} from "./security/sessions.js";
+export { Job, BUN_JOB_KIND, BUN_JOB_HANDLE_KIND, BunQueueError, type BunJobOptions, type BunJobDefinition, type JobPolicy, type JobConstructor, type JobArguments } from "./jobs/jobs.js";
+export { JsonJobSerializer, type JobSerializer } from "./jobs/job-serializer.js";
+export { BUN_JOB_CONTEXT, BunJobFatalError, type BunJobContext } from "./jobs/job-context.js";
+export { BUN_QUEUE_WORKER, QueueWorker, type BunQueueWorkerOptions, type QueueWorkerState } from "./jobs/queue-worker.js";
+export { Queue, type BunQueuedListenerOptions, type BunQueuedListenerDefinition } from "./jobs/queued-listeners.js";
+export { defineQueueEventCodec, type QueueEventCodec } from "./jobs/queue-event-codec.js";
+export { MemoryFailedJobStore, type FailedJobStore, type FailedJobRecord, type FailedJobError, type FailedJobReason } from "./jobs/failed-jobs.js";
+export { SyncQueueDriver, MemoryQueueDriver, type QueueDriver, type QueueDriverContext, type QueueEnvelope, type QueueReservation } from "./jobs/queue-driver.js";
+export { QueueManager, JobDispatchBuilder, BUN_QUEUE_MANAGER, type BunQueueOptions, type JobDispatchOptions, type JobDispatchReceipt } from "./jobs/queue-manager.js";

@@ -1,6 +1,6 @@
 import { defineClassKind, defineMethodKind, defineManagedClassDecorator, defineCompilerMetadataHandler, type ApplicationScheduleCompilationHandlerData, type ManagedClassCompilationHandlerData } from "@bunwire/core";
 import { BunScheduleError, parseCronExpression, validateTimeZone } from "./cron.js";
-import { JsonJobSerializer } from "./job-serializer.js";
+import { JsonJobSerializer } from "../jobs/job-serializer.js";
 
 export interface BunScheduleOptions { readonly cron?: string }
 export interface BunScheduledTaskDefinition { readonly cron?: string; readonly id?: string; readonly timezone?: string; readonly overlap: "allow" | "without-overlap" | "single-server" | "without-overlap-single-server"; readonly lockFor?: number }

@@ -5,7 +5,7 @@ import {
   BunAdapter, JsonJobSerializer, MemoryQueueDriver, MemorySessionStore,
 } from "@bunwire/bun";
 import registry from "../../../examples/bun-app/.bunwire/registry.js";
-import { snapshotEnvelope } from "../../../packages/bun/src/queue-driver.js";
+import { snapshotEnvelope } from "../../../packages/bun/src/jobs/queue-driver.js";
 import manifest from "../../../examples/bun-app/.bunwire/pages.js";
 import bunPackage from "../../../packages/bun/package.json" with { type: "json" };
 

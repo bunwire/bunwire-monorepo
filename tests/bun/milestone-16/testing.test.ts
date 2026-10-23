@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BunTestClient, RecordingEventDispatcher, RecordingQueueDriver } from "@bunwire/bun/testing";
 import type { QueueEnvelope } from "@bunwire/bun";
-import { BunOperationObserver } from "../../../packages/bun/src/observability.js";
+import { BunOperationObserver } from "../../../packages/bun/src/foundation/observability.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => { await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))); });

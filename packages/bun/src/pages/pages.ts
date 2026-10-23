@@ -1,9 +1,9 @@
 import { createToken, type Token } from "@bunwire/core";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { BunAuthContext } from "./auth.js";
-import { BunValidationException } from "./exceptions.js";
-import type { BunHttpContext } from "./http.js";
+import type { BunAuthContext } from "../security/auth.js";
+import { BunValidationException } from "../http/exceptions.js";
+import type { BunHttpContext } from "../http/http.js";
 import {
   BUN_PAGE_LOCATION_HEADER,
   BUN_PAGE_CAPABILITY_HEADER,
@@ -25,7 +25,7 @@ import {
   BUN_SESSION_FRAMEWORK_SET,
   type BunSessionValue,
   type Session,
-} from "./sessions.js";
+} from "../security/sessions.js";
 
 export interface BunPageSharedPropsContext<Principal = unknown> {
   readonly http: BunHttpContext<Principal>;

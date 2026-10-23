@@ -1,5 +1,5 @@
 import { createToken, defineManagedClassAttachment, getManagedClassMetadata, LISTENER_KIND, type ListenerDefinition, type Application, type ManagedMethodPlan, type RuntimeRegistry } from "@bunwire/core";
-import { BunExecutionScopeManager } from "./execution-scopes.js";
+import { BunExecutionScopeManager } from "../foundation/execution-scopes.js";
 import { BUN_JOB_HANDLE_KIND, BUN_JOB_KIND, Job, BunQueueError, compiledJobDefinition, jobPolicy, queueInteger, queueName,
   type BunJobDefinition, type JobArguments, type JobConstructor } from "./jobs.js";
 import { JsonJobSerializer, type JobSerializer } from "./job-serializer.js";
@@ -9,7 +9,7 @@ import { BUN_JOB_CONTEXT, InvalidJobError } from "./job-context.js";
 import { QueueWorker, workerOptions, assertWorkerDriver, type BunQueueWorkerOptions } from "./queue-worker.js";
 import { Queue } from "./queued-listeners.js";
 import { snapshotEventCodecs, requireSynchronousCodecResult, type QueueEventCodec } from "./queue-event-codec.js";
-import { BunOperationObserver } from "./observability.js";
+import { BunOperationObserver } from "../foundation/observability.js";
 
 export interface BunQueueOptions { readonly driver: QueueDriver; readonly serializer?: JobSerializer; readonly failedJobs?: FailedJobStore; readonly worker?: BunQueueWorkerOptions; readonly eventCodecs?: readonly QueueEventCodec<any, any>[] }
 export interface JobDispatchOptions { readonly queue?: string; readonly delay?: number; readonly tries?: number }

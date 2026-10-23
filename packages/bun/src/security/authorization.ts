@@ -5,9 +5,9 @@ import {
   type Token,
 } from "@bunwire/core";
 import type { BunAuthContext } from "./auth.js";
-import { BunAuthorizationException } from "./exceptions.js";
-import type { BunHttpContext } from "./http.js";
-import type { BunMiddlewareContext } from "./middleware.js";
+import { BunAuthorizationException } from "../http/exceptions.js";
+import type { BunHttpContext } from "../http/http.js";
+import type { BunMiddlewareContext } from "../http/middleware.js";
 
 export interface BunAbilityContext<Principal = unknown, Resource = unknown> {
   readonly principal: Principal | undefined;

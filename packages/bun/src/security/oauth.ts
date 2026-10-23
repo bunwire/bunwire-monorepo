@@ -1,9 +1,9 @@
 import { createToken, type Token } from "@bunwire/core";
 import * as oauth from "oauth4webapi";
 import type { AuthManager, BunAuthContext } from "./auth.js";
-import { BunHttpException } from "./exceptions.js";
-import type { BunHttpContext } from "./http.js";
-import { redirect, type BunRedirectResult } from "./response.js";
+import { BunHttpException } from "../http/exceptions.js";
+import type { BunHttpContext } from "../http/http.js";
+import { redirect, type BunRedirectResult } from "../http/response.js";
 import {
   BUN_SESSION_FRAMEWORK_GET,
   BUN_SESSION_FRAMEWORK_SET,

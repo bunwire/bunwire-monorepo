@@ -10,7 +10,7 @@ import {
   type ManagedClassIdentityHandlerData,
   type Token,
 } from "@bunwire/core";
-import type { BunExecutionScope } from "./execution-scopes.js";
+import type { BunExecutionScope } from "../foundation/execution-scopes.js";
 
 export class BunCommandError extends Error { override readonly name: string = "BunCommandError"; }
 export class BunCommandUsageError extends BunCommandError { override readonly name = "BunCommandUsageError"; }

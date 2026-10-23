@@ -8,7 +8,8 @@ Status: Complete
 
 ## Implemented
 
-- Opt-in native liveness/readiness endpoints on the existing `Bun.serve()` server, with bounded concurrent application checks and minimal public responses.
+- Opt-in native liveness/readiness endpoints on the existing `Bun.serve()` server, with a bounded response deadline, concurrent checks within one probe, and minimal public responses.
+- Post-completion review correction: readiness allows only one unsettled check run; later probes return 503 until that run settles.
 - Application-scoped runtime maintenance control, optional retry header, and explicit timeout-bounded authorization callback.
 - Maintenance gate across generated routes, fallback/page assets, and WebSocket upgrades; health remains accessible.
 - Health path validation and collision rejection, plus lifecycle-aware readiness during startup and shutdown.
@@ -29,6 +30,7 @@ Status: Complete
 - `tests/bun/milestone-19/operational-http.test.ts` — health/check timeout, safe responses, maintenance control and fail-closed bypass.
 - `tests/bun/milestone-19/http-integration.test.ts` — startup, shutdown, native route/fallback/WebSocket gate, path conflicts, role behavior.
 - `tests/bun/milestone-19/operational-process.test.ts` and child fixture — real Bun server health and maintenance switching.
+- Post-completion: `operational-http.test.ts` covers repeated probes during a check that ignores abort and recovery after that check settles.
 
 ## Tests Run
 
@@ -40,6 +42,7 @@ Status: Complete
 - Final `pnpm exec vitest run tests/bun/milestone-19`: 10 passed across 3 files after adding configured-path and real Bun HEAD checks.
 - Final `pnpm typecheck`, `pnpm --filter @bunwire/bun build`, `pnpm test:built-exports`, and `pnpm check:boundaries` all passed.
 - `git diff --check` passed.
+- Post-completion correction (2026-10-23): the focused Milestone 19 operational tests passed (5 tests); dependent HTTP integration and real Bun process tests passed (6 tests). The final combined affected run passed 20 tests across 6 files. `pnpm typecheck` and `pnpm --filter @bunwire/bun build` passed.
 
 ## Test Results
 
@@ -71,7 +74,7 @@ Status: Complete
 
 ## Known Limitations
 
-- None identified.
+- A readiness check that ignores abort can continue past the response deadline. New probes return 503 without launching overlapping work until it settles.
 
 ## Blockers
 

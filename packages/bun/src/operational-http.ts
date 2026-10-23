@@ -147,6 +147,7 @@ export class BunHealthEndpoints {
   readonly #running: () => boolean;
   readonly #listening: () => boolean;
   readonly #maintenance: BunMaintenance | undefined;
+  #activeChecks: Promise<readonly boolean[]> | undefined;
 
   constructor(options: BunHealthOptions, running: () => boolean, listening: () => boolean, maintenance?: BunMaintenance) {
     validateBunHealthOptions(options);
@@ -165,11 +166,17 @@ export class BunHealthEndpoints {
 
   async readiness(method: string): Promise<Response> {
     if (!this.#listening() || !this.#running() || this.#maintenance?.enabled) return statusResponse(503, method);
+    if (this.#activeChecks) return statusResponse(503, method);
+    if (this.#checks.length === 0) return statusResponse(200, method);
     const abort = new AbortController();
     const checks = Promise.all(this.#checks.map(async (check) => {
       try { return await check(abort.signal) === true; }
       catch { return false; }
     }));
+    this.#activeChecks = checks;
+    void checks.then(() => {
+      if (this.#activeChecks === checks) this.#activeChecks = undefined;
+    });
     const results = await deadline(checks, this.#timeoutMs, [false], abort);
     return statusResponse(results.every(Boolean) && this.#running() && !this.#maintenance?.enabled ? 200 : 503, method);
   }

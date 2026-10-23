@@ -102,6 +102,7 @@ Overall status:
 - `@bunwire/bun` Milestone 22 adds negotiated partial/deferred page responses and optional separate SSR.
 - `@bunwire/bun` Milestone 23 adds validated opt-in WebSocket envelopes and authorized channel helpers.
 - `@bunwire/bun` Milestone 24 verifies combined real Bun flows and compatibility, documents security/resource boundaries, and fixes outgoing envelope validation. Its broad suite had two failures resolved in focused reruns; see the milestone record.
+- Post-completion Bun review fixes serialize async page renders and prevent overlapping readiness checks; see the Milestone 22 and 19 records.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work

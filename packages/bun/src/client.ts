@@ -92,7 +92,9 @@ export class BunPageClient<Component = unknown> {
   readonly #listeners = new Set<BunPageClientListener>();
   #started = false;
   #generation = 0;
+  #lifecycle = 0;
   #pending?: AbortController;
+  #commitQueue: Promise<void> = Promise.resolve();
 
   constructor(options: BunPageClientOptions<Component>) {
     if (!options || typeof options !== "object" || typeof options.resolvePage !== "function" || typeof options.render !== "function") {
@@ -128,6 +130,7 @@ export class BunPageClient<Component = unknown> {
     if (!this.#started) return;
     this.#started = false;
     this.#generation++;
+    this.#lifecycle++;
     this.#pending?.abort();
     this.#document.removeEventListener("click", this.#click);
     this.#window.removeEventListener("popstate", this.#popstate);
@@ -178,13 +181,21 @@ export class BunPageClient<Component = unknown> {
     }
   }
 
-  async #commit(page: BunwirePage, replace: boolean, preserveScroll: boolean, generation = this.#generation): Promise<void> {
+  #commit(page: BunwirePage, replace: boolean, preserveScroll: boolean, generation = this.#generation): Promise<void> {
+    const lifecycle = this.#lifecycle;
+    const commit = this.#commitQueue.then(() => this.#performCommit(page, replace, preserveScroll, generation, lifecycle));
+    this.#commitQueue = commit.catch(() => undefined);
+    return commit;
+  }
+
+  async #performCommit(page: BunwirePage, replace: boolean, preserveScroll: boolean, generation: number, lifecycle: number): Promise<void> {
+    if (generation !== this.#generation || lifecycle !== this.#lifecycle) return;
     const previous = this.#page;
     if (page.partial && (page.component !== previous.component || page.partial.some((key) => !(key in page.props)))) {
       throw new BunPageClientError("Partial Bun page response does not match the current component or selected props.");
     }
     const resolved = await this.#resolvePage(page.component);
-    if (generation !== this.#generation) return;
+    if (generation !== this.#generation || lifecycle !== this.#lifecycle) return;
     const component = moduleValue(resolved);
     if (component === undefined || component === null) throw new BunPageClientError(`Unable to resolve Bun page component ${JSON.stringify(page.component)}.`);
     this.#page = Object.freeze({ ...page, props: Object.freeze(page.partial ? { ...previous.props, ...page.props } : { ...page.props }) });
@@ -193,7 +204,13 @@ export class BunPageClient<Component = unknown> {
       (replace ? this.#window.history.replaceState : this.#window.history.pushState).call(this.#window.history, { bunwire: true }, "", page.url);
     }
     if (!preserveScroll) this.#window.scrollTo(0, 0);
-    await this.#render(Object.freeze({ page: this.#page, component }));
+    try {
+      await this.#render(Object.freeze({ page: this.#page, component }));
+    } catch (error) {
+      if (generation === this.#generation && lifecycle === this.#lifecycle) throw error;
+      return;
+    }
+    if (!this.#started || lifecycle !== this.#lifecycle) return;
     for (const listener of this.#listeners) listener();
   }
 

@@ -13,6 +13,7 @@ Status: Complete
 - Negotiated protocol 2 partial/deferred page responses while preserving complete protocol 1 responses.
 - Added deferred prop evaluation inside fresh HTTP requests, client cancellation and stale-navigation checks, and targeted partial prop merging.
 - Added optional renderer callback, separate Vite SSR build manifest, React server rendering, and React hydration.
+- Post-completion review correction: client commits serialize async renders, skip obsolete queued commits, notify completed renders in order, and let a newer commit proceed after an obsolete render failure.
 
 ## Remaining
 
@@ -31,6 +32,7 @@ Status: Complete
 - `tests/bun/milestone-22/pages-process.test.ts`
 - `tests/bun/milestone-22/react-hydration.test.ts`
 - `tests/bun/milestone-22/vite-ssr.test.ts`
+- Post-completion: `client.test.ts` covers delayed render ordering, a failed newer navigation, obsolete render failure, and stop during a queued commit.
 
 ## Tests Run
 
@@ -44,6 +46,7 @@ Status: Complete
 - `pnpm check:boundaries`: passed.
 - `pnpm test:built-exports`: passed after updating the intentional public export allowlist.
 - `pnpm test:release-pack`: passed.
+- Post-completion correction (2026-10-23): focused Milestone 22 client tests passed (7 tests); dependent React hydration and real Bun page process tests passed (2 tests). The final combined affected run passed 20 tests across 6 files. `pnpm typecheck` and `pnpm --filter @bunwire/bun build` passed after the final code change.
 
 ## Test Results
 
@@ -72,6 +75,7 @@ Status: Complete
 
 - Initial document requests remain version-1 full pages because they cannot negotiate the navigation capability; deferred delivery begins on protocol-2 navigations.
 - Deferred resolver cancellation is cooperative while a resolver is running. Bunwire observes the request abort before and after resolution, and keeps the request scope open until the resolver settles.
+- New navigations wait for a pending custom async renderer. Its returned promise must represent completion of its UI work; a renderer that never settles also delays later commits.
 
 ## Important Decisions
 

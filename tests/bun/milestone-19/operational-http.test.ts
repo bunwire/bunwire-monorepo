@@ -48,6 +48,20 @@ describe("Bun Milestone 19 — operational HTTP state", () => {
     expect(await (await health.readiness("HEAD")).text()).toBe("");
   });
 
+  it("does not overlap readiness checks that ignore abort and recovers after settlement", async () => {
+    let release!: (value: boolean) => void;
+    const stalled = new Promise<boolean>((resolve) => { release = resolve; });
+    const check = vi.fn().mockImplementationOnce(() => stalled).mockResolvedValue(true);
+    const health = new BunHealthEndpoints({ timeoutMs: 5, checks: { database: check } }, () => true, () => true);
+    expect((await health.readiness("GET")).status).toBe(503);
+    expect((await health.readiness("GET")).status).toBe(503);
+    expect((await health.readiness("HEAD")).status).toBe(503);
+    expect(check).toHaveBeenCalledTimes(1);
+    release(false);
+    await vi.waitFor(async () => expect((await health.readiness("GET")).status).toBe(200));
+    expect(check).toHaveBeenCalledTimes(2);
+  });
+
   it("switches maintenance at runtime and fails closed on bypass errors and timeouts", async () => {
     const authorized = new BunMaintenance({ retryAfterSeconds: 30, authorizeBypass: (request) => request.headers.get("X-Operator") === "approved" });
     const request = new Request("https://example.test/");

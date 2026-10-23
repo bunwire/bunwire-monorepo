@@ -182,7 +182,7 @@ maintenance.disable();
 
 Import `BUN_MAINTENANCE` from `@bunwire/bun`. The control exists only when `http.maintenance` is configured. `initiallyEnabled: true` starts in maintenance mode; `enable(retryAfterSeconds?)` may override the configured retry interval. This state is local to one application process; operators must coordinate multiple instances themselves.
 
-Liveness reports whether the native host server is listening. Readiness requires a running application, no maintenance, and every configured check to return `true`. Checks run concurrently on each readiness request, receive an `AbortSignal`, and share a 2-second deadline by default. A `false` result, thrown error, or timeout yields HTTP 503. If no checks are configured, readiness reflects application and maintenance state. Readiness becomes unavailable as shutdown begins, before the server stops. Neither endpoint reruns startup or Provider registration.
+Liveness reports whether the native host server is listening. Readiness requires a running application, no maintenance, and every configured check to return `true`. Checks run concurrently within one probe, receive an `AbortSignal`, and share a 2-second response deadline by default. A `false` result, thrown error, or timeout yields HTTP 503. While a check run remains unsettled, later probes return 503 without starting another run; a check that ignores abort keeps readiness unavailable until it settles. If no checks are configured, readiness reflects application and maintenance state. Readiness becomes unavailable as shutdown begins, before the server stops. Neither endpoint reruns startup or Provider registration.
 
 Health endpoints accept GET and HEAD; other methods return 405. Public responses contain only `{ "status": "ok" }` or `{ "status": "unavailable" }`, never check names or errors, and set `Cache-Control: no-store`. A custom `livenessPath` or `readinessPath` must be a distinct static root-relative path and cannot overlap a generated HTTP or WebSocket route.
 
@@ -300,7 +300,7 @@ Milestone 22 adds an opt-in version 2 navigation capability. Version 1 clients s
 await app.client.visit("/dashboard", { only: ["activity"] });
 ```
 
-Deferred props are marked in the Controller and fetched by the client in a fresh, authorized GET request. Every resolver finishes inside that request's scope; aborted or stale responses cannot update a newer navigation. `onDeferredError` receives failures while the existing props stay intact.
+Deferred props are marked in the Controller and fetched by the client in a fresh, authorized GET request. Every resolver finishes inside that request's scope; aborted or stale responses cannot update a newer navigation. Client renders run in order: a newer navigation can fetch while an earlier async render is pending, then waits for that render before committing. Completed renders notify subscribers in commit order, including when a newer navigation fails; a failed obsolete render does not block the newer navigation. A custom render callback's returned promise must settle after its UI work finishes. `onDeferredError` receives failures while the existing props stay intact.
 
 ```ts
 return page("Dashboard", {

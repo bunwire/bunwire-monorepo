@@ -25,6 +25,118 @@ const response = (value: unknown, advanced = true): Response => new Response(JSO
 });
 
 describe("Bun Milestone 22 — page client", () => {
+  it("serializes async renders and notifies subscribers in commit order", async () => {
+    const platform = browser();
+    let release!: () => void;
+    const delayed = new Promise<void>((resolve) => { release = resolve; });
+    const events: string[] = [];
+    const client = createBunwirePageClient({
+      initialPage: { component: "Dashboard", props: {}, url: "/dashboard" },
+      resolvePage: (name) => name,
+      render: async ({ page }) => {
+        events.push(`${page.component}:start`);
+        if (page.component === "First") await delayed;
+        events.push(`${page.component}:end`);
+      },
+      fetch: (async (url: string) => response({
+        component: url.endsWith("/first") ? "First" : "Second", props: {},
+        url: url.endsWith("/first") ? "/first" : "/second",
+      })) as typeof fetch,
+      ...platform,
+    });
+    await client.start();
+    const notify = vi.fn();
+    client.subscribe(notify);
+    const first = client.visit("/first");
+    await vi.waitFor(() => expect(events).toContain("First:start"));
+    const second = client.visit("/second");
+    await vi.waitFor(() => expect(client.page.component).toBe("First"));
+    expect(events).not.toContain("Second:start");
+    release();
+    await Promise.all([first, second]);
+    expect(events).toEqual(["Dashboard:start", "Dashboard:end", "First:start", "First:end", "Second:start", "Second:end"]);
+    expect(client.page.component).toBe("Second");
+    expect(platform.window.location.pathname).toBe("/second");
+    expect(notify).toHaveBeenCalledTimes(2);
+    client.stop();
+  });
+
+  it("notifies the last committed page when a newer navigation fails", async () => {
+    const platform = browser();
+    let release!: () => void;
+    const delayed = new Promise<void>((resolve) => { release = resolve; });
+    const client = createBunwirePageClient({
+      initialPage: { component: "Dashboard", props: {}, url: "/dashboard" },
+      resolvePage: (name) => name,
+      render: ({ page }) => page.component === "First" ? delayed : undefined,
+      fetch: (async (url: string) => {
+        if (url.endsWith("/second")) throw new Error("navigation failed");
+        return response({ component: "First", props: {}, url: "/first" });
+      }) as typeof fetch,
+      ...platform,
+    });
+    await client.start();
+    const notify = vi.fn();
+    client.subscribe(notify);
+    const first = client.visit("/first");
+    await vi.waitFor(() => expect(client.page.component).toBe("First"));
+    await expect(client.visit("/second")).rejects.toThrow("navigation failed");
+    release();
+    await first;
+    expect(client.page.component).toBe("First");
+    expect(notify).toHaveBeenCalledTimes(1);
+    client.stop();
+  });
+
+  it("does not block a newer commit when an obsolete render fails", async () => {
+    const platform = browser();
+    let reject!: (reason: Error) => void;
+    const delayed = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const client = createBunwirePageClient({
+      initialPage: { component: "Dashboard", props: {}, url: "/dashboard" },
+      resolvePage: (name) => name,
+      render: ({ page }) => page.component === "First" ? delayed : undefined,
+      fetch: (async (url: string) => response({
+        component: url.endsWith("/first") ? "First" : "Second", props: {},
+        url: url.endsWith("/first") ? "/first" : "/second",
+      })) as typeof fetch,
+      ...platform,
+    });
+    await client.start();
+    const first = client.visit("/first");
+    await vi.waitFor(() => expect(client.page.component).toBe("First"));
+    const second = client.visit("/second");
+    reject(new Error("obsolete render failed"));
+    await Promise.all([first, second]);
+    expect(client.page.component).toBe("Second");
+    client.stop();
+  });
+
+  it("skips a queued commit after stop", async () => {
+    const platform = browser();
+    let release!: () => void;
+    const delayed = new Promise<void>((resolve) => { release = resolve; });
+    const render = vi.fn(({ page }: { page: { component: string } }) => page.component === "First" ? delayed : undefined);
+    const client = createBunwirePageClient({
+      initialPage: { component: "Dashboard", props: {}, url: "/dashboard" },
+      resolvePage: (name) => name, render,
+      fetch: (async (url: string) => response({
+        component: url.endsWith("/first") ? "First" : "Second", props: {},
+        url: url.endsWith("/first") ? "/first" : "/second",
+      })) as typeof fetch,
+      ...platform,
+    });
+    await client.start();
+    const first = client.visit("/first");
+    await vi.waitFor(() => expect(client.page.component).toBe("First"));
+    const second = client.visit("/second");
+    client.stop();
+    release();
+    await Promise.all([first, second]);
+    expect(client.page.component).toBe("First");
+    expect(render.mock.calls.map(([context]) => context.page.component)).toEqual(["Dashboard", "First"]);
+  });
+
   it("merges partial props and completes deferred props for the current navigation", async () => {
     const platform = browser();
     const fetcher = vi.fn(async (_url: string, init: RequestInit) => {

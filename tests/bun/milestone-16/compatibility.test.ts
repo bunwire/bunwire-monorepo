@@ -39,7 +39,7 @@ describe("Bun milestone 16 compatibility boundary", () => {
   });
 
   it("exposes only intentional package entrypoints and a concrete session store contract", () => {
-    expect(Object.keys(bunPackage.exports).sort()).toEqual([".", "./client", "./react", "./testing"]);
+    expect(Object.keys(bunPackage.exports).sort()).toEqual([".", "./client", "./react", "./react/server", "./testing"]);
     const store = new MemorySessionStore();
     expect(["read", "write", "destroy"].every((method) => typeof store[method as "read"] === "function")).toBe(true);
   });

@@ -29,6 +29,10 @@ import {
   type BunWebSocketMessageContext,
 } from "./websocket.js";
 import type { BunRuntimeContext } from "./runtime.js";
+import {
+  BUN_WEBSOCKET_CHANNELS, BunWebSocketMalformedMessageError, bunWebSocketDelivery,
+  type BunWebSocketChannelAuthorization, type BunWebSocketChannels, type BunWebSocketDelivery, type BunWebSocketFrame,
+} from "./websocket-conveniences.js";
 import { BunDefaultHttpExceptionHandler, createBunHttpExceptionContext, handleBunHttpException,
   type BunHttpExceptionHandler, type BunHttpMode } from "./exceptions.js";
 import { BunOperationObserver } from "./observability.js";
@@ -40,6 +44,9 @@ export interface BunWebSocketOptions<Principal = unknown> {
   readonly mapIdentity?: (context: BunHttpContext<Principal>) => BunWebSocketIdentity | undefined | Promise<BunWebSocketIdentity | undefined>;
   readonly shutdownGraceMs?: number;
   readonly backpressureLimit?: number;
+  /** A missing policy denies helper-managed channel joins. The upgrade request is no longer available here. */
+  readonly authorizeChannel?: (context: BunWebSocketChannelAuthorization) => boolean | Promise<boolean>;
+  readonly maxChannelsPerConnection?: number;
 }
 
 interface SocketRoute {
@@ -65,6 +72,7 @@ interface ActiveConnection extends PendingConnection {
   messageCount: number;
   failed: boolean;
   closing?: Promise<void>;
+  cleanupChannels?: () => void;
 }
 
 export interface BunWebSocketRuntimeState {
@@ -248,6 +256,7 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
   };
   const finalize = async (connection: ActiveConnection, code: number, reason: string): Promise<void> => {
     if (connection.closing) return connection.closing;
+    connection.cleanupChannels?.();
     connection.closing = (async () => {
       const settled = (async () => {
         try { await connection.ready; } catch { /* open failure already reported */ }
@@ -282,10 +291,57 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
         const context: BunWebSocketConnectionContext = Object.freeze({ id: ws.data.id, socket: ws, path: pending.route.path,
           params: pending.params, identity: pending.identity, scope });
         scope.value(BUN_WEBSOCKET_CONNECTION, context);
+        const memberships = new Set<string>();
+        const active = (): boolean => !state.closing && state.connections.get(ws.data.id)?.socket === ws
+          && !state.connections.get(ws.data.id)?.closing;
+        const channelName = (channel: string): void => {
+          if (typeof channel !== "string" || !/^[!-~]{1,128}$/.test(channel)) {
+            throw new TypeError("WebSocket channel must contain 1–128 printable non-space ASCII characters.");
+          }
+        };
+        const channels: BunWebSocketChannels = Object.freeze({
+          async join(channel: string): Promise<boolean> {
+            channelName(channel);
+            if (!active()) return false;
+            if (memberships.has(channel)) return true;
+            if (memberships.size >= (state.options.maxChannelsPerConnection ?? 32)) {
+              throw new RangeError("WebSocket connection channel limit reached.");
+            }
+            const allowed = await state.options.authorizeChannel?.(Object.freeze({ channel, identity: pending.identity,
+              connection: Object.freeze({ id: ws.data.id, path: pending.route.path, params: pending.params }) }));
+            if (allowed !== true || !active()) return false;
+            if (memberships.has(channel)) return true;
+            if (memberships.size >= (state.options.maxChannelsPerConnection ?? 32)) {
+              throw new RangeError("WebSocket connection channel limit reached.");
+            }
+            if (!ws.subscribe(channel)) return false;
+            memberships.add(channel);
+            return true;
+          },
+          leave(channel: string): boolean {
+            channelName(channel);
+            if (!memberships.delete(channel)) return false;
+            ws.unsubscribe(channel);
+            return true;
+          },
+          send(connectionId: number, data: BunWebSocketFrame): BunWebSocketDelivery {
+            if (!active()) return { status: "missing" };
+            const target = state.connections.get(connectionId);
+            if (!target || target.closing) return { status: "missing" };
+            return bunWebSocketDelivery(target.socket.send(data));
+          },
+          broadcast(channel: string, data: BunWebSocketFrame): BunWebSocketDelivery {
+            channelName(channel);
+            if (!active() || !memberships.has(channel)) return { status: "missing" };
+            return bunWebSocketDelivery(ws.publish(channel, data));
+          },
+        });
+        scope.value(BUN_WEBSOCKET_CHANNELS, channels);
         const target = pending.route.entry.target;
         scope.scoped(target, () => new target(...pending.route.entry.dependencies.map((dependency) => scope!.resolve(dependency.token))));
         const connection: ActiveConnection = { ...pending, id: ws.data.id, socket: ws, scope, context,
-          ready: Promise.resolve(), messages: new Set(), startedAt: performance.now(), messageCount: 0, failed: false };
+          ready: Promise.resolve(), messages: new Set(), startedAt: performance.now(), messageCount: 0, failed: false,
+          cleanupChannels: () => { for (const channel of memberships) ws.unsubscribe(channel); memberships.clear(); } };
         state.connections.set(connection.id, connection);
         state.observer.emit({ kind: "websocket-connection", phase: "start", id: String(connection.id), at: Date.now(), route: connection.route.path, connectionId: connection.id });
         connection.ready = invoke(connection, "open", [ws]).catch((error) => { connection.failed = true; report(error); ws.close(1011, "WebSocket open failed"); });
@@ -309,7 +365,11 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
         }, { parent: connection.scope });
       });
       connection.messages.add(work);
-      try { await work; } catch (error) { connection.failed = true; report(error); ws.close(1011, "WebSocket message failed"); }
+      try { await work; } catch (error) {
+        connection.failed = true;
+        if (error instanceof BunWebSocketMalformedMessageError) ws.close(1007, "Malformed WebSocket message");
+        else { report(error); ws.close(1011, "WebSocket message failed"); }
+      }
       finally { connection.messages.delete(work); }
     },
     async drain(ws: ServerWebSocket<{ readonly id: number }>): Promise<void> {
@@ -326,7 +386,10 @@ export function bunNativeWebSocketHandler(state: BunWebSocketRuntimeState, manag
     },
     async shutdown(): Promise<void> {
       state.closing = true;
-      for (const connection of state.connections.values()) connection.socket.close(1001, "Server shutting down");
+      for (const connection of state.connections.values()) {
+        connection.cleanupChannels?.();
+        connection.socket.close(1001, "Server shutting down");
+      }
       const grace = state.options.shutdownGraceMs ?? 5000;
       if (state.connections.size > 0) {
         await new Promise<void>((resolve) => {

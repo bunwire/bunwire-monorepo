@@ -49,6 +49,9 @@ describe("Bun Milestone 1 — compiler and generated-registry integration", () =
       "QueueExampleAction",
       "ExampleJobAudit",
       "RecordExampleJob",
+      "ExampleUploadRequest",
+      "V2Chat",
+      "V2Controller",
     ].sort());
   });
 

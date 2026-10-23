@@ -6,13 +6,15 @@ import { SchedulerDemoProgress as __bunwire_import_2 } from "../src/work.js";
 import { AuthenticateMiddleware as __bunwire_import_8 } from "@bunwire/bun";
 import { AuthorizeMiddleware as __bunwire_import_10 } from "@bunwire/bun";
 import { BUN_JOB_CONTEXT as __bunwire_import_6 } from "@bunwire/bun";
-import { BUN_JOB_HANDLE_KIND as __bunwire_import_13 } from "@bunwire/bun";
-import { BUN_SCHEDULED_TASK_HANDLE_KIND as __bunwire_import_12 } from "@bunwire/bun";
+import { BUN_JOB_HANDLE_KIND as __bunwire_import_15 } from "@bunwire/bun";
+import { BUN_SCHEDULED_TASK_HANDLE_KIND as __bunwire_import_14 } from "@bunwire/bun";
 import { BUN_SCHEDULE_CONTEXT as __bunwire_import_3 } from "@bunwire/bun";
 import { CsrfMiddleware as __bunwire_import_11 } from "@bunwire/bun";
 import { GuestMiddleware as __bunwire_import_9 } from "@bunwire/bun";
 import { Job as __bunwire_import_5 } from "@bunwire/bun";
 import { Schedule as __bunwire_import_1 } from "@bunwire/bun";
+import { SignedUrlMiddleware as __bunwire_import_13 } from "@bunwire/bun";
+import { ThrottleMiddleware as __bunwire_import_12 } from "@bunwire/bun";
 import { Service as __bunwire_import_7 } from "@bunwire/core";
 
 export const applicationRegistry = defineRuntimeRegistry({
@@ -28,17 +30,19 @@ export const applicationRegistry = defineRuntimeRegistry({
     defineMiddlewareDefinition({ target: __bunwire_import_9, data: { "alias": "guest" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_10, data: { "alias": "can" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_11, data: { "alias": "csrf" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_12, data: { "alias": "throttle" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_13, data: { "alias": "signed" }, dependencies: [] }),
   ],
   providers: [
   ],
   methods: [
-    defineManagedMethodPlan({ kind: __bunwire_import_12, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "handle", data: undefined, parameters: [], middleware: [] }),
-    defineManagedMethodPlan({ kind: __bunwire_import_13, ownerKind: __bunwire_import_5.definition.kind, target: __bunwire_import_4, method: "handle", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_14, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "handle", data: undefined, parameters: [], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_15, ownerKind: __bunwire_import_5.definition.kind, target: __bunwire_import_4, method: "handle", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
   ],
   events: [
   ],
   eventAliases: [
   ],
 });
-export const BUNWIRE_REGISTRY_HASH = "6159927a27e56de565113c8a319c4473dbb0e635b9f151e51684b162f5fed7d3";
+export const BUNWIRE_REGISTRY_HASH = "dc11289cde32a19ce86b5a26ef277133a5e5a4de3a5a0120d87ca3e84e526af1";
 export default applicationRegistry;

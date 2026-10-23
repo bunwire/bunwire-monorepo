@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: `@bunwire/bun` Milestone 21 — command UX (complete).
+Current milestone: `@bunwire/bun` Milestone 24 — cross-feature hardening (complete).
 
 Overall status:
 
@@ -49,6 +49,9 @@ Overall status:
 - `@bunwire/bun` Milestone 19: Complete — [details](../packages/bun/progress/milestone-19.md)
 - `@bunwire/bun` Milestone 20: Complete — [details](../packages/bun/progress/milestone-20.md)
 - `@bunwire/bun` Milestone 21: Complete — [details](../packages/bun/progress/milestone-21.md)
+- `@bunwire/bun` Milestone 22: Complete — [details](../packages/bun/progress/milestone-22.md)
+- `@bunwire/bun` Milestone 23: Complete — [details](../packages/bun/progress/milestone-23.md)
+- `@bunwire/bun` Milestone 24: Complete — [details](../packages/bun/progress/milestone-24.md)
 
 ## Implemented
 
@@ -95,16 +98,20 @@ Overall status:
 - `@bunwire/bun` Milestone 16 completes combined runtime examples, isolated testing helpers, structured observability, security hardening/review, performance sanity checks, documentation, and compatibility verification.
 - Post-completion Bun regressions fixed: session special-key persistence and WebSocket shutdown with an unresolved handler; see the Milestone 7 and 15 progress records.
 - `@bunwire/bun` Milestone 17 adds request-scoped authorization allow/deny and named-policy helpers over the existing manager and middleware behavior.
+- `@bunwire/bun` Milestones 18–21 add signed URLs, pagination, file rules, health and maintenance controls, rate limiting, and command UX.
+- `@bunwire/bun` Milestone 22 adds negotiated partial/deferred page responses and optional separate SSR.
+- `@bunwire/bun` Milestone 23 adds validated opt-in WebSocket envelopes and authorized channel helpers.
+- `@bunwire/bun` Milestone 24 verifies combined real Bun flows and compatibility, documents security/resource boundaries, and fixes outgoing envelope validation. Its broad suite had two failures resolved in focused reruns; see the milestone record.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
-- `@bunwire/bun` Milestone 21 completed generated command help, deterministic display helpers, and explicit command prompts.
+- No Bun v2 milestone is in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- `@bunwire/bun` Milestone 22 — advanced page protocol in [the Bun v2 plan](../packages/bun/MILESTONES-v2.md).
+- Plan optional backend packages as separate work.
 
 ## Blockers
 
@@ -153,3 +160,8 @@ Overall status:
 - [`@bunwire/bun` Milestone 17](../packages/bun/progress/milestone-17.md)
 - [`@bunwire/bun` Milestone 18](../packages/bun/progress/milestone-18.md)
 - [`@bunwire/bun` Milestone 19](../packages/bun/progress/milestone-19.md)
+- [`@bunwire/bun` Milestone 20](../packages/bun/progress/milestone-20.md)
+- [`@bunwire/bun` Milestone 21](../packages/bun/progress/milestone-21.md)
+- [`@bunwire/bun` Milestone 22](../packages/bun/progress/milestone-22.md)
+- [`@bunwire/bun` Milestone 23](../packages/bun/progress/milestone-23.md)
+- [`@bunwire/bun` Milestone 24](../packages/bun/progress/milestone-24.md)

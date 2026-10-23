@@ -16,6 +16,8 @@ The architecture separates:
 
 The Bun adapter owns its page HTTP protocol and request-scoped page work. Its version 2 partial/deferred capability is negotiated per navigation, while version 1 full responses remain valid. Optional SSR uses a separate Vite server bundle and an adapter renderer callback; neither the page protocol nor React rendering belongs in Core.
 
+The Bun adapter also owns opt-in typed WebSocket envelopes and connection-scoped channel helpers. These use Bun's native socket and durable post-upgrade identity snapshot; Core and the generic compiler retain their existing managed invocation contracts.
+
 Electrobun must not be embedded into Core.
 
 The initial target is Electrobun, but Core must expose enough generic machinery that another adapter can add new controller-like class kinds and route-like method kinds without requiring Core or Vite to hard-code them.
@@ -1969,3 +1971,5 @@ That separation is the foundation of Bunwire.
 ## Bun host adapter
 
 `@bunwire/bun` is a separate first-party host adapter built on those Core and compiler contracts. Its explicit `http`, `worker`, `scheduler`, and `command` roles share generated managed metadata while owning different native resources. Bun-owned HTTP, sessions, pages, queues, schedules, commands, and WebSockets stay in that package; Core retains generic managed invocation, DI, Provider lifecycle, middleware, and direct event dispatch. `BunAdapterOptions.observability` supplies per-application structured lifecycle records, and the Bun HTTP context carries a request ID. Bun also owns signed URLs, persistence-independent pagination, and operational health/maintenance behavior; pure native `File` validation rules live in `@bunwire/validation` and are used by Bun Form Requests. The package's [guide](../packages/bun/README.md), [foundation milestones](../packages/bun/MILESTONES.md), and [v2 milestones](../packages/bun/MILESTONES-v2.md) define its concrete host behavior and release boundary.
+
+The v2 conveniences compose through that same Application bootstrap and generated registry. Page protocol 2 is opt-in for partial and deferred responses; protocol 1 remains the default. Typed WebSocket envelopes and authorized channels are opt-in above native socket methods. Queue envelopes, session persistence, and generated registry schemas retain their existing contracts. Durable backend integrations and provider presets remain separate future package decisions.

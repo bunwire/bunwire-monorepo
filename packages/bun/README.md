@@ -2,7 +2,9 @@
 
 `@bunwire/bun` is Bunwire's first-party Bun host adapter and application runtime integration.
 
-Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–20 add authorization conveniences, signed URLs, pagination, file validation, health reporting, maintenance control, and rate limiting.
+Milestones 1–15 provide the package foundation, explicit runtime roles, isolated execution scopes, generated native HTTP routes, middleware, response/exception handling, registered Form Requests, sessions/CSRF, authentication, OAuth integration, authorization, React server-driven pages, Core event/listener integration, generated jobs and workers, scheduling, managed commands, and Bun-native managed WebSockets. Milestone 16 integrates the example and compatibility checks; Milestones 17–23 add authorization conveniences, signed URLs, pagination, file validation, health reporting, maintenance control, rate limiting, command UX, advanced page responses, and WebSocket conveniences.
+
+The [Bun example](../../examples/bun-app/README.md) combines the v2 features with the existing bootstrap, generated registry, and native host. It includes signed authenticated routes with rate limiting, bounded pagination, file validation with page errors, protected partial/deferred pages, optional SSR, operational endpoints, registry inspection commands, and authorized channels. The current page wire format remains version 1 by default; partial/deferred responses require the explicit protocol 2 navigation capability. Queue envelopes, session persistence, and generated registry schemas retain their existing formats.
 
 ```ts
 // bootstrap.ts
@@ -29,6 +31,33 @@ await app.withRuntimeRegistry(registry).start();
 Decorate a class with `@WebSocket("/path")` and implement `message(client, message)`. Optional native hooks are `open(client)`, `close(client, code, reason)`, and `drain(client)`. Their client argument is Bun's actual `ServerWebSocket`, so `send`, `subscribe`, `publish`, and backpressure behavior remain native. The compiler generates the route and invocation plans and rejects duplicate socket paths or HTTP GET conflicts.
 
 Socket-class `@Use()` and global middleware authorize the HTTP upgrade. Configure `http.websocket.mapIdentity(context)` to copy durable JSON identity data into the connection; request context and session objects are disposed after upgrade. Inject `BUN_WEBSOCKET_CONNECTION` into the handler constructor for connection context, or `BUN_WEBSOCKET_MESSAGE` into a message method for its short-lived child scope. Each connection has its own handler instance. Shutdown sends code `1001`, waits `http.websocket.shutdownGraceMs` (default 5000 ms), then terminates remaining sockets. `app.stop()` does not wait indefinitely for a handler that ignores the deadline; its connection and message scopes remain alive and are disposed if the handler later settles.
+
+For typed text messages, define explicit payload validators with `defineBunWebSocketMessages({ chat: (value): value is ChatPayload => ... })`, then call `messages.decode(raw)` inside `message()`. The codec accepts only JSON `{ type, payload }` envelopes and can also `encode(type, payload)`. A malformed or binary message decoded by this helper closes that connection with code `1007`; ordinary handler failures still use `1011`. Existing handlers may continue to consume raw Bun messages.
+
+For channels, configure `http.websocket.authorizeChannel({ channel, identity, connection })` using the durable identity snapshot and inject `BUN_WEBSOCKET_CHANNELS` into the handler. `join()` returns `false` on denial without closing the socket; absent policy denies joins. `leave()`, `send(connectionId, data)`, and `broadcast(channel, data)` wrap native Bun operations. Broadcast requires the sending connection to have joined the channel and excludes the sender, following Bun's default publish behavior. Results report `sent` with native bytes, `backpressure`, `dropped`, or `missing`; they do not imply persistence, retry, or exactly-once delivery. Helper-managed channels are limited to 32 per connection by default (`maxChannelsPerConnection`) and are removed on close and shutdown. Channel names use 1–128 printable non-space ASCII characters. Native socket APIs remain available for custom behavior.
+
+```ts
+import { BUN_WEBSOCKET_CHANNELS, WebSocket, defineBunWebSocketMessages, type BunWebSocketChannels } from "@bunwire/bun";
+import { Inject } from "@bunwire/core";
+import type { ServerWebSocket } from "bun";
+
+const messages = defineBunWebSocketMessages({
+  chat: (value: unknown): value is { text: string } =>
+    typeof value === "object" && value !== null && typeof (value as { text?: unknown }).text === "string",
+});
+
+@WebSocket("/chat")
+class ChatSocket {
+  constructor(@Inject(BUN_WEBSOCKET_CHANNELS) private readonly channels: BunWebSocketChannels) {}
+
+  async message(_client: ServerWebSocket<unknown>, raw: string | Buffer) {
+    const envelope = messages.decode(raw);
+    if (envelope.type === "chat" && await this.channels.join("room:general")) {
+      this.channels.broadcast("room:general", messages.encode("chat", envelope.payload));
+    }
+  }
+}
+```
 
 ## HTTP routes
 
@@ -598,3 +627,5 @@ Use Core's canonical adapter/compiler descriptors for new managed class kinds, m
 This initial package does not include an ORM, SQL/model binding layer, Redis/SQLite queue drivers, distributed scheduler locks, full logging/tracing infrastructure, OAuth provider presets/OIDC, or host-managed browser rendering beyond the documented page/Vite integration. Memory queue and session stores are process-local. Multiple process roles require an application-supplied shared backend when they exchange work.
 
 See [MILESTONES.md](MILESTONES.md), [SECURITY_REVIEW.md](SECURITY_REVIEW.md), and [progress.md](progress.md) for the implementation plan, security boundaries, and current status.
+
+Optional OAuth/OIDC provider presets, durable session and queue stores, Redis rate limiting, distributed scheduler locks, mail, notifications, localization, and storage/S3 integrations remain separately planned. The built-in memory backends and WebSocket publish helpers do not provide cross-process durability or delivery guarantees.

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "generate": "node generate.mjs",
-    "build": "pnpm generate && vite build && tsc -b",
+    "build": "pnpm generate && vite build && vite build --ssr src/page-server.ts --outDir dist/server && tsc -b",
     "dev:pages": "vite",
     "worker": "bun dist/worker/main.js",
     "worker:demo": "bun dist/worker/main.js --demo",

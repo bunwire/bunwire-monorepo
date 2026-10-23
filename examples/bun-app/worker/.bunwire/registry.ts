@@ -8,11 +8,13 @@ import { Welcome as __bunwire_import_3 } from "../src/work.js";
 import { AuthenticateMiddleware as __bunwire_import_8 } from "@bunwire/bun";
 import { AuthorizeMiddleware as __bunwire_import_10 } from "@bunwire/bun";
 import { BUN_JOB_CONTEXT as __bunwire_import_1 } from "@bunwire/bun";
-import { BUN_JOB_HANDLE_KIND as __bunwire_import_12 } from "@bunwire/bun";
+import { BUN_JOB_HANDLE_KIND as __bunwire_import_14 } from "@bunwire/bun";
 import { CsrfMiddleware as __bunwire_import_11 } from "@bunwire/bun";
 import { GuestMiddleware as __bunwire_import_9 } from "@bunwire/bun";
 import { Job as __bunwire_import_6 } from "@bunwire/bun";
-import { Queue as __bunwire_import_13 } from "@bunwire/bun";
+import { Queue as __bunwire_import_15 } from "@bunwire/bun";
+import { SignedUrlMiddleware as __bunwire_import_13 } from "@bunwire/bun";
+import { ThrottleMiddleware as __bunwire_import_12 } from "@bunwire/bun";
 import { Service as __bunwire_import_4 } from "@bunwire/core";
 
 const __bunwire_listener_0 = defineListenerDefinition({ target: __bunwire_import_2, event: __bunwire_import_3, dependencies: [{ index: 0, token: __bunwire_import_0 }, { index: 1, token: __bunwire_import_1 }] });
@@ -20,7 +22,7 @@ const __bunwire_event_0 = defineEventDefinition({ target: __bunwire_import_3, li
 
 export const applicationRegistry = defineRuntimeRegistry({
   classAttachments: [
-    defineManagedClassAttachment({ target: __bunwire_import_2, definition: __bunwire_import_13.definition, data: { "backoff": [], "id": "example.worker-welcome", "queue": "default", "tries": 2 } }),
+    defineManagedClassAttachment({ target: __bunwire_import_2, definition: __bunwire_import_15.definition, data: { "backoff": [], "id": "example.worker-welcome", "queue": "default", "tries": 2 } }),
   ],
   classes: [
     { kind: __bunwire_import_4.definition.kind, target: __bunwire_import_0, data: { "scope": "singleton" }, scope: "singleton", dependencies: [] },
@@ -32,12 +34,14 @@ export const applicationRegistry = defineRuntimeRegistry({
     defineMiddlewareDefinition({ target: __bunwire_import_9, data: { "alias": "guest" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_10, data: { "alias": "can" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_11, data: { "alias": "csrf" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_12, data: { "alias": "throttle" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_13, data: { "alias": "signed" }, dependencies: [] }),
   ],
   providers: [
   ],
   methods: [
-    defineManagedMethodPlan({ kind: __bunwire_import_12, ownerKind: __bunwire_import_6.definition.kind, target: __bunwire_import_5, method: "handle", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
-    defineManagedMethodPlan({ kind: __bunwire_import_12, ownerKind: __bunwire_import_6.definition.kind, target: __bunwire_import_7, method: "handle", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_14, ownerKind: __bunwire_import_6.definition.kind, target: __bunwire_import_5, method: "handle", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_14, ownerKind: __bunwire_import_6.definition.kind, target: __bunwire_import_7, method: "handle", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
     __bunwire_listener_0.handle,
   ],
   events: [
@@ -46,5 +50,5 @@ export const applicationRegistry = defineRuntimeRegistry({
   eventAliases: [
   ],
 });
-export const BUNWIRE_REGISTRY_HASH = "9ae9c69ea0454201a3efec42bd2674fa7d8efefa2fb363f4f040b63fe4fb5f6e";
+export const BUNWIRE_REGISTRY_HASH = "ca28f5f303ba8601a25b4a84d9dc93a0ff26cc555ac653dcc93fab6cc294b00f";
 export default applicationRegistry;

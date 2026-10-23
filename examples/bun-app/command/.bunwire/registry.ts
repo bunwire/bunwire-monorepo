@@ -4,10 +4,12 @@ import { GreetCommand as __bunwire_import_0 } from "../src/commands.js";
 import { GreetingService as __bunwire_import_2 } from "../src/commands.js";
 import { AuthenticateMiddleware as __bunwire_import_4 } from "@bunwire/bun";
 import { AuthorizeMiddleware as __bunwire_import_6 } from "@bunwire/bun";
-import { BUN_COMMAND_HANDLE_KIND as __bunwire_import_8 } from "@bunwire/bun";
+import { BUN_COMMAND_HANDLE_KIND as __bunwire_import_10 } from "@bunwire/bun";
 import { Command as __bunwire_import_1 } from "@bunwire/bun";
 import { CsrfMiddleware as __bunwire_import_7 } from "@bunwire/bun";
 import { GuestMiddleware as __bunwire_import_5 } from "@bunwire/bun";
+import { SignedUrlMiddleware as __bunwire_import_9 } from "@bunwire/bun";
+import { ThrottleMiddleware as __bunwire_import_8 } from "@bunwire/bun";
 import { Service as __bunwire_import_3 } from "@bunwire/core";
 
 export const applicationRegistry = defineRuntimeRegistry({
@@ -18,16 +20,18 @@ export const applicationRegistry = defineRuntimeRegistry({
     defineMiddlewareDefinition({ target: __bunwire_import_5, data: { "alias": "guest" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_6, data: { "alias": "can" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_7, data: { "alias": "csrf" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_8, data: { "alias": "throttle" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_9, data: { "alias": "signed" }, dependencies: [] }),
   ],
   providers: [
   ],
   methods: [
-    defineManagedMethodPlan({ kind: __bunwire_import_8, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "handle", data: undefined, parameters: [{ source: "resolver", methodIndex: 0, resolverId: createParameterResolverId("bun.command-argument"), data: { "description": "Name to greet.", "kind": "argument", "name": "name", "required": true, "type": "string" } }, { source: "resolver", methodIndex: 1, resolverId: createParameterResolverId("bun.command-option"), data: { "alias": "c", "default": 1, "description": "Number of greetings.", "kind": "option", "name": "count", "required": false, "type": "integer" } }, { source: "resolver", methodIndex: 2, resolverId: createParameterResolverId("bun.command-flag"), data: { "alias": "e", "description": "Use excited punctuation.", "kind": "flag", "name": "excited" } }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_10, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "handle", data: undefined, parameters: [{ source: "resolver", methodIndex: 0, resolverId: createParameterResolverId("bun.command-argument"), data: { "description": "Name to greet.", "kind": "argument", "name": "name", "required": true, "type": "string" } }, { source: "resolver", methodIndex: 1, resolverId: createParameterResolverId("bun.command-option"), data: { "alias": "c", "default": 1, "description": "Number of greetings.", "kind": "option", "name": "count", "required": false, "type": "integer" } }, { source: "resolver", methodIndex: 2, resolverId: createParameterResolverId("bun.command-flag"), data: { "alias": "e", "description": "Use excited punctuation.", "kind": "flag", "name": "excited" } }], middleware: [] }),
   ],
   events: [
   ],
   eventAliases: [
   ],
 });
-export const BUNWIRE_REGISTRY_HASH = "ceee3c58e97236f8518c244743f25193d6b3731d08e7a47fd3abae6d113afe96";
+export const BUNWIRE_REGISTRY_HASH = "afa36ca6b42fe149da30eb17f6de5783cbae4cd04dc766cb5aaa9ed0db6b07c3";
 export default applicationRegistry;

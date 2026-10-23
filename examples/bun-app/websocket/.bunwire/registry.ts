@@ -3,13 +3,15 @@ import { createParameterResolverId, defineManagedMethodPlan, defineMiddlewareAtt
 import { ChatSocket as __bunwire_import_0 } from "../src/chat.js";
 import { AuthenticateMiddleware as __bunwire_import_3 } from "@bunwire/bun";
 import { AuthorizeMiddleware as __bunwire_import_5 } from "@bunwire/bun";
-import { BUN_WEBSOCKET_CLOSE_KIND as __bunwire_import_10 } from "@bunwire/bun";
+import { BUN_WEBSOCKET_CLOSE_KIND as __bunwire_import_12 } from "@bunwire/bun";
 import { BUN_WEBSOCKET_CONNECTION as __bunwire_import_2 } from "@bunwire/bun";
-import { BUN_WEBSOCKET_MESSAGE as __bunwire_import_9 } from "@bunwire/bun";
-import { BUN_WEBSOCKET_MESSAGE_KIND as __bunwire_import_8 } from "@bunwire/bun";
-import { BUN_WEBSOCKET_OPEN_KIND as __bunwire_import_7 } from "@bunwire/bun";
+import { BUN_WEBSOCKET_MESSAGE as __bunwire_import_11 } from "@bunwire/bun";
+import { BUN_WEBSOCKET_MESSAGE_KIND as __bunwire_import_10 } from "@bunwire/bun";
+import { BUN_WEBSOCKET_OPEN_KIND as __bunwire_import_9 } from "@bunwire/bun";
 import { CsrfMiddleware as __bunwire_import_6 } from "@bunwire/bun";
 import { GuestMiddleware as __bunwire_import_4 } from "@bunwire/bun";
+import { SignedUrlMiddleware as __bunwire_import_8 } from "@bunwire/bun";
+import { ThrottleMiddleware as __bunwire_import_7 } from "@bunwire/bun";
 import { WebSocket as __bunwire_import_1 } from "@bunwire/bun";
 
 export const applicationRegistry = defineRuntimeRegistry({
@@ -19,18 +21,20 @@ export const applicationRegistry = defineRuntimeRegistry({
     defineMiddlewareDefinition({ target: __bunwire_import_4, data: { "alias": "guest" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_5, data: { "alias": "can" }, dependencies: [] }),
     defineMiddlewareDefinition({ target: __bunwire_import_6, data: { "alias": "csrf" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_7, data: { "alias": "throttle" }, dependencies: [] }),
+    defineMiddlewareDefinition({ target: __bunwire_import_8, data: { "alias": "signed" }, dependencies: [] }),
   ],
   providers: [
   ],
   methods: [
-    defineManagedMethodPlan({ kind: __bunwire_import_7, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "open", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
-    defineManagedMethodPlan({ kind: __bunwire_import_8, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "message", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }, { source: "transport", methodIndex: 1, argumentIndex: 1, optional: false, rest: false }, { source: "container", methodIndex: 2, token: __bunwire_import_9 }], middleware: [] }),
-    defineManagedMethodPlan({ kind: __bunwire_import_10, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "close", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }, { source: "transport", methodIndex: 1, argumentIndex: 1, optional: false, rest: false }, { source: "transport", methodIndex: 2, argumentIndex: 2, optional: false, rest: false }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_9, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "open", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_10, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "message", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }, { source: "transport", methodIndex: 1, argumentIndex: 1, optional: false, rest: false }, { source: "container", methodIndex: 2, token: __bunwire_import_11 }], middleware: [] }),
+    defineManagedMethodPlan({ kind: __bunwire_import_12, ownerKind: __bunwire_import_1.definition.kind, target: __bunwire_import_0, method: "close", data: undefined, parameters: [{ source: "transport", methodIndex: 0, argumentIndex: 0, optional: false, rest: false }, { source: "transport", methodIndex: 1, argumentIndex: 1, optional: false, rest: false }, { source: "transport", methodIndex: 2, argumentIndex: 2, optional: false, rest: false }], middleware: [] }),
   ],
   events: [
   ],
   eventAliases: [
   ],
 });
-export const BUNWIRE_REGISTRY_HASH = "ab0b8f61e269d4acbb19faf2b135a36a82781982e94a4df1e5140eee95d83b32";
+export const BUNWIRE_REGISTRY_HASH = "03fbdd91c0f308b4991ea570d9ea115602efcbebe735276a54fd510ba96cbd0d";
 export default applicationRegistry;

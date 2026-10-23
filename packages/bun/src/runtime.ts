@@ -380,9 +380,11 @@ export class BunAdapter<Principal = unknown> extends Adapter<BunRuntimeContext> 
       const socket = http.websocket;
       if (typeof socket !== "object" || socket === null
         || (socket.mapIdentity !== undefined && typeof socket.mapIdentity !== "function")
+          || (socket.authorizeChannel !== undefined && typeof socket.authorizeChannel !== "function")
+          || (socket.maxChannelsPerConnection !== undefined && (!Number.isSafeInteger(socket.maxChannelsPerConnection) || socket.maxChannelsPerConnection < 1))
         || (socket.shutdownGraceMs !== undefined && (!Number.isSafeInteger(socket.shutdownGraceMs) || socket.shutdownGraceMs < 0))
         || (socket.backpressureLimit !== undefined && (!Number.isSafeInteger(socket.backpressureLimit) || socket.backpressureLimit < 1))) {
-        throw new BunAdapterError("BunAdapter WebSocket options require a callable identity mapper and non-negative grace/positive backpressure limits.");
+          throw new BunAdapterError("BunAdapter WebSocket options require callable identity/channel policies and positive channel/backpressure limits and non-negative shutdown grace.");
       }
     }
     validateQueueOptions(options.queues);

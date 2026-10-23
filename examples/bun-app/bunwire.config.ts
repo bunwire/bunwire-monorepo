@@ -6,5 +6,6 @@ export default defineBunwireConfig({
   pages: {
     root: "./src/pages",
     entry: "./src/frontend.ts",
+    ssrEntry: "./src/page-server.ts",
   },
 });

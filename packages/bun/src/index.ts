@@ -19,6 +19,11 @@ export {
 } from "./websocket.js";
 export type { BunWebSocketIdentity, BunWebSocketOptions } from "./websocket-runtime.js";
 export {
+  BUN_WEBSOCKET_CHANNELS, BunWebSocketMalformedMessageError, defineBunWebSocketMessages,
+  type BunWebSocketChannels, type BunWebSocketChannelAuthorization,
+  type BunWebSocketDelivery, type BunWebSocketFrame, type BunWebSocketPayloadValidator,
+} from "./websocket-conveniences.js";
+export {
   Argument,
   Command,
   Flag,

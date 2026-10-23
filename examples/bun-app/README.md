@@ -33,6 +33,16 @@ For a single-process exercise of the major systems together, set `BUNWIRE_EXAMPL
 
 The generated `POST /api/integrated/:id` route runs CSRF, session authentication, ability authorization, a DI-backed Form Request, direct event dispatch, queued listener dispatch, and job dispatch. `GET /api/integrated/status/:id` reports their audit counts. `GET /api/page` and `/api/page/dashboard` show HTML and navigation responses; invalid page submissions flash validation errors/old input into the next page response. `GET /api/login` and `/api/logout` change the session principal. The same HTTP server exposes an authenticated `/api/chat` WebSocket with a durable identity snapshot. Write `stop` to stdin to drain the worker, sockets, scopes, and server through `app.stop()`.
 
+## v2 integrated flows
+
+The same bootstrap also configures signed URLs, pagination, a user-keyed rate limit, health endpoints, and maintenance mode. After `GET /api/login`, `GET /api/v2/report-link/42` supplies a signed link. `GET` on that link requires the current session and is limited to two requests per minute for that principal. `/api/v2/reports?page=2&perPage=2&filter=demo` returns bounded items and navigation links retaining the filter. `/api/v2/upload` accepts a multipart PNG file of at most 1024 bytes; invalid page submissions redirect to `/api/v2/upload-page` with one-request validation errors. `/api/v2/private-page` checks the dashboard ability on full, partial, and deferred requests. These additions use the existing application bootstrap and generated registry.
+
+The build creates separate browser and SSR bundles. Set `BUNWIRE_EXAMPLE_SSR=1` when starting the example from this directory to enable server rendering from the generated server manifest; without it, the same bootstrap serves the client-rendered page shell. `GET /api/page` demonstrates SSR and client hydration, while protocol 2 page navigation remains opt-in.
+
+In integrated mode, write `maintenance:on` or `maintenance:off` to stdin. Liveness remains available while maintenance is on, readiness returns 503, and ordinary routes return 503. Set `BUNWIRE_EXAMPLE_OPERATOR_KEY` to enable the explicitly checked `X-Example-Operator-Key` bypass; no bypass is available without that environment variable. Write `stop` to exercise shutdown. The example signing and session secrets are local development defaults; set `BUNWIRE_EXAMPLE_URL_SECRET` and `BUNWIRE_SESSION_SECRET` to independent production secrets.
+
+The authenticated `/api/v2/chat` route demonstrates validated `{ type, payload }` messages and identity-authorized `user:example-user` channel joins. The original `/api/chat` route remains a native raw-message example. To inspect the **same** HTTP application's generated registry without starting its server, run `bun inspect.ts routes:list` or `bun inspect.ts list` from this directory. `tests/bun/milestone-24/example-process.test.ts` exercises these flows with real Bun processes and multiple WebSocket clients.
+
 `tests/bun/milestone-16/example-process.test.ts` executes this flow, including an authenticated Bun WebSocket client and shutdown. `scheduler-worker.test.ts` drives the generated scheduler example into a live memory worker at a fixed timestamp.
 
 ## Worker example

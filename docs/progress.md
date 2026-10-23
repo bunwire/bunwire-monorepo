@@ -2,7 +2,9 @@
 
 ## Current Status
 
-Current milestone: `@bunwire/bun` Milestone 24 — cross-feature hardening (complete).
+Current milestone: Project Milestone 15 — shared static expression resolver (complete).
+
+The [static expressions and modular composition track, Milestones 15–22](STATIC_COMPOSITION_MILESTONES.md), has started. See [Milestone 15 details](progress/milestone-15.md). These project milestone numbers are separate from Bun package numbering.
 
 Post-completion Bun maintenance: [source layout reorganization](../packages/bun/progress/source-layout-2026-10-23.md); all public entrypoints remain available.
 
@@ -30,6 +32,9 @@ Overall status:
 - Prior-milestone regression closure: Complete — [details](progress/prior-milestone-regression-closure.md)
 - Milestone 13: Complete — [details](progress/milestone-13.md)
 - Milestone 14: Complete — [details](progress/milestone-14.md)
+- Milestone 15: Complete — [details](progress/milestone-15.md)
+- Milestones 16–22: Not started — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
+- Project Milestones 15–22: Planned — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
 - `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
 - `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
 - `@bunwire/bun` Milestone 3: Complete — [details](../packages/bun/progress/milestone-03.md)
@@ -82,6 +87,7 @@ Overall status:
 - Prior-milestone regression closure adds nominal runtime tokens, constructable class-token validation, public generated import identities, host-aware path identity, exact virtual-module declarations, byte-stable shared artifact generation, and real Vite source/config invalidation.
 - Milestone 13 prepares audited public `0.1.0` packages, exact export/tarball contracts, precise bootstrap diagnostics, a buildable fake second-adapter example, release documentation, deterministic performance/churn checks, and CI release gates without publishing or tagging.
 - Milestone 14 adds canonical Core events and aliases, compiler-validated DI-managed listeners, deterministic generated relationships, and exact-identity sequential dispatch with isolated invocation scopes.
+- Milestone 15 adds the internal compiler static expression resolver with canonical references, provenance/dependency tracking, source boundaries, mutation checks, fixed budgets, and direct TypeScript-program fixture verification. Metadata consumers retain existing syntax until Milestone 16.
 - `@bunwire/bun` Milestone 1 adds the public Bun adapter package, immutable runtime roles, generated-registry consumption, Core-owned terminal shutdown and startup rollback, signal cleanup, a minimal Bun example, and complete workspace/release verification.
 - `@bunwire/bun` Milestone 2 adds public Bun execution scopes, isolated contextual bindings, per-scope service caching, nested WebSocket scope identity, deterministic explicit disposal, active-run shutdown coordination, and global-context architecture enforcement.
 - `@bunwire/bun` Milestone 3 adds Core Controller-based HTTP decorators, compiler-validated generated native routes, explicit frozen HTTP context, request-scope inheritance into Core invocation, deterministic 404/405/500 behavior, and graceful `Bun.serve()` lifecycle integration.
@@ -110,11 +116,13 @@ Overall status:
 ## Current Work
 
 - No Bun v2 milestone is in progress.
+- Project Milestone 15 is complete; no static composition milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- Plan optional backend packages as separate work.
+- Project Milestone 16 — expressions throughout managed metadata, followed by Milestones 17–22 in the [detailed roadmap](STATIC_COMPOSITION_MILESTONES.md).
+- Optional backend packages remain separate future work.
 
 ## Blockers
 
@@ -144,6 +152,7 @@ Overall status:
 - [Prior-milestone regression closure](progress/prior-milestone-regression-closure.md)
 - [Milestone 13](progress/milestone-13.md)
 - [Milestone 14](progress/milestone-14.md)
+- [Milestone 15](progress/milestone-15.md)
 - [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)
 - [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
 - [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)

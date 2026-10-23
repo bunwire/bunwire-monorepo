@@ -1351,6 +1351,18 @@ Core owns canonical direct events completely; no High/Medium correctness finding
 
 ---
 
+# Static Expressions and Modular Composition — Milestones 15–22
+
+Status: Milestone 15 is complete; Milestones 16–22 are not started. See [Milestone 15 implementation record](progress/milestone-15.md).
+
+The detailed implementation order, static language contract, required automated tests, and acceptance criteria are defined in [STATIC_COMPOSITION_MILESTONES.md](STATIC_COMPOSITION_MILESTONES.md).
+
+This project-wide track follows Milestone 14 and is separate from the Bun package's milestone numbering. It covers shared static expressions throughout managed metadata, composable middleware/schedule values, imported policy helpers, repeated Application policy blocks, bounded `for...of` expansion, dependency invalidation, and cross-package hardening.
+
+The compiler owns resolution and expansion; Core owns Application configuration rules; adapters retain metadata semantics. Existing architecture restrictions describe current behavior until the corresponding milestone implements and documents its planned changes. Config parsing, adapter discovery, arbitrary application/Provider execution, durable backends, and CLI tooling are outside this track.
+
+---
+
 # Release Checkpoints
 
 ## Checkpoint A — Core Runtime Kernel

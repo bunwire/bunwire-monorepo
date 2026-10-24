@@ -11,6 +11,7 @@
     "experimentalDecorators": true,
     "noEmit": true,
     "paths": {
+      "proof-static": ["tests/fixtures/milestone-16-static-metadata/adapter.ts"],
       "@bunwire/bun/client": ["packages/bun/src/client.ts"],
       "@bunwire/bun/react/server": ["packages/bun/src/react-server.ts"],
       "@bunwire/bun/react": ["packages/bun/src/react.ts"],

@@ -38,6 +38,12 @@ function expectFailure(file: string, code: string, message: RegExp): void {
 }
 
 describe("Middleware Redesign 12C — attachment diagnostics", () => {
+  it.each(["invalid-identifier.ts", "invalid-template.ts"])("accepts resolved static references in %s", (file) => {
+    const result = analyzeBunwireProgram({ projectRoot: repositoryRoot,
+      sourceFiles: [path.join(fixtureRoot, "valid/middleware.ts"), path.join(fixtureRoot, file)], extensions,
+      compilerOptions: { baseUrl: repositoryRoot, paths: { "@bunwire/core": ["packages/core/src/index.ts"], "@bunwire/electrobun": ["packages/electrobun/src/index.ts"] } } });
+    expect(result.classes.find((entry) => entry.name === "Invalid")?.middleware[0]?.target.symbolName).toBeTruthy();
+  });
   it.each([
     ["invalid-unknown-alias.ts", /unknown middleware alias/i],
     ["invalid-empty-reference.ts", /names must not be empty/i],
@@ -47,9 +53,7 @@ describe("Middleware Redesign 12C — attachment diagnostics", () => {
     ["invalid-escaping.ts", /do not support escaping/i],
     ["invalid-escaping-colon.ts", /do not support escaping/i],
     ["invalid-no-arguments.ts", /at least one middleware reference/i],
-    ["invalid-identifier.ts", /must be a direct string literal/i],
-    ["invalid-template.ts", /direct middleware class reference or string literal/i],
-    ["invalid-call.ts", /direct middleware class reference or string literal/i],
+    ["invalid-call.ts", /arbitrary calls/i],
     ["invalid-target.ts", /not a canonical managed middleware class/i],
     ["invalid-counterfeit-middleware.ts", /not a canonical managed middleware class/i],
     ["invalid-class-callback.ts", /not a canonical managed middleware class/i],

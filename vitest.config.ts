@@ -12,6 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "proof-static": fileURLToPath(new URL("./tests/fixtures/milestone-16-static-metadata/adapter.ts", import.meta.url)),
       "@bunwire/bun/client": fileURLToPath(new URL("./packages/bun/src/client.ts", import.meta.url)),
       "@bunwire/bun/react/server": fileURLToPath(new URL("./packages/bun/src/react-server.ts", import.meta.url)),
       "@bunwire/bun/react": fileURLToPath(new URL("./packages/bun/src/react.ts", import.meta.url)),

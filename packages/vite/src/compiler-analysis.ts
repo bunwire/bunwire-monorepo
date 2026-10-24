@@ -32,6 +32,7 @@ import {
 } from "./middleware-policy-analysis.js";
 import { analyzeSchedulePolicySyntax } from "./schedule-policy-analysis.js";
 import { canonicalCompilerPath } from "./path-identity.js";
+import { ManagedMetadataResolver } from "./managed-metadata.js";
 
 export interface BunwireProgramOptions {
   readonly sourceFiles: readonly string[];
@@ -514,7 +515,9 @@ function evaluateDecoratorValue(expression: ts.Expression): unknown {
 
 function decoratorData(
   match: DecoratorMatch<{ readonly createMetadata: (options: any) => unknown }>,
+  metadata: ManagedMetadataResolver,
 ): unknown {
+  metadata.allowDecorator(match.call);
   const arguments_ = match.call?.arguments ?? [];
   if (arguments_.length > 1) {
     fail(
@@ -525,8 +528,9 @@ function decoratorData(
   }
   const argument = arguments_[0];
   try {
-    return match.definition.createMetadata(argument ? evaluateDecoratorValue(argument) : undefined);
+    return match.definition.createMetadata(argument ? metadata.data(argument) : undefined);
   } catch (cause) {
+    if (cause instanceof BunwireCompilerError) throw cause;
     throw new BunwireCompilerError(
       "DECORATOR_ARGUMENT_INVALID",
       `Decorator "${match.id}" metadata could not be compiled: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -1107,6 +1111,7 @@ function validateDirectClassExport(
 function analyzeEventClass(
   declaration: ts.ClassDeclaration,
   checker: ts.TypeChecker,
+  metadata: ManagedMetadataResolver,
 ): AnalyzedEventClass {
   const name = declaration.name as ts.Identifier;
   if (hasModifier(declaration, ts.SyntaxKind.AbstractKeyword)) {
@@ -1145,19 +1150,19 @@ function analyzeEventClass(
         member,
       );
     }
-    if (!member.initializer || !ts.isStringLiteral(member.initializer)
-      || member.initializer.text.trim().length === 0) {
+    const value = member.initializer ? metadata.resolve(member.initializer, "EVENT_ALIAS_INVALID") : undefined;
+    if (value?.kind !== "scalar" || typeof value.value !== "string" || value.value.trim().length === 0) {
       fail(
         "EVENT_ALIAS_INVALID",
-        "Event alias must be initialized with a non-empty direct string literal.",
+        "Event alias must resolve to a non-empty static string.",
         member.initializer ?? member,
       );
     }
     if (alias !== undefined) {
       fail("EVENT_ALIAS_INVALID", `Event class "${name.text}" declares alias more than once.`, member);
     }
-    alias = member.initializer.text;
-    aliasLocation = locationOf(member);
+    alias = value.value;
+    aliasLocation = value.origin;
   }
   return Object.freeze({ alias, aliasLocation });
 }
@@ -1308,54 +1313,39 @@ function validateNoMiddlewareConstructorAssignments(
 function middlewareStringLiteral(
   initializer: ts.Expression,
   key: MiddlewareMetadataKey,
+  metadata: ManagedMetadataResolver,
 ): string {
-  if (!ts.isStringLiteral(initializer) || initializer.text.trim().length === 0) {
-    fail(
-      "MIDDLEWARE_METADATA_INVALID",
-      `Middleware metadata field "${key}" must be initialized with a non-empty direct string literal.`,
-      initializer,
-    );
+  const value = metadata.resolve(initializer, "MIDDLEWARE_METADATA_INVALID");
+  if (value.kind !== "scalar" || typeof value.value !== "string" || value.value.trim().length === 0) {
+    throw new BunwireCompilerError("MIDDLEWARE_METADATA_INVALID",
+      `Middleware metadata field "${key}" must resolve to a non-empty static string.`, { location: value.origin });
   }
-  return initializer.text;
+  return value.value;
 }
 
 function middlewareStringArray(
   initializer: ts.Expression,
   key: Exclude<MiddlewareMetadataKey, "alias">,
+  metadata: ManagedMetadataResolver,
 ): readonly string[] {
-  if (!ts.isArrayLiteralExpression(initializer)) {
-    fail(
-      "MIDDLEWARE_METADATA_INVALID",
-      `Middleware metadata field "${key}" must be initialized with a direct array literal of non-empty string literals.`,
-      initializer,
-    );
+  const resolved = metadata.resolve(initializer, "MIDDLEWARE_METADATA_INVALID");
+  if (resolved.kind !== "array") {
+    throw new BunwireCompilerError("MIDDLEWARE_METADATA_INVALID",
+      `Middleware metadata field "${key}" must resolve to an array of non-empty strings.`, { location: resolved.origin });
   }
   const values: string[] = [];
   const seen = new Set<string>();
-  for (const element of initializer.elements) {
-    if (ts.isSpreadElement(element)) {
-      fail(
-        "MIDDLEWARE_METADATA_INVALID",
-        `Middleware metadata field "${key}" does not support spread elements.`,
-        element,
-      );
+  for (const element of resolved.items) {
+    if (element.kind !== "scalar" || typeof element.value !== "string" || element.value.trim().length === 0) {
+      throw new BunwireCompilerError("MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" must contain only non-empty strings.`, { location: element.origin });
     }
-    if (!ts.isStringLiteral(element) || element.text.trim().length === 0) {
-      fail(
-        "MIDDLEWARE_METADATA_INVALID",
-        `Middleware metadata field "${key}" must contain only non-empty direct string literals.`,
-        element,
-      );
+    if (seen.has(element.value)) {
+      throw new BunwireCompilerError("MIDDLEWARE_METADATA_INVALID",
+        `Middleware metadata field "${key}" contains duplicate value ${JSON.stringify(element.value)}.`, { location: element.origin });
     }
-    if (seen.has(element.text)) {
-      fail(
-        "MIDDLEWARE_METADATA_INVALID",
-        `Middleware metadata field "${key}" contains duplicate value ${JSON.stringify(element.text)}.`,
-        element,
-      );
-    }
-    seen.add(element.text);
-    values.push(element.text);
+    seen.add(element.value);
+    values.push(element.value);
   }
   return Object.freeze(values);
 }
@@ -1363,6 +1353,7 @@ function middlewareStringArray(
 function analyzeMiddlewareClass(
   declaration: ts.ClassDeclaration,
   checker: ts.TypeChecker,
+  metadata: ManagedMetadataResolver,
 ): MiddlewareClassAnalysis {
   const name = declaration.name as ts.Identifier;
   if (hasModifier(declaration, ts.SyntaxKind.AbstractKeyword)) {
@@ -1420,10 +1411,10 @@ function analyzeMiddlewareClass(
       );
     }
     if (key === "alias") {
-      data.alias = middlewareStringLiteral(member.initializer, key);
+      data.alias = middlewareStringLiteral(member.initializer, key, metadata);
       aliasNode = member;
     } else {
-      data[key] = middlewareStringArray(member.initializer, key);
+      data[key] = middlewareStringArray(member.initializer, key, metadata);
     }
   }
   if (data.only !== undefined && data.except !== undefined) {
@@ -1513,6 +1504,7 @@ function analyzeConstructor(
 function analyzeMethodParameters(
   method: ts.MethodDeclaration,
   checker: ts.TypeChecker,
+  metadata: ManagedMetadataResolver,
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind }>,
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
   injectDefinitions: ResolvedCompilerDefinitions<typeof Inject.definition>,
@@ -1538,7 +1530,7 @@ function analyzeMethodParameters(
         methodIndex,
         resolverId: injector.definition.resolverId,
         injectorId: injector.id,
-        data: decoratorData(injector),
+        data: decoratorData(injector, metadata),
         location: locationOf(parameter),
       }));
       return;
@@ -1663,29 +1655,30 @@ function contributedMiddlewareDefinitions(
 }
 
 function parseMiddlewareAliasReference(
-  expression: ts.StringLiteral,
+  expression: ts.Expression,
   diagnosticCode: BunwireCompilerError["code"] = "MIDDLEWARE_ATTACHMENT_INVALID",
+  text = ts.isStringLiteralLike(expression) ? expression.text : "",
 ): { readonly name: string; readonly parameters: readonly string[] } {
-  if (/\\[,:]/.test(expression.getText())) {
+  if (/\\[,:]/.test(expression.getText()) || /\\[,:]/.test(text)) {
     fail(
       diagnosticCode,
       "Middleware references do not support escaping ':' or ','.",
       expression,
     );
   }
-  const boundary = expression.text.indexOf(":");
-  const name = (boundary < 0 ? expression.text : expression.text.slice(0, boundary)).trim();
+  const boundary = text.indexOf(":");
+  const name = (boundary < 0 ? text : text.slice(0, boundary)).trim();
   if (name.length === 0) {
     fail(diagnosticCode, "Middleware reference names must not be empty.", expression);
   }
   if (boundary < 0) {
     return { name, parameters: Object.freeze([]) };
   }
-  const parameters = expression.text.slice(boundary + 1).split(",").map((entry) => entry.trim());
+  const parameters = text.slice(boundary + 1).split(",").map((entry) => entry.trim());
   if (parameters.some((entry) => entry.length === 0)) {
     fail(
       diagnosticCode,
-      `Middleware reference ${JSON.stringify(expression.text)} contains an empty parameter.`,
+      `Middleware reference ${JSON.stringify(text)} contains an empty parameter.`,
       expression,
     );
   }
@@ -1696,12 +1689,14 @@ function analyzeUseEntries(
   uses: readonly DecoratorMatch<typeof Use.definition>[],
   ownerLabel: string,
   checker: ts.TypeChecker,
+  metadata: ManagedMetadataResolver,
   middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
   middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
   middlewareGroups: ReadonlyMap<string, readonly AnalyzedMiddlewareAttachment[]> = new Map(),
 ): readonly AnalyzedMiddlewareAttachment[] {
   const entries: AnalyzedMiddlewareAttachment[] = [];
   for (const use of uses) {
+    metadata.allowDecorator(use.call);
     const useArguments = use.call?.arguments ?? [];
     if (useArguments.length === 0) {
       fail(
@@ -1712,8 +1707,17 @@ function analyzeUseEntries(
     }
     for (const argument of useArguments) {
       const expression = unwrapExpression(argument);
-      if (ts.isStringLiteral(expression)) {
-        const parsed = parseMiddlewareAliasReference(expression);
+      const directSymbol = symbolAtExpression(checker, expression);
+      const isClass = directSymbol && middlewareBySymbol.has(directSymbol);
+      if (!isClass) {
+        if (checker.getTypeAtLocation(expression).getCallSignatures().length > 0) {
+          fail("MIDDLEWARE_ATTACHMENT_INVALID", `@Use() argument on ${ownerLabel} is not a canonical managed middleware class.`, expression);
+        }
+        const value = metadata.resolve(expression, "MIDDLEWARE_ATTACHMENT_INVALID");
+        if (value.kind !== "scalar" || typeof value.value !== "string") {
+          fail("MIDDLEWARE_ATTACHMENT_INVALID", `@Use() argument on ${ownerLabel} is not a canonical managed middleware class or static string reference.`, expression);
+        }
+        const parsed = parseMiddlewareAliasReference(expression, "MIDDLEWARE_ATTACHMENT_INVALID", value.value);
         const target = middlewareAliases.get(parsed.name);
         if (target) {
           entries.push(Object.freeze({
@@ -1748,14 +1752,6 @@ function analyzeUseEntries(
         fail(
           "MIDDLEWARE_ATTACHMENT_INVALID",
           `@Use() argument "${expression.getText()}" on ${ownerLabel} must be a direct middleware class reference or string literal.`,
-          expression,
-        );
-      }
-      const type = checker.getTypeAtLocation(expression);
-      if ((type.flags & ts.TypeFlags.StringLike) !== 0) {
-        fail(
-          "MIDDLEWARE_ATTACHMENT_INVALID",
-          `@Use() string reference "${expression.getText()}" on ${ownerLabel} must be a direct string literal.`,
           expression,
         );
       }
@@ -2007,6 +2003,7 @@ function analyzeManagedMethods(
   declaration: ts.ClassDeclaration,
   ownerKind: ManagedClassKind | undefined,
   checker: ts.TypeChecker,
+  metadata: ManagedMetadataResolver,
   managedBySymbol: ReadonlyMap<ts.Symbol, { readonly kind: ManagedClassKind }>,
   methodDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly kind: ManagedMethodKind; readonly createMetadata: (options: any) => unknown }>,
   injectorDefinitions: ResolvedCompilerDefinitions<CompilerDefinition & { readonly resolverId: ParameterResolverId; readonly createMetadata: (options: any) => unknown }>,
@@ -2106,6 +2103,7 @@ function analyzeManagedMethods(
     const parameters = analyzeMethodParameters(
       member,
       checker,
+      metadata,
       managedBySymbol,
       injectorDefinitions,
       injectDefinitions,
@@ -2116,6 +2114,7 @@ function analyzeManagedMethods(
       uses,
       `managed method "${member.name.getText()}"`,
       checker,
+      metadata,
       middlewareBySymbol,
       middlewareAliases,
       middlewareGroups,
@@ -2137,7 +2136,7 @@ function analyzeManagedMethods(
       name: member.name.text,
       kind: decorator.definition.kind,
       decoratorId: decorator.id,
-      data: decoratorData(decorator),
+      data: decoratorData(decorator, metadata),
       location: locationOf(member),
       parameters,
       minimumCallerArguments: highestRequired + 1,
@@ -2191,6 +2190,7 @@ function validateConstructorCycles(
 export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireCompilerAnalysis {
   const context = createBunwireProgramInternal(options, compilerSymbolRootNames(options));
   const checker = context.checker;
+  const metadata = new ManagedMetadataResolver(context.program, options.projectRoot);
   const compilationHandlers = new Map<string, ManagedClassCompilationHandlerData>();
   for (const handler of options.extensions.metadataHandlers) {
     if (!isObject(handler.data) || handler.data.type !== "bunwire.managed-class-compilation") continue;
@@ -2327,7 +2327,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       }
     };
     if (attachmentDefinitions.byId.size) rejectInheritedAttachments(declaration);
-    attachmentsByClass.set(declaration, Object.freeze(attachments.map((match) => Object.freeze({ definition: match.definition, data: decoratorData(match), location: locationOf(match.decorator) }))));
+    attachmentsByClass.set(declaration, Object.freeze(attachments.map((match) => Object.freeze({ definition: match.definition, data: decoratorData(match, metadata), location: locationOf(match.decorator) }))));
     if (decorators.length === 0) {
       continue;
     }
@@ -2372,7 +2372,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     if (match.definition.kind !== MIDDLEWARE_KIND) {
       continue;
     }
-    const analysis = analyzeMiddlewareClass(declaration, checker);
+    const analysis = analyzeMiddlewareClass(declaration, checker, metadata);
     middlewareByDeclaration.set(declaration, analysis);
     if (analysis.data.alias === undefined || !analysis.aliasNode) {
       continue;
@@ -2396,7 +2396,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
   const eventAliases = new Map<string, { readonly declaration: ts.ClassDeclaration; readonly location: BunwireSourceLocation }>();
   for (const [declaration, match] of discovered) {
     if (match.definition.kind === EVENT_KIND) {
-      const event = analyzeEventClass(declaration, checker);
+      const event = analyzeEventClass(declaration, checker, metadata);
       eventsByDeclaration.set(declaration, event);
       if (event.alias !== undefined && event.aliasLocation) {
         const existing = eventAliases.get(event.alias);
@@ -2504,6 +2504,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
         classUses,
         `Managed class "${declaration.name?.text ?? "<anonymous>"}"`,
         checker,
+        metadata,
         middlewareTargetsBySymbol,
         middlewareTargetsByAlias,
         middlewarePolicy.groups,
@@ -2512,6 +2513,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       declaration,
       ownerKind,
       checker,
+      metadata,
       managedBySymbol,
       methodDefinitions,
       injectorDefinitions,
@@ -2557,10 +2559,10 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
           || member.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword)) {
           fail("DECORATOR_ARGUMENT_INVALID", `Metadata field "${key}" requires one protected instance property with a literal initializer.`, member);
         }
-        properties[key] = evaluateDecoratorValue(member.initializer);
+        properties[key] = metadata.data(member.initializer);
       }
-      try { compiledData = compilation.compileMetadata(decoratorData(match), Object.freeze(properties)); }
-      catch (cause) { throw new BunwireCompilerError("DECORATOR_ARGUMENT_INVALID", `Invalid class metadata: ${cause instanceof Error ? cause.message : String(cause)}`, { location: locationOf(declaration), cause }); }
+      try { compiledData = compilation.compileMetadata(decoratorData(match, metadata), Object.freeze(properties)); }
+      catch (cause) { if (cause instanceof BunwireCompilerError) throw cause; throw new BunwireCompilerError("DECORATOR_ARGUMENT_INVALID", `Invalid class metadata: ${cause instanceof Error ? cause.message : String(cause)}`, { location: locationOf(declaration), cause }); }
       for (const intrinsic of compilation.intrinsicMethods) {
         const candidates = declaration.members.filter((member) => member.name && (ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name)) && member.name.text === intrinsic.name);
         const member = candidates[0];
@@ -2570,7 +2572,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
           || methods.some((method) => method.name === intrinsic.name)) {
           fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" must be an own public non-overloaded concrete instance method without a managed-method decorator.`, declaration);
         }
-        const parameters = analyzeMethodParameters(member, checker, managedBySymbol, injectorDefinitions, injectDefinitions, intrinsicInjectables, classBehaviors);
+        const parameters = analyzeMethodParameters(member, checker, metadata, managedBySymbol, injectorDefinitions, injectDefinitions, intrinsicInjectables, classBehaviors);
         if (intrinsic.parameters === "none" && parameters.length > 0) fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" accepts no parameters; use constructor DI.`, member);
         if (intrinsic.parameters === "payload-only" && parameters.some((parameter) => parameter.source !== "transport")) {
           fail("MANAGED_METHOD_INVALID", `Intrinsic method "${intrinsic.name}" accepts payload-only parameters; use constructor DI for framework dependencies.`, member);
@@ -2612,7 +2614,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
           ? Object.freeze({ type: "event" as const })
           : match.definition.kind === LISTENER_KIND
             ? Object.freeze({ type: "listener" as const })
-            : compilation ? compiledData : decoratorData(match)),
+            : compilation ? compiledData : decoratorData(match, metadata)),
       target: runtimeReference(checker, declaration.name, symbol),
       location: locationOf(declaration),
       constructor: constructorsByDeclaration.get(declaration)?.plan,
@@ -2702,5 +2704,6 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     if (ids.has(schedule.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Duplicate generated schedule identity "${schedule.id}".`);
     ids.add(schedule.id);
   }
+  metadata.validateMutations();
   return Object.freeze({ context, classes: Object.freeze(normalizedClasses), schedules: Object.freeze(schedules) });
 }

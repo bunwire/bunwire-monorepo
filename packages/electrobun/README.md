@@ -2,6 +2,8 @@
 
 Bunwire's Electrobun adapter owns the normal native RPC and main-window bootstrap:
 
+Registered decorator metadata, Controller prefixes, Route/Message names, middleware aliases/filters, and string-valued `@Use()` arguments accept the shared compiler static expression language, including imported project-local constants and known collections. Existing endpoint/filter validators and canonical Window/Webview/Context injection remain unchanged. Compilation never executes application modules; detected mutation of consumed metadata is rejected. Central Application middleware/schedule policy callbacks retain their current literal restrictions until project Milestone 17.
+
 ```ts
 import { defineApp } from "@bunwire/core";
 import { ElectrobunAdapter } from "@bunwire/electrobun";

@@ -37,10 +37,14 @@ function expectFailure(files: readonly string[], message: RegExp): void {
 }
 
 describe("Middleware Redesign 12B — intrinsic metadata diagnostics", () => {
+  it.each(["invalid-metadata-identifier.ts", "invalid-metadata-spread.ts", "invalid-metadata-template.ts"])("accepts supported static expressions in %s", (file) => {
+    const result = analyze(file);
+    expect(result.classes).toHaveLength(1);
+    expect(result.classes[0]?.data).toMatchObject(file.includes("spread") ? { include: ["/literal", "/dynamic"] }
+      : { alias: file.includes("template") ? "template" : "dynamic" });
+  });
   it.each([
-    ["invalid-metadata-identifier.ts", /direct string literal/i],
-    ["invalid-metadata-call.ts", /direct array literal/i],
-    ["invalid-metadata-spread.ts", /does not support spread/i],
+    ["invalid-metadata-call.ts", /arbitrary calls/i],
     ["invalid-metadata-computed.ts", /computed property name/i],
     ["invalid-metadata-visibility.ts", /protected non-static/i],
     ["invalid-metadata-static.ts", /protected non-static/i],
@@ -48,9 +52,8 @@ describe("Middleware Redesign 12B — intrinsic metadata diagnostics", () => {
     ["invalid-metadata-getter.ts", /protected instance property/i],
     ["invalid-metadata-constructor.ts", /constructor assignments are not supported/i],
     ["invalid-metadata-missing.ts", /requires a deterministic literal initializer/i],
-    ["invalid-metadata-template.ts", /direct string literal/i],
-    ["invalid-metadata-empty.ts", /only non-empty direct string literals/i],
-    ["invalid-metadata-type.ts", /only non-empty direct string literals/i],
+    ["invalid-metadata-empty.ts", /only non-empty strings/i],
+    ["invalid-metadata-type.ts", /only non-empty strings/i],
     ["invalid-metadata-duplicate.ts", /duplicate value.*request/i],
     ["invalid-only-except.ts", /cannot declare both.*only.*except/i],
   ] as const)("rejects %s", (file, message) => {

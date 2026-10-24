@@ -26,6 +26,9 @@ export interface StaticExpressionOptions {
   /** Existing canonical authorization may admit opaque public package classes/tokens.
    * This callback inspects compiler symbols only; it must not evaluate application code. */
   readonly isCanonicalReference?: (symbol: ts.Symbol) => boolean;
+  readonly deferMutationChecks?: boolean;
+  /** Exact authorized decorator sites, not arbitrary functions sharing a name or ID. */
+  readonly isMetadataConsumer?: (call: ts.CallExpression | ts.NewExpression) => boolean;
 }
 
 interface Step { readonly node: ts.Node; readonly depth: number }
@@ -59,6 +62,7 @@ export class StaticExpressionResolver {
   private readonly cache = new Map<ts.Symbol, Cached>();
   private readonly active = new Set<ts.Symbol>();
   private readonly consumed = new Set<ts.Symbol>();
+  private readonly consumedProperties = new Map<ts.Symbol, StaticValue>();
   private readonly frames: Frame[] = [];
   private readonly chain: ts.Node[] = [];
   private readonly paths = new Map<string, string>();
@@ -75,7 +79,11 @@ export class StaticExpressionResolver {
     this.frames.push(frame);
     try {
       const value = this.evaluate(expression, 1);
-      this.checkMutation();
+      if (ts.isPropertyDeclaration(expression.parent) && expression.parent.initializer === expression) {
+        const symbol = this.symbol(expression.parent.name);
+        if (symbol) { this.consumed.add(symbol); this.consumedProperties.set(symbol, value); }
+      }
+      if (!this.options.deferMutationChecks) this.validateMutations();
       return Object.freeze({ value, dependencies: Object.freeze([...frame.files].sort()),
         provenance: Object.freeze([...frame.origins.values()]) });
     } finally { this.frames.pop(); }
@@ -363,9 +371,10 @@ export class StaticExpressionResolver {
     return String(value.value);
   }
 
-  private checkMutation(): void {
+  validateMutations(): void {
     const aliases = new Set(this.consumed);
     const aliasValues = new Map([...this.cache].map(([symbol, cached]) => [symbol, cached.value]));
+    for (const [symbol, value] of this.consumedProperties) aliasValues.set(symbol, value);
     const files = this.options.program.getSourceFiles().filter((source) => {
       if (source.isDeclarationFile) return false;
       let real: string;
@@ -379,6 +388,11 @@ export class StaticExpressionResolver {
       if (ts.isIdentifier(node)) { const symbol = this.symbol(node); return Boolean(symbol && aliases.has(symbol)); }
       if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
         const symbol = this.symbol(ts.isPropertyAccessExpression(node) ? node.name : node);
+        // An unresolved computed key must not bypass mutation checks on a known
+        // receiver. Inspect candidate property identities, not inferred key values.
+        if (!symbol && ts.isElementAccessExpression(node)
+          && this.checker.getTypeAtLocation(node.expression).getProperties()
+            .some((property) => aliases.has(this.canonical(property)))) return true;
         return Boolean(symbol && aliases.has(symbol)) || derived(node.expression);
       }
       if (ts.isArrayLiteralExpression(node)) return node.elements.some((item) => !ts.isOmittedExpression(item) && derived(item));
@@ -461,6 +475,7 @@ export class StaticExpressionResolver {
       this.fail(assignment, "value escape through property/destructuring assignment affecting a consumed static value");
     for (const write of writes) if (derived(write as ts.Expression)) this.fail(write, "detected write affecting a consumed static value through a binding, alias, or property");
     for (const call of calls) {
+      if (this.options.isMetadataConsumer?.(call)) continue;
       const target = unwrapped(call.expression);
       if (((ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) && canMutate(target.expression))
         || call.arguments?.some(canMutate))

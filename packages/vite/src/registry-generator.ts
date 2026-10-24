@@ -58,7 +58,7 @@ function stableValue(value: unknown): string {
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .sort(([left], [right]) => compareText(left, right));
-    return `{ ${entries.map(([key, entry]) => `${JSON.stringify(key)}: ${stableValue(entry)}`).join(", ")} }`;
+    return `{ ${entries.map(([key, entry]) => `${key === "__proto__" ? `[${JSON.stringify(key)}]` : JSON.stringify(key)}: ${stableValue(entry)}`).join(", ")} }`;
   }
   throw new BunwireCompilerError(
     "REGISTRY_GENERATION_INVALID",

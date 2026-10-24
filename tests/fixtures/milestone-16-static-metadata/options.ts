@@ -1,0 +1,11 @@
+export const EVENT_ALIAS = "static.created";
+export const MIDDLEWARE_ALIAS = "audit";
+export const HTTP_FILTERS = ["/static/**"] as const;
+export const ELECTROBUN_FILTERS = ["static/**"] as const;
+export const HTTP_ONLY = ["GET"];
+export const TRANSPORT_ONLY = ["request"];
+export const USE_AUDIT = MIDDLEWARE_ALIAS + ":strict";
+export const CONTROLLER_OPTIONS = { prefix: "static" };
+export const METHOD_OPTIONS = { name: "execute" };
+export const INJECTOR_OPTIONS = { key: "framework" };
+export const ATTACHMENT_OPTIONS = { id: "static.tag" };

@@ -144,10 +144,10 @@ Supported fields are:
 - `only?: readonly string[]` — allowed adapter transport kinds;
 - `except?: readonly string[]` — excluded adapter transport kinds.
 
-These fields are compiler input. Their initializers must be deterministic literals:
+These fields are compiler input. Their initializers use the shared supported static expression language:
 
-- `alias` must be a non-empty string literal;
-- filters must be array literals containing non-empty string literals;
+- `alias` must resolve to a non-empty string;
+- filters must resolve to arrays containing unique non-empty strings;
 - variables, calls, getters, constructor assignments, spreads, computed values, and environment-dependent expressions are rejected;
 - `only` and `except` are mutually exclusive;
 - duplicate values within one filter are rejected;
@@ -471,7 +471,7 @@ The compiler fails closed for:
 - counterfeit `@Middleware()` or `@Use()` symbols;
 - middleware classes that are anonymous, unexported, abstract, or lack a concrete callable `handle()`;
 - invalid constructor dependencies;
-- non-literal metadata fields;
+- metadata fields outside the supported static expression language;
 - `only` and `except` used together;
 - duplicate aliases;
 - alias/group name collisions;

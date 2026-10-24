@@ -1,10 +1,10 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestone 15 is complete; Milestones 16–22 are not started.
+Status: Project Milestones 15–16 are complete; Milestones 17–22 are not started.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
-These are project milestones following project Milestone 14, not the separately numbered `@bunwire/bun` milestones. This document specifies future behavior. Existing direct-literal and once-only restrictions remain the current implementation until the corresponding milestone changes them and updates the authoritative architecture documentation.
+These are project milestones following project Milestone 14, not the separately numbered `@bunwire/bun` milestones. This document specifies the track's target behavior; each milestone status distinguishes implemented and planned behavior. Existing direct-literal and once-only restrictions remain the current implementation until the corresponding milestone changes them and updates the authoritative architecture documentation.
 
 ## Purpose and completion target
 
@@ -146,7 +146,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 | Milestone | Deliverable | Dependency | Status |
 |---|---|---|---|
 | 15 | Shared static expression resolver | Completed project baseline | Complete |
-| 16 | Expressions throughout managed metadata | 15 | Planned |
+| 16 | Expressions throughout managed metadata | 15 | Complete |
 | 17 | Composable middleware and schedule values | 16 | Planned |
 | 18 | Static policy helpers across files | 17 | Planned |
 | 19 | Multiple Application policy blocks | 18 | Planned |
@@ -199,7 +199,7 @@ Expected behavior: the resolver is verified through real TypeScript-program fixt
 
 # Milestone 16 — Expressions Throughout Managed Metadata
 
-Status: Planned. Depends on Milestone 15.
+Status: Complete. Depends on Milestone 15. See [implementation record](progress/milestone-16.md).
 
 ## Goal and packages affected
 
@@ -215,20 +215,20 @@ Integrate the resolver throughout relevant managed metadata in `@bunwire/vite`, 
 
 ## Required automated tests
 
-- [ ] **[Automated / Compiler Fixture]** The exact imported queue/backoff constants and `60 * 1000` job example compile to the expected policy.
-- [ ] **[Automated / Compiler Fixture]** Imported event/middleware aliases, include/exclude/only/except arrays, decorator options, parameter-injector options, and class attachment data resolve where valid.
-- [ ] **[Automated / Compiler Fixture]** Invalid resolved values, conflicting aliases, counterfeit symbols, invalid tokens, mutation, and unauthorized class kinds remain rejected.
-- [ ] **[Automated / Generated Output]** Literal and expression-based declarations generate equivalent runtime metadata, canonical imports, and invocation plans.
-- [ ] **[Automated / Integration]** A generated Bun job executes with the intended queue, timeout, and retry policy.
-- [ ] **[Automated / Integration]** Electrobun and a generic fake adapter consume expression-derived metadata without compiler branches for their semantics.
-- [ ] **[Automated / Type-level]** Existing caller-visible signatures and DI exclusions remain correct.
+- [x] **[Automated / Compiler Fixture]** The exact imported queue/backoff constants and `60 * 1000` job example compile to the expected policy.
+- [x] **[Automated / Compiler Fixture]** Imported event/middleware aliases, include/exclude/only/except arrays, decorator options, parameter-injector options, and class attachment data resolve where valid.
+- [x] **[Automated / Compiler Fixture]** Invalid resolved values, conflicting aliases, counterfeit symbols, invalid tokens, mutation, and unauthorized class kinds remain rejected.
+- [x] **[Automated / Generated Output]** Literal and expression-based declarations generate equivalent runtime metadata, canonical imports, and invocation plans.
+- [x] **[Automated / Integration]** A generated Bun job executes with the intended queue, timeout, and retry policy.
+- [x] **[Automated / Integration]** Electrobun and a generic fake adapter consume expression-derived metadata without compiler branches for their semantics.
+- [x] **[Automated / Type-level]** Existing caller-visible signatures and DI exclusions remain correct.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Every listed metadata consumer uses consistent expression rules; exceptions are limited to documented canonical-identity handling.
-- [ ] All quoted job metadata examples work through compilation and generated runtime integration.
-- [ ] Existing metadata validation and canonical authorization remain intact.
-- [ ] Required tests and impacted package checks pass and are recorded.
+- [x] Every listed metadata consumer uses consistent expression rules; exceptions are limited to documented canonical-identity handling.
+- [x] All quoted job metadata examples work through compilation and generated runtime integration.
+- [x] Existing metadata validation and canonical authorization remain intact.
+- [x] Required tests and impacted package checks pass and are recorded.
 
 Expected behavior: shared static values work throughout managed metadata. Not expected yet: collection composition in central policies, helper expansion, multiple policy blocks, or loops.
 

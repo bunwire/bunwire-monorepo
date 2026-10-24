@@ -467,7 +467,7 @@ export default defineApp()
   });
 ```
 
-Central job arguments must be compiler-safe JSON literals and satisfy the generated `handle()` contract. Supported cadences are `cron()`, `everyMinute()`, `hourlyAt()`, and `dailyAt()`. Schedule modifiers are `timezone()`, `withoutOverlapping()`, `onOneServer()`, `lockFor()`, and `id()`.
+Central job arguments must resolve to compiler-safe JSON data and satisfy the generated `handle()` contract. Project Milestone 17 supports local/imported constants, arithmetic, collection spreads, and known argument tuples in schedule targets, payloads, cadences, and modifiers; class targets retain canonical identity. For example, `schedule.job(JOBS[0], ...PAYLOAD).dailyAt(TIME).timezone(ZONE).id(ID)` is valid when those constants have supported initializers. Helpers, loops, and multiple schedule blocks remain deferred. Supported cadences are `cron()`, `everyMinute()`, `hourlyAt()`, and `dailyAt()`. Schedule modifiers are `timezone()`, `withoutOverlapping()`, `onOneServer()`, `lockFor()`, and `id()`.
 
 Cron uses five minute-level fields and accepts wildcards, lists, ranges, steps, month/weekday names, and Sunday `0`/`7`. UTC is the default, the adapter may provide another default IANA timezone, and each schedule may override it. The current minute is evaluated once at startup, later absolute minutes are evaluated once, and missed minutes are skipped. DST gaps therefore skip nonexistent local minutes, while the two absolute minutes representing a repeated fallback time may both run.
 

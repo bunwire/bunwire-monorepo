@@ -2,9 +2,9 @@
 
 ## Current Status
 
-Current milestone: Project Milestone 16 — expressions throughout managed metadata (complete).
+Current milestone: Project Milestone 17 — composable middleware and schedule values (complete).
 
-The [static expressions and modular composition track, Milestones 15–22](STATIC_COMPOSITION_MILESTONES.md), has started. See [Milestone 16 details](progress/milestone-16.md). These project milestone numbers are separate from Bun package numbering.
+The [static expressions and modular composition track, Milestones 15–22](STATIC_COMPOSITION_MILESTONES.md), has started. See [Milestone 17 details](progress/milestone-17.md). These project milestone numbers are separate from Bun package numbering.
 
 Post-completion Bun maintenance: [source layout reorganization](../packages/bun/progress/source-layout-2026-10-23.md); all public entrypoints remain available.
 
@@ -34,8 +34,9 @@ Overall status:
 - Milestone 14: Complete — [details](progress/milestone-14.md)
 - Milestone 15: Complete — [details](progress/milestone-15.md)
 - Milestone 16: Complete — [details](progress/milestone-16.md)
-- Milestones 17–22: Not started — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
-- Project Milestones 15–22: Planned — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
+- Milestone 17: Complete — [details](progress/milestone-17.md)
+- Milestones 18–22: Not started — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
+- Project Milestones 15–22: In progress — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
 - `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
 - `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
 - `@bunwire/bun` Milestone 3: Complete — [details](../packages/bun/progress/milestone-03.md)
@@ -89,7 +90,8 @@ Overall status:
 - Milestone 13 prepares audited public `0.1.0` packages, exact export/tarball contracts, precise bootstrap diagnostics, a buildable fake second-adapter example, release documentation, deterministic performance/churn checks, and CI release gates without publishing or tagging.
 - Milestone 14 adds canonical Core events and aliases, compiler-validated DI-managed listeners, deterministic generated relationships, and exact-identity sequential dispatch with isolated invocation scopes.
 - Milestone 15 adds the internal compiler static expression resolver with canonical references, provenance/dependency tracking, source boundaries, mutation checks, fixed budgets, and direct TypeScript-program fixture verification.
-- Milestone 16 integrates static expressions throughout managed metadata, with existing validators and canonical identities preserved, protected-property mutation checks, safe object-key generation, and verified Bun/Electrobun/generic-adapter behavior. Central policy composition remains for Milestone 17.
+- Milestone 16 integrates static expressions throughout managed metadata, with existing validators and canonical identities preserved, protected-property mutation checks, safe object-key generation, and verified Bun/Electrobun/generic-adapter behavior.
+- Milestone 17 adds reusable middleware collections/mappings and schedule values, canonical target checks, imported value/key diagnostics, bounded group expansion, and verified generated middleware/scheduler execution.
 - `@bunwire/bun` Milestone 1 adds the public Bun adapter package, immutable runtime roles, generated-registry consumption, Core-owned terminal shutdown and startup rollback, signal cleanup, a minimal Bun example, and complete workspace/release verification.
 - `@bunwire/bun` Milestone 2 adds public Bun execution scopes, isolated contextual bindings, per-scope service caching, nested WebSocket scope identity, deterministic explicit disposal, active-run shutdown coordination, and global-context architecture enforcement.
 - `@bunwire/bun` Milestone 3 adds Core Controller-based HTTP decorators, compiler-validated generated native routes, explicit frozen HTTP context, request-scope inheritance into Core invocation, deterministic 404/405/500 behavior, and graceful `Bun.serve()` lifecycle integration.
@@ -118,12 +120,12 @@ Overall status:
 ## Current Work
 
 - No Bun v2 milestone is in progress.
-- Project Milestone 16 is complete; no static composition milestone is currently in progress.
+- Project Milestone 17 is complete; no static composition milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- Project Milestone 17 — composable middleware and schedule values, followed by Milestones 18–22 in the [detailed roadmap](STATIC_COMPOSITION_MILESTONES.md).
+- Project Milestone 18 — static policy helpers across files, followed by Milestones 19–22 in the [detailed roadmap](STATIC_COMPOSITION_MILESTONES.md).
 - Optional backend packages remain separate future work.
 
 ## Blockers
@@ -156,6 +158,7 @@ Overall status:
 - [Milestone 14](progress/milestone-14.md)
 - [Milestone 15](progress/milestone-15.md)
 - [Milestone 16](progress/milestone-16.md)
+- [Milestone 17](progress/milestone-17.md)
 - [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)
 - [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
 - [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)

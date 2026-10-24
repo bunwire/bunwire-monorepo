@@ -10,7 +10,7 @@ export const STATIC_LIMITS = Object.freeze({ depth: 64, nodes: 100_000, declarat
 export type StaticValue = (
   | { readonly kind: "scalar"; readonly value: string | number | boolean | null | undefined }
   | { readonly kind: "array"; readonly items: readonly StaticValue[] }
-  | { readonly kind: "object"; readonly properties: Readonly<Record<string, StaticValue>> }
+  | { readonly kind: "object"; readonly properties: Readonly<Record<string, StaticValue>>; readonly keyOrigins: Readonly<Record<string, BunwireSourceLocation>> }
   | { readonly kind: "reference"; readonly symbol: ts.Symbol }
 ) & { readonly origin: BunwireSourceLocation };
 
@@ -92,6 +92,11 @@ export class StaticExpressionResolver {
   /** Shared accounting hook for policy expansion in subsequent milestones. */
   emitDeclaration(node: ts.Node): void {
     if (++this.declarations > STATIC_LIMITS.declarations) this.fail(node, "emitted policy declaration budget (10000) exceeded");
+  }
+
+  /** Policy normalization shares the expression budget, including cached group copies. */
+  consumePolicyWork(node: ts.Node, depth: number, count = 1): void {
+    for (let index = 0; index < count; index++) this.charge(node, depth);
   }
 
   private fail(node: ts.Node, reason: string): never {
@@ -292,16 +297,20 @@ export class StaticExpressionResolver {
     }
     if (ts.isObjectLiteralExpression(node)) {
       const properties: Record<string, StaticValue> = Object.create(null);
+      const keyOrigins: Record<string, BunwireSourceLocation> = Object.create(null);
       for (const property of node.properties) {
         this.charge(property, depth + 1);
         if (ts.isSpreadAssignment(property)) {
           const spread = this.evaluate(property.expression, depth + 2);
           if (spread.kind !== "object") this.fail(property, "object spread requires a known object");
-          for (const key of Object.keys(spread.properties)) properties[key] = spread.properties[key]!;
+          for (const key of Object.keys(spread.properties)) {
+            properties[key] = spread.properties[key]!;
+            keyOrigins[key] = spread.keyOrigins[key]!;
+          }
         } else if (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) {
-          const key = ts.isComputedPropertyName(property.name)
-            ? this.key(this.evaluate(property.name.expression, depth + 2), property.name)
-            : property.name.text;
+          const computed = ts.isComputedPropertyName(property.name) ? this.evaluate(property.name.expression, depth + 2) : undefined;
+          const key = computed ? this.key(computed, property.name) : (property.name as ts.Identifier | ts.StringLiteral | ts.NumericLiteral).text;
+          keyOrigins[key] = computed?.origin ?? location(property.name);
           if (ts.isShorthandPropertyAssignment(property)) {
             const symbol = this.checker.getShorthandAssignmentValueSymbol(property);
             if (!symbol) this.fail(property, "unresolved shorthand property");
@@ -309,7 +318,7 @@ export class StaticExpressionResolver {
           } else properties[key] = this.evaluate(property.initializer, depth + 2);
         } else this.fail(property, "object methods, getters, and setters are unsupported");
       }
-      return Object.freeze({ kind: "object", properties: Object.freeze(properties), origin });
+      return Object.freeze({ kind: "object", properties: Object.freeze(properties), keyOrigins: Object.freeze(keyOrigins), origin });
     }
     if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
       if (node.questionDotToken) this.fail(node, "optional property access is unsupported");

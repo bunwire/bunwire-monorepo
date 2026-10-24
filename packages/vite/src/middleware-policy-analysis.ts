@@ -7,22 +7,27 @@ import {
 } from "./bootstrap-discovery.js";
 import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.js";
 import { canonicalCompilerPath } from "./path-identity.js";
+import type { ManagedMetadataResolver } from "./managed-metadata.js";
+import type { StaticValue } from "./static-expression.js";
 
 export interface MiddlewarePolicyGroupSyntax {
   readonly name: string;
-  readonly references: readonly ts.Expression[];
-  readonly node: ts.StringLiteral;
+  readonly references: readonly StaticValue[];
+  readonly node: ts.Node;
+  readonly origin: BunwireSourceLocation;
 }
 
 export interface MiddlewareControllerMappingSyntax {
   readonly pattern: string;
-  readonly references: readonly ts.Expression[];
-  readonly node: ts.StringLiteral;
+  readonly references: readonly StaticValue[];
+  readonly node: ts.Node;
+  readonly origin: BunwireSourceLocation;
 }
 
 export interface MiddlewarePolicySyntax {
+  readonly node?: ts.Node;
   readonly configured: boolean;
-  readonly global: readonly ts.Expression[];
+  readonly global: readonly StaticValue[];
   readonly groups: readonly MiddlewarePolicyGroupSyntax[];
   readonly controllers: readonly MiddlewareControllerMappingSyntax[];
 }
@@ -53,31 +58,20 @@ function fail(message: string, node: ts.Node): never {
   });
 }
 
-function directReferenceArray(expression: ts.Expression, label: string): readonly ts.Expression[] {
-  const value = unwrapBootstrapExpression(expression);
-  if (!ts.isArrayLiteralExpression(value) || value.elements.some(ts.isSpreadElement)) {
-    fail(`${label} must be a direct array literal without spreads.`, expression);
+function referenceArray(value: StaticValue, label: string): readonly StaticValue[] {
+  if (value.kind !== "array") {
+    throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", `${label} must resolve to a middleware reference array.`, { location: value.origin });
   }
-  if (value.elements.length === 0) {
-    fail(`${label} must contain at least one middleware reference.`, expression);
+  if (value.items.length === 0) {
+    throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", `${label} must contain at least one middleware reference.`, { location: value.origin });
   }
-  return Object.freeze([...value.elements]);
-}
-
-function directMappingReferences(expression: ts.Expression, label: string): readonly ts.Expression[] {
-  const value = unwrapBootstrapExpression(expression);
-  if (ts.isArrayLiteralExpression(value)) {
-    return directReferenceArray(value, label);
-  }
-  if (ts.isSpreadElement(value)) {
-    fail(`${label} does not support spread references.`, value);
-  }
-  return Object.freeze([value]);
+  return value.items;
 }
 
 export function analyzeMiddlewarePolicySyntax(
   program: ts.Program,
   bootstrapPath: string | undefined,
+  metadata: ManagedMetadataResolver,
 ): MiddlewarePolicySyntax {
   if (!bootstrapPath) return EMPTY_POLICY;
   const normalized = canonicalCompilerPath(bootstrapPath);
@@ -138,7 +132,7 @@ export function analyzeMiddlewarePolicySyntax(
     );
   }
   const registryName = callback.parameters[0]!.name.text;
-  const global: ts.Expression[] = [];
+  const global: StaticValue[] = [];
   const groups: MiddlewarePolicyGroupSyntax[] = [];
   const controllers: MiddlewareControllerMappingSyntax[] = [];
   const groupNames = new Set<string>();
@@ -158,61 +152,56 @@ export function analyzeMiddlewarePolicySyntax(
       || called.expression.text !== registryName) {
       fail("Middleware policy calls must directly target the callback registry parameter.", expression.expression);
     }
-    if (expression.arguments.some(ts.isSpreadElement)) {
-      fail("Middleware policy calls do not support spread arguments.", expression);
-    }
+    if (expression.questionDotToken) fail("Middleware policy calls must be non-optional.", expression);
+    if (!["use", "group", "controllers"].includes(called.name.text)) fail(`Unsupported middleware policy call registry.${called.name.text}().`, called.name);
+    const arguments_ = metadata.arguments(expression, "MIDDLEWARE_POLICY_INVALID");
     switch (called.name.text) {
       case "use": {
-        if (expression.arguments.length === 0) {
+        if (arguments_.length === 0) {
           fail("registry.use() requires at least one middleware reference.", expression);
         }
-        global.push(...expression.arguments);
+        for (const value of arguments_) global.push(value);
         break;
       }
       case "group": {
-        const nameExpression = expression.arguments[0];
-        const referencesExpression = expression.arguments[1];
-        if (expression.arguments.length !== 2
-          || !nameExpression
-          || !ts.isStringLiteral(nameExpression)
-          || !referencesExpression) {
-          fail("registry.group() requires a direct string name and one direct reference array.", expression);
+        const nameValue = arguments_[0];
+        const referencesValue = arguments_[1];
+        if (arguments_.length !== 2 || !nameValue || !referencesValue) {
+          fail("registry.group() requires a static string name and one reference array.", expression);
         }
-        const name = nameExpression.text.trim();
+        if (nameValue.kind !== "scalar" || typeof nameValue.value !== "string")
+          throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", "Middleware group names must resolve to strings.", { location: nameValue.origin });
+        const name = nameValue.value.trim();
         if (name.length === 0) {
-          fail("Middleware group names must not be empty.", nameExpression);
+          throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", "Middleware group names must not be empty.", { location: nameValue.origin });
         }
         if (groupNames.has(name)) {
-          fail(`Middleware group ${JSON.stringify(name)} is declared more than once.`, nameExpression);
+          throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", `Middleware group ${JSON.stringify(name)} is declared more than once.`, { location: nameValue.origin });
         }
         groupNames.add(name);
+        metadata.emitDeclaration(expression);
         groups.push(Object.freeze({
           name,
-          references: directReferenceArray(referencesExpression, `Middleware group ${JSON.stringify(name)}`),
-          node: nameExpression,
+          references: referenceArray(referencesValue, `Middleware group ${JSON.stringify(name)}`),
+          node: expression,
+          origin: nameValue.origin,
         }));
         break;
       }
       case "controllers": {
-        const mappingExpression = expression.arguments[0];
-        if (expression.arguments.length !== 1 || !mappingExpression) {
-          fail("registry.controllers() requires one direct object-literal mapping.", expression);
+        const mapping = arguments_[0];
+        if (arguments_.length !== 1 || !mapping) {
+          fail("registry.controllers() requires one static object mapping.", expression);
         }
-        const mapping = unwrapBootstrapExpression(mappingExpression);
-        if (!ts.isObjectLiteralExpression(mapping)) {
-          fail("registry.controllers() requires one direct object-literal mapping.", mappingExpression);
+        if (mapping.kind !== "object") {
+          throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", "registry.controllers() requires one static object mapping.", { location: mapping.origin });
         }
-        for (const property of mapping.properties) {
-          if (!ts.isPropertyAssignment(property) || !ts.isStringLiteral(property.name)) {
-            fail("Controller mappings require explicit string-literal properties without spreads or computed names.", property);
-          }
+        for (const [pattern, value] of Object.entries(mapping.properties)) {
           controllers.push(Object.freeze({
-            pattern: property.name.text,
-            references: directMappingReferences(
-              property.initializer,
-              `Controller mapping ${JSON.stringify(property.name.text)}`,
-            ),
-            node: property.name,
+            pattern,
+            references: value.kind === "array" ? referenceArray(value, `Controller mapping ${JSON.stringify(pattern)}`) : Object.freeze([value]),
+            node: expression,
+            origin: mapping.keyOrigins[pattern]!,
           }));
         }
         break;
@@ -222,6 +211,7 @@ export function analyzeMiddlewarePolicySyntax(
     }
   }
   return Object.freeze({
+    node: policyCall,
     configured: true,
     global: Object.freeze(global),
     groups: Object.freeze(groups),

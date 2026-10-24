@@ -33,6 +33,7 @@ import {
 import { analyzeSchedulePolicySyntax } from "./schedule-policy-analysis.js";
 import { canonicalCompilerPath } from "./path-identity.js";
 import { ManagedMetadataResolver } from "./managed-metadata.js";
+import type { StaticValue } from "./static-expression.js";
 
 export interface BunwireProgramOptions {
   readonly sourceFiles: readonly string[];
@@ -461,56 +462,6 @@ function explicitInjectDecorators(
     }
   }
   return matches;
-}
-
-function evaluateDecoratorValue(expression: ts.Expression): unknown {
-  const value = unwrapExpression(expression);
-  if (ts.isStringLiteralLike(value)) {
-    return value.text;
-  }
-  if (ts.isNumericLiteral(value)) {
-    return Number(value.text);
-  }
-  if (ts.isPrefixUnaryExpression(value)
-    && value.operator === ts.SyntaxKind.MinusToken
-    && ts.isNumericLiteral(unwrapExpression(value.operand))) {
-    return -Number((unwrapExpression(value.operand) as ts.NumericLiteral).text);
-  }
-  if (value.kind === ts.SyntaxKind.TrueKeyword) {
-    return true;
-  }
-  if (value.kind === ts.SyntaxKind.FalseKeyword) {
-    return false;
-  }
-  if (value.kind === ts.SyntaxKind.NullKeyword) {
-    return null;
-  }
-  if (ts.isIdentifier(value) && value.text === "undefined") {
-    return undefined;
-  }
-  if (ts.isArrayLiteralExpression(value)) {
-    return value.elements.map((element) => evaluateDecoratorValue(element));
-  }
-  if (ts.isObjectLiteralExpression(value)) {
-    const result: Record<string, unknown> = {};
-    for (const property of value.properties) {
-      if (!ts.isPropertyAssignment(property)
-        || (!ts.isIdentifier(property.name) && !ts.isStringLiteralLike(property.name))) {
-        fail(
-          "DECORATOR_ARGUMENT_INVALID",
-          "Decorator metadata objects must use explicit identifier or string-literal properties.",
-          property,
-        );
-      }
-      result[property.name.text] = evaluateDecoratorValue(property.initializer);
-    }
-    return Object.freeze(result);
-  }
-  return fail(
-    "DECORATOR_ARGUMENT_INVALID",
-    `Decorator argument "${value.getText()}" is not a deterministic literal value.`,
-    value,
-  );
 }
 
 function decoratorData(
@@ -1654,35 +1605,29 @@ function contributedMiddlewareDefinitions(
   return Object.freeze(definitions);
 }
 
-function parseMiddlewareAliasReference(
-  expression: ts.Expression,
-  diagnosticCode: BunwireCompilerError["code"] = "MIDDLEWARE_ATTACHMENT_INVALID",
-  text = ts.isStringLiteralLike(expression) ? expression.text : "",
+function parseMiddlewareAliasText(
+  text: string,
+  raw: string,
+  location: BunwireSourceLocation,
+  code: BunwireCompilerError["code"],
 ): { readonly name: string; readonly parameters: readonly string[] } {
-  if (/\\[,:]/.test(expression.getText()) || /\\[,:]/.test(text)) {
-    fail(
-      diagnosticCode,
-      "Middleware references do not support escaping ':' or ','.",
-      expression,
-    );
-  }
+  const invalid = (message: string): never => { throw new BunwireCompilerError(code, message, { location }); };
+  if (/\\[,:]/.test(raw) || /\\[,:]/.test(text)) invalid("Middleware references do not support escaping ':' or ','.");
   const boundary = text.indexOf(":");
   const name = (boundary < 0 ? text : text.slice(0, boundary)).trim();
-  if (name.length === 0) {
-    fail(diagnosticCode, "Middleware reference names must not be empty.", expression);
-  }
-  if (boundary < 0) {
-    return { name, parameters: Object.freeze([]) };
-  }
+  if (!name) invalid("Middleware reference names must not be empty.");
+  if (boundary < 0) return { name, parameters: Object.freeze([]) };
   const parameters = text.slice(boundary + 1).split(",").map((entry) => entry.trim());
-  if (parameters.some((entry) => entry.length === 0)) {
-    fail(
-      diagnosticCode,
-      `Middleware reference ${JSON.stringify(text)} contains an empty parameter.`,
-      expression,
-    );
-  }
+  if (parameters.some((entry) => !entry)) invalid(`Middleware reference ${JSON.stringify(text)} contains an empty parameter.`);
   return { name, parameters: Object.freeze(parameters) };
+}
+
+function parseMiddlewareAliasReference(
+  expression: ts.Expression,
+  code: BunwireCompilerError["code"] = "MIDDLEWARE_ATTACHMENT_INVALID",
+  text = ts.isStringLiteralLike(expression) ? expression.text : "",
+): { readonly name: string; readonly parameters: readonly string[] } {
+  return parseMiddlewareAliasText(text, expression.getText(), locationOf(expression), code);
 }
 
 function analyzeUseEntries(
@@ -1782,94 +1727,64 @@ interface ResolvedMiddlewarePolicy {
   readonly controllers: readonly {
     readonly pattern: string;
     readonly attachments: readonly AnalyzedMiddlewareAttachment[];
-    readonly node: ts.StringLiteral;
+    readonly node: BunwireSourceLocation;
   }[];
 }
 
 type PolicyReference = AnalyzedMiddlewareAttachment | {
   readonly source: "group";
   readonly name: string;
-  readonly node: ts.Expression;
+  readonly node: BunwireSourceLocation;
 };
 
 function policyReference(
-  expression: ts.Expression,
-  checker: ts.TypeChecker,
+  value: StaticValue,
+  metadata: ManagedMetadataResolver,
   middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
   middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
   groupNames: { readonly has: (name: string) => boolean },
 ): PolicyReference {
-  const value = unwrapExpression(expression);
-  if (ts.isStringLiteral(value)) {
-    const parsed = parseMiddlewareAliasReference(value, "MIDDLEWARE_POLICY_INVALID");
+  const invalid = (message: string): never => { throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", message, { location: value.origin }); };
+  if (value.kind === "scalar" && typeof value.value === "string") {
+    const parsed = parseMiddlewareAliasText(value.value, metadata.sourceText(value.origin), value.origin, "MIDDLEWARE_POLICY_INVALID");
     const target = middlewareAliases.get(parsed.name);
-    if (target) {
-      return Object.freeze({
-        source: "attachment" as const,
-        target,
-        parameters: parsed.parameters,
-        location: locationOf(value),
-      });
-    }
+    if (target) return Object.freeze({ source: "attachment" as const, target, parameters: parsed.parameters, location: value.origin });
     if (groupNames.has(parsed.name)) {
-      if (parsed.parameters.length > 0) {
-        fail(
-          "MIDDLEWARE_POLICY_INVALID",
-          `Middleware group ${JSON.stringify(parsed.name)} cannot receive parameters.`,
-          value,
-        );
-      }
-      return Object.freeze({ source: "group" as const, name: parsed.name, node: value });
+      if (parsed.parameters.length) invalid(`Middleware group ${JSON.stringify(parsed.name)} cannot receive parameters.`);
+      return Object.freeze({ source: "group" as const, name: parsed.name, node: value.origin });
     }
-    fail(
-      "MIDDLEWARE_POLICY_INVALID",
-      `Middleware policy references unknown alias or group ${JSON.stringify(parsed.name)}.`,
-      value,
-    );
+    invalid(`Middleware policy references unknown alias or group ${JSON.stringify(parsed.name)}.`);
   }
-  if (!ts.isIdentifier(value) && !ts.isPropertyAccessExpression(value)) {
-    fail(
-      "MIDDLEWARE_POLICY_INVALID",
-      `Middleware policy reference "${value.getText()}" must be a direct middleware class or string literal.`,
-      value,
-    );
-  }
-  const symbol = symbolAtExpression(checker, value);
-  const target = symbol ? middlewareBySymbol.get(symbol) : undefined;
-  if (!target) {
-    fail(
-      "MIDDLEWARE_POLICY_INVALID",
-      `Middleware policy reference "${value.getText()}" is not a canonical managed middleware class.`,
-      value,
-    );
-  }
-  return Object.freeze({
-    source: "attachment" as const,
-    target,
-    parameters: Object.freeze([]),
-    location: locationOf(value),
-  });
+  if (value.kind !== "reference") return invalid("Middleware policy references must resolve to a canonical managed middleware class or a string alias/group.");
+  const target = middlewareBySymbol.get(value.symbol);
+  if (!target) return invalid("Middleware policy reference is not a canonical managed middleware class.");
+  return Object.freeze({ source: "attachment" as const, target, parameters: Object.freeze([]), location: value.origin });
 }
 
 function resolveMiddlewarePolicy(
   syntax: MiddlewarePolicySyntax,
-  checker: ts.TypeChecker,
+  metadata: ManagedMetadataResolver,
   middlewareBySymbol: ReadonlyMap<ts.Symbol, CompilerRuntimeReference>,
   middlewareAliases: ReadonlyMap<string, CompilerRuntimeReference>,
 ): ResolvedMiddlewarePolicy {
   const groupSyntax = new Map(syntax.groups.map((group) => [group.name, group]));
   for (const group of syntax.groups) {
     if (middlewareAliases.has(group.name)) {
-      fail(
-        "MIDDLEWARE_POLICY_INVALID",
-        `Middleware group ${JSON.stringify(group.name)} collides with a middleware alias.`,
-        group.node,
-      );
+      throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", `Middleware group ${JSON.stringify(group.name)} collides with a middleware alias.`, { location: group.origin });
     }
   }
   const groups = new Map<string, readonly AnalyzedMiddlewareAttachment[]>();
+  const groupDepths = new Map<string, number>();
   const stack: string[] = [];
-  const expandGroup = (name: string, referenceNode?: ts.Expression): readonly AnalyzedMiddlewareAttachment[] => {
+  const work = (node: ts.Node, count = 1, depth = stack.length + 1): void => {
+    try { metadata.work(node, depth, count); }
+    catch (cause) {
+      if (cause instanceof BunwireCompilerError) throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID",
+        `${cause.message}; policy expansion path: ${stack.join(" -> ") || "global/controller mapping"}`, { ...(cause.location ? { location: cause.location } : {}), cause });
+      throw cause;
+    }
+  };
+  const expandGroup = (name: string, referenceNode?: BunwireSourceLocation): readonly AnalyzedMiddlewareAttachment[] => {
     const existing = groups.get(name);
     if (existing) return existing;
     const cycleIndex = stack.indexOf(name);
@@ -1878,49 +1793,62 @@ function resolveMiddlewarePolicy(
       throw new BunwireCompilerError(
         "MIDDLEWARE_GROUP_CYCLE",
         `Middleware group cycle detected: ${cycle.join(" -> ")}.`,
-        { location: locationOf(referenceNode ?? groupSyntax.get(name)!.node) },
+        { location: referenceNode ?? groupSyntax.get(name)!.origin },
       );
     }
     const declaration = groupSyntax.get(name);
     if (!declaration) {
-      fail("MIDDLEWARE_POLICY_INVALID", `Unknown middleware group ${JSON.stringify(name)}.`, referenceNode!);
+      throw new BunwireCompilerError("MIDDLEWARE_POLICY_INVALID", `Unknown middleware group ${JSON.stringify(name)}.`, { ...(referenceNode ? { location: referenceNode } : {}) });
     }
     stack.push(name);
+    work(declaration.node);
     const attachments: AnalyzedMiddlewareAttachment[] = [];
+    let depth = 1;
     for (const expression of declaration.references) {
       const reference = policyReference(
         expression,
-        checker,
+        metadata,
         middlewareBySymbol,
         middlewareAliases,
         groupSyntax,
       );
       if (reference.source === "group") {
-        attachments.push(...expandGroup(reference.name, reference.node));
+        const expanded = expandGroup(reference.name, reference.node);
+        const nestedDepth = groupDepths.get(reference.name)!;
+        depth = Math.max(depth, nestedDepth + 1);
+        work(declaration.node, expanded.length, stack.length + nestedDepth + 1);
+        for (const attachment of expanded) attachments.push(attachment);
       } else {
+        work(declaration.node);
         attachments.push(reference);
       }
     }
     stack.pop();
     const frozen = Object.freeze(attachments);
+    groupDepths.set(name, depth);
     groups.set(name, frozen);
     return frozen;
   };
   for (const name of groupSyntax.keys()) expandGroup(name);
 
-  const expandReferences = (references: readonly ts.Expression[]): readonly AnalyzedMiddlewareAttachment[] => {
+  const expandReferences = (references: readonly StaticValue[]): readonly AnalyzedMiddlewareAttachment[] => {
     const attachments: AnalyzedMiddlewareAttachment[] = [];
     for (const expression of references) {
       const reference = policyReference(
         expression,
-        checker,
+        metadata,
         middlewareBySymbol,
         middlewareAliases,
         groupSyntax,
       );
-      attachments.push(...(reference.source === "group"
+      const expanded = reference.source === "group"
         ? expandGroup(reference.name, reference.node)
-        : [reference]));
+        : [reference];
+      work(syntax.node!, expanded.length, reference.source === "group" ? groupDepths.get(reference.name)! + 1 : 1);
+      for (const attachment of expanded) {
+        metadata.emitDeclaration(syntax.node!);
+        attachments.push(attachment);
+      }
     }
     return Object.freeze(attachments);
   };
@@ -1930,12 +1858,12 @@ function resolveMiddlewarePolicy(
     controllers: Object.freeze(syntax.controllers.map((mapping) => Object.freeze({
       pattern: mapping.pattern,
       attachments: expandReferences(mapping.references),
-      node: mapping.node,
+      node: mapping.origin,
     }))),
   });
 }
 
-function middlewarePatternRegex(pattern: string, node: ts.StringLiteral): RegExp {
+function middlewarePatternRegex(pattern: string, node: BunwireSourceLocation): RegExp {
   const segments = pattern.split("/");
   if (pattern.trim().length === 0
     || pattern !== pattern.trim()
@@ -1948,11 +1876,8 @@ function middlewarePatternRegex(pattern: string, node: ts.StringLiteral): RegExp
       || segment === ".."
       || (segment.includes("**") && segment !== "**")
     ))) {
-    fail(
-      "MIDDLEWARE_CONTROLLER_PATTERN_INVALID",
-      `Controller pattern ${JSON.stringify(pattern)} must be a non-empty relative path using '/' without traversal.`,
-      node,
-    );
+    throw new BunwireCompilerError("MIDDLEWARE_CONTROLLER_PATTERN_INVALID",
+      `Controller pattern ${JSON.stringify(pattern)} must be a non-empty relative path using '/' without traversal.`, { location: node });
   }
   let source = "^";
   for (let index = 0; index < pattern.length;) {
@@ -2229,12 +2154,9 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       compilationHandlers.set(kindId, data);
     }
   }
-  const policySyntax = analyzeMiddlewarePolicySyntax(context.program, options.bootstrapPath);
-  const scheduleSyntax = analyzeSchedulePolicySyntax(context.program, options.bootstrapPath);
   const scheduleHandlers = options.extensions.metadataHandlers.filter((entry) => isObject(entry.data) && entry.data.type === "bunwire.application-schedule");
   if (scheduleHandlers.length > 1) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "Only one Application schedule compiler handler may be contributed.");
   const scheduleHandler = scheduleHandlers[0]?.data as ApplicationScheduleCompilationHandlerData | undefined;
-  if (scheduleSyntax.configured && !scheduleHandler) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "withSchedule() requires an adapter schedule compiler contribution.");
   if (scheduleHandler && (!Array.isArray(scheduleHandler.jobClassKindIds) || !Array.isArray(scheduleHandler.taskClassKindIds)
     || typeof scheduleHandler.compile !== "function" || typeof scheduleHandler.decorated !== "function")) {
     throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "The adapter schedule compiler contribution is malformed.");
@@ -2444,9 +2366,14 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       middlewareTargetsByAlias.set(contribution.data.alias, contribution.target);
     }
   }
+  for (const symbol of managedBySymbol.keys()) metadata.allowReference(symbol);
+  for (const symbol of middlewareTargetsBySymbol.keys()) metadata.allowReference(symbol);
+  const policySyntax = analyzeMiddlewarePolicySyntax(context.program, options.bootstrapPath, metadata);
+  const scheduleSyntax = analyzeSchedulePolicySyntax(context.program, options.bootstrapPath, metadata);
+  if (scheduleSyntax.configured && !scheduleHandler) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", "withSchedule() requires an adapter schedule compiler contribution.");
   const middlewarePolicy = resolveMiddlewarePolicy(
     policySyntax,
-    checker,
+    metadata,
     middlewareTargetsBySymbol,
     middlewareTargetsByAlias,
   );
@@ -2634,11 +2561,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
         .some((candidate) => matcher.test(candidate))
     ));
     if (matches.length === 0) {
-      fail(
-        "MIDDLEWARE_CONTROLLER_PATTERN_INVALID",
-        `Controller pattern ${JSON.stringify(mapping.pattern)} matched no discovered Controller.`,
-        mapping.node,
-      );
+      throw new BunwireCompilerError("MIDDLEWARE_CONTROLLER_PATTERN_INVALID", `Controller pattern ${JSON.stringify(mapping.pattern)} matched no discovered Controller.`, { location: mapping.node });
     }
     for (const entry of matches) {
       const attachments = controllerMappings.get(entry) ?? [];
@@ -2662,6 +2585,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     }))),
   }));
   const schedules: AnalyzedScheduleDefinition[] = [];
+  const scheduleOrigins = new Map<AnalyzedScheduleDefinition, BunwireSourceLocation>();
   if (scheduleHandler) {
     const allowedJobs = new Set(scheduleHandler.jobClassKindIds); const allowedTasks = new Set(scheduleHandler.taskClassKindIds);
     for (const kindId of [...allowedJobs, ...allowedTasks]) if (!options.extensions.classKinds.some((kind) => kind.id === kindId)) {
@@ -2676,32 +2600,48 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
       let definition: Omit<DefineRuntimeScheduleOptions, "target"> | undefined;
       try { definition = scheduleHandler.decorated(Object.freeze({ targetName: entry.name, targetData: entry.data, generatedId: generatedId(entry, "") })); }
       catch (cause) { if (cause instanceof BunwireCompilerError) throw cause; throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Invalid decorated schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`, { location: entry.location, cause }); }
-      if (definition) schedules.push(Object.freeze({ ...definition, target: entry.target }));
+      if (definition) {
+        const schedule = Object.freeze({ ...definition, target: entry.target });
+        schedules.push(schedule); scheduleOrigins.set(schedule, entry.location);
+      }
     }
     for (const [index, syntax] of scheduleSyntax.entries.entries()) {
-      const symbol = symbolAtExpression(checker, syntax.target);
+      const symbol = syntax.target.kind === "reference" ? syntax.target.symbol : undefined;
       const managed = symbol && managedBySymbol.get(canonicalSymbol(checker, symbol));
       const entry = managed && normalizedClasses.find((candidate) => canonicalCompilerPath(candidate.location.filePath) === canonicalCompilerPath(managed.declaration.getSourceFile().fileName)
         && candidate.name === managed.declaration.name?.text);
       const allowed = syntax.execution === "job" ? allowedJobs : allowedTasks;
-      if (!entry || !allowed.has(entry.kind.id)) fail("SCHEDULE_POLICY_INVALID", `schedule.${syntax.execution === "job" ? "job" : "task"}() must reference a generated class of an allowed canonical kind.`, syntax.target);
+      if (!entry || !allowed.has(entry.kind.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `schedule.${syntax.execution === "job" ? "job" : "task"}() must reference a generated class of an allowed canonical kind.`, { location: syntax.target.origin });
       const intrinsic = entry.methods.length === 1 ? entry.methods[0] : undefined;
       if (!intrinsic || (syntax.execution === "direct" && syntax.arguments.length > 0)
         || (syntax.execution === "job" && (syntax.arguments.length < intrinsic.minimumCallerArguments || (intrinsic.maximumCallerArguments !== null && syntax.arguments.length > intrinsic.maximumCallerArguments)))) {
         fail("SCHEDULE_POLICY_INVALID", `Scheduled ${syntax.execution} arguments do not satisfy the target handle contract.`, syntax.node);
       }
+      const argumentData = Object.freeze(syntax.arguments.map((value) => metadata.materialize(value, "SCHEDULE_POLICY_INVALID")));
+      const callData = Object.freeze(syntax.calls.map((call) => Object.freeze({ name: call.name, arguments: Object.freeze(call.arguments.map((value) => metadata.materialize(value, "SCHEDULE_POLICY_INVALID"))) })));
       try {
         const definition = scheduleHandler.compile(Object.freeze({ execution: syntax.execution, targetName: entry.name, targetData: entry.data,
-          arguments: Object.freeze(syntax.arguments.map(evaluateDecoratorValue)),
-          calls: Object.freeze(syntax.calls.map((call) => Object.freeze({ name: call.name, arguments: Object.freeze(call.arguments.map(evaluateDecoratorValue)) }))),
+          arguments: argumentData,
+          calls: callData,
           generatedId: generatedId(entry, `:${index + 1}`) }));
-        schedules.push(Object.freeze({ ...definition, target: entry.target }));
-      } catch (cause) { if (cause instanceof BunwireCompilerError) throw cause; throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Invalid central schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`, { location: locationOf(syntax.node), cause }); }
+        const schedule = Object.freeze({ ...definition, target: entry.target });
+        schedules.push(schedule);
+        scheduleOrigins.set(schedule, syntax.calls.find((call) => call.name === "id")?.arguments[0]?.origin ?? locationOf(syntax.node));
+      } catch (cause) {
+        if (cause instanceof BunwireCompilerError) throw cause;
+        const source = cause instanceof Error && isObject(cause.cause) ? cause.cause : undefined;
+        const index = source && Number.isSafeInteger(source.index) && (source.index as number) >= 0 ? source.index as number : undefined;
+        const callIndex = source ? callData.findIndex((call) => call === source.value) : -1;
+        const call = syntax.calls[callIndex];
+        const origin = source?.value === argumentData && index !== undefined ? syntax.arguments[index]?.origin
+          : call ? (index === undefined ? undefined : call.arguments[index]?.origin) ?? locationOf(call.node) : undefined;
+        throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Invalid central schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`, { location: origin ?? locationOf(syntax.node), cause });
+      }
     }
   }
   const ids = new Set<string>();
   for (const schedule of schedules) {
-    if (ids.has(schedule.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Duplicate generated schedule identity "${schedule.id}".`);
+    if (ids.has(schedule.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Duplicate generated schedule identity "${schedule.id}".`, { location: scheduleOrigins.get(schedule)! });
     ids.add(schedule.id);
   }
   metadata.validateMutations();

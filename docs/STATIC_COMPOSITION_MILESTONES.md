@@ -1,6 +1,6 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestones 15–16 are complete; Milestones 17–22 are not started.
+Status: Project Milestones 15–17 are complete; Milestones 18–22 are not started.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
@@ -147,7 +147,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 |---|---|---|---|
 | 15 | Shared static expression resolver | Completed project baseline | Complete |
 | 16 | Expressions throughout managed metadata | 15 | Complete |
-| 17 | Composable middleware and schedule values | 16 | Planned |
+| 17 | Composable middleware and schedule values | 16 | Complete |
 | 18 | Static policy helpers across files | 17 | Planned |
 | 19 | Multiple Application policy blocks | 18 | Planned |
 | 20 | Bounded static `for...of` expansion | 19 | Planned |
@@ -236,7 +236,7 @@ Expected behavior: shared static values work throughout managed metadata. Not ex
 
 # Milestone 17 — Composable Middleware and Schedule Values
 
-Status: Planned. Depends on Milestone 16.
+Status: Complete. Depends on Milestone 16. See [implementation record](progress/milestone-17.md).
 
 ## Goal and packages affected
 
@@ -252,19 +252,19 @@ Extend both central policy parsers in `@bunwire/vite` to accept supported values
 
 ## Required automated tests
 
-- [ ] **[Automated / Compiler Fixture]** All `COMMON_SECURITY` and `ADMIN_GLOB` review examples compile, with real referenced middleware/policies.
-- [ ] **[Automated / Compiler Fixture]** Imported mapping objects, object spreads, mixed class/alias middleware arrays, and known argument spreads work.
-- [ ] **[Automated / Compiler Fixture]** Schedule arguments, times, timezones, IDs, and modifiers resolve from supported expressions.
-- [ ] **[Automated / Compiler Fixture]** Reject invalid globs, unknown middleware, group cycles, duplicate schedule IDs, invalid cadence values, wrong job arity, and nonserializable job payloads.
-- [ ] **[Automated / Generated Output]** Equivalent composed and inline policies emit equivalent metadata.
-- [ ] **[Automated / Integration]** Middleware execution order and delivered scheduled-job arguments match the declared policy.
+- [x] **[Automated / Compiler Fixture]** All `COMMON_SECURITY` and `ADMIN_GLOB` review examples compile, with real referenced middleware/policies.
+- [x] **[Automated / Compiler Fixture]** Imported mapping objects, object spreads, mixed class/alias middleware arrays, and known argument spreads work.
+- [x] **[Automated / Compiler Fixture]** Schedule arguments, times, timezones, IDs, and modifiers resolve from supported expressions.
+- [x] **[Automated / Compiler Fixture]** Reject invalid globs, unknown middleware, group cycles, duplicate schedule IDs, invalid cadence values, wrong job arity, and nonserializable job payloads.
+- [x] **[Automated / Generated Output]** Equivalent composed and inline policies emit equivalent metadata.
+- [x] **[Automated / Integration]** Middleware execution order and delivered scheduled-job arguments match the declared policy.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Shared arrays, spreads, and computed mapping keys work in their supported policy positions.
-- [ ] Resolved values receive the same validation as inline values.
-- [ ] Errors retain the source location of the invalid value, including imported declarations.
-- [ ] Required tests and dependent adapter checks pass and are recorded.
+- [x] Shared arrays, spreads, and computed mapping keys work in their supported policy positions.
+- [x] Resolved values receive the same validation as inline values.
+- [x] Errors retain the source location of the invalid value, including imported declarations.
+- [x] Required tests and dependent adapter checks pass and are recorded.
 
 Expected behavior: central callbacks accept reusable values and collections. Not expected yet: function helpers, multiple callbacks, or loops.
 

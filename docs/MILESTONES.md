@@ -1353,7 +1353,7 @@ Core owns canonical direct events completely; no High/Medium correctness finding
 
 # Static Expressions and Modular Composition — Milestones 15–22
 
-Status: Milestones 15–16 are complete; Milestones 17–22 are not started. See [Milestone 16 implementation record](progress/milestone-16.md). See [Milestone 15 implementation record](progress/milestone-15.md).
+Status: Milestones 15–17 are complete; Milestones 18–22 are not started. See [Milestone 17 implementation record](progress/milestone-17.md). See [Milestone 16 implementation record](progress/milestone-16.md). See [Milestone 15 implementation record](progress/milestone-15.md).
 
 The detailed implementation order, static language contract, required automated tests, and acceptance criteria are defined in [STATIC_COMPOSITION_MILESTONES.md](STATIC_COMPOSITION_MILESTONES.md).
 

@@ -29,10 +29,14 @@ export const BUN_SCHEDULED_TASK_COMPILATION_HANDLER = defineCompilerMetadataHand
   type: "bunwire.managed-class-compilation", classKindIds: [BUN_SCHEDULED_TASK_KIND.id], scope: "transient", properties: ["id", "timezone", "withoutOverlapping", "onOneServer", "lockFor"], compileMetadata: compiled,
   intrinsicMethods: [{ name: "handle", kind: BUN_SCHEDULED_TASK_HANDLE_KIND, compilerSymbol: { moduleSpecifier: "@bunwire/bun", exportName: "BUN_SCHEDULED_TASK_HANDLE_KIND" }, parameters: "none" }],
 } satisfies ManagedClassCompilationHandlerData) });
+function policyFailure(error: unknown, value: unknown, index?: number): BunScheduleError {
+  return new BunScheduleError(error instanceof Error ? error.message : String(error),
+    { cause: { value, ...(index === undefined ? {} : { index }), error } });
+}
 function cadence(calls: readonly { readonly name: string; readonly arguments: readonly unknown[] }[]): { cron: string; timezone?: string; overlap: BunScheduledTaskDefinition["overlap"]; lockFor?: number; id?: string } {
   let cron: string | undefined; let timezone: string | undefined; let without = false; let single = false; let lockFor: number | undefined; let id: string | undefined;
   const arity = (name: string, args: readonly unknown[], min: number, max = min): void => { if (args.length < min || args.length > max) throw new BunScheduleError(`${name}() received an invalid argument count.`); };
-  for (const call of calls) switch (call.name) {
+  for (const call of calls) { try { switch (call.name) {
     case "cron": arity(call.name, call.arguments, 1); cron = call.arguments[0] as string; break;
     case "everyMinute": arity(call.name, call.arguments, 0); cron = "* * * * *"; break;
     case "hourlyAt": arity(call.name, call.arguments, 0, 1); { const minute = call.arguments[0] ?? 0; if (!Number.isSafeInteger(minute) || (minute as number) < 0 || (minute as number) > 59) throw new BunScheduleError("hourlyAt minute must be 0..59."); cron = `${minute} * * * *`; } break;
@@ -43,12 +47,26 @@ function cadence(calls: readonly { readonly name: string; readonly arguments: re
     case "lockFor": arity(call.name, call.arguments, 1); if (!Number.isSafeInteger(call.arguments[0]) || (call.arguments[0] as number) < 1) throw new BunScheduleError("lockFor requires a positive safe integer."); lockFor = call.arguments[0] as number; break;
     case "id": arity(call.name, call.arguments, 1); if (typeof call.arguments[0] !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/.test(call.arguments[0])) throw new BunScheduleError("Schedule id is invalid."); id = call.arguments[0]; break;
   }
-  if (!cron) throw new BunScheduleError("Schedule cadence is missing."); parseCronExpression(cron); if (single && !id) throw new BunScheduleError("onOneServer schedules require id().");
+  } catch (error) { throw policyFailure(error, call, call.arguments.length ? 0 : undefined); } }
+  if (!cron) throw new BunScheduleError("Schedule cadence is missing.");
+  try { parseCronExpression(cron); } catch (error) { throw policyFailure(error, calls.find((call) => call.name === "cron"), 0); }
+  if (single && !id) throw policyFailure(new BunScheduleError("onOneServer schedules require id()."), calls.find((call) => call.name === "onOneServer"));
   return { cron, ...(timezone === undefined ? {} : { timezone }), overlap: without && single ? "without-overlap-single-server" : without ? "without-overlap" : single ? "single-server" : "allow", ...(lockFor === undefined ? {} : { lockFor }), ...(id ? { id } : {}) };
 }
 export const BUN_APPLICATION_SCHEDULE_HANDLER = defineCompilerMetadataHandler({ id: "bun.application-schedule", data: Object.freeze({
   type: "bunwire.application-schedule", jobClassKindIds: ["bun.job"], taskClassKindIds: [BUN_SCHEDULED_TASK_KIND.id],
-  compile(input) { const data = cadence(input.calls); if (input.execution === "job") new JsonJobSerializer().serialize(input.arguments);
+  compile(input) { const data = cadence(input.calls);
+    if (input.execution === "job") {
+      const serializer = new JsonJobSerializer();
+      try { serializer.serialize(input.arguments); }
+      catch (error) {
+        for (let index = 0; index < input.arguments.length; index++) {
+          try { serializer.serialize([input.arguments[index]]); }
+          catch { throw policyFailure(error, input.arguments, index); }
+        }
+        throw error;
+      }
+    }
     return Object.freeze({ id: data.id ?? input.generatedId, execution: input.execution, arguments: input.arguments, cron: data.cron, ...(data.timezone === undefined ? {} : { timezone: data.timezone }), overlap: data.overlap, ...(data.lockFor === undefined ? {} : { lockFor: data.lockFor }) }); },
   decorated(input) { const data = input.targetData as BunScheduledTaskDefinition; if (!data.cron) return undefined;
     return Object.freeze({ id: data.id ?? input.generatedId, execution: "direct", arguments: [], cron: data.cron, ...(data.timezone === undefined ? {} : { timezone: data.timezone }), overlap: data.overlap, ...(data.lockFor === undefined ? {} : { lockFor: data.lockFor }) }); },

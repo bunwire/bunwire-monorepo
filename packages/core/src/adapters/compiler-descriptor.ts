@@ -61,6 +61,9 @@ export interface ApplicationScheduleCompilationHandlerData {
   readonly type: "bunwire.application-schedule";
   readonly jobClassKindIds: readonly string[];
   readonly taskClassKindIds: readonly string[];
+  /** Validation errors may set Error.cause to { value: input.calls[n] | input.arguments,
+   * index?: number } to locate a failing argument without depending on compiler AST types.
+   * Omit index for errors concerning a complete fluent call. This convention is optional. */
   readonly compile: (input: {
     readonly execution: ScheduleExecution;
     readonly targetName: string;

@@ -19,8 +19,8 @@ describe("Bun schedule compilation", () => {
     const generated = generateRuntimeRegistryModule({ analysis, extensions, modulePath: path.join(fixture, ".generated/registry.ts") });
     expect(generated.code).toContain("schedules: ["); expect(generated.code).toContain("defineRuntimeSchedule({"); expect(generated.code).not.toContain('"lockFor": 30000'); expect(generateRuntimeRegistryModule({ analysis, extensions, modulePath: path.join(fixture, ".generated/registry.ts") }).code).toBe(generated.code);
   });
-  it("rejects nonliteral arguments before evaluating invalid cadence", () => {
-    expect(() => analyze("invalid.ts")).toThrowError(expect.objectContaining({ code: "DECORATOR_ARGUMENT_INVALID" }));
+  it("accepts constant arguments and still rejects invalid cadence", () => {
+    expect(() => analyze("invalid.ts")).toThrowError(expect.objectContaining({ code: "SCHEDULE_POLICY_INVALID", message: expect.stringMatching(/five fields/) }));
   });
   it.each([
     ["invalid-target.ts", "SCHEDULE_POLICY_INVALID", /allowed canonical kind/],

@@ -3,12 +3,14 @@ import ts from "typescript";
 import { applicationCallChain, collectImportBindings, unwrapBootstrapExpression } from "./bootstrap-discovery.js";
 import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.js";
 import { canonicalCompilerPath } from "./path-identity.js";
+import type { ManagedMetadataResolver } from "./managed-metadata.js";
+import type { StaticValue } from "./static-expression.js";
 
-export interface ScheduleCallSyntax { readonly name: string; readonly arguments: readonly ts.Expression[]; readonly node: ts.CallExpression }
+export interface ScheduleCallSyntax { readonly name: string; readonly arguments: readonly StaticValue[]; readonly node: ts.CallExpression }
 export interface ScheduleEntrySyntax {
   readonly execution: "direct" | "job";
-  readonly target: ts.Expression;
-  readonly arguments: readonly ts.Expression[];
+  readonly target: StaticValue;
+  readonly arguments: readonly StaticValue[];
   readonly calls: readonly ScheduleCallSyntax[];
   readonly node: ts.ExpressionStatement;
 }
@@ -20,7 +22,7 @@ function locationOf(node: ts.Node): BunwireSourceLocation {
 }
 function fail(message: string, node: ts.Node): never { throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", message, { location: locationOf(node) }); }
 
-export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: string | undefined): SchedulePolicySyntax {
+export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: string | undefined, metadata: ManagedMetadataResolver): SchedulePolicySyntax {
   if (!bootstrapPath) return EMPTY;
   const source = program.getSourceFiles().find((candidate) => canonicalCompilerPath(candidate.fileName) === canonicalCompilerPath(bootstrapPath));
   if (!source) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Schedule bootstrap "${bootstrapPath}" is not part of the TypeScript Program.`, { filePath: bootstrapPath });
@@ -52,13 +54,14 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
     if (!ts.isExpressionStatement(statement)) fail("Schedule callbacks may contain only direct fluent schedule expressions.", statement);
     let current = unwrapBootstrapExpression(statement.expression); const fluent: ScheduleCallSyntax[] = []; let rooted = false;
     while (ts.isCallExpression(current)) {
-      if (current.questionDotToken || current.arguments.some(ts.isSpreadElement)) fail("Schedule expressions do not support optional calls or spread arguments.", current);
+      if (current.questionDotToken) fail("Schedule expressions do not support optional calls.", current);
       const called = unwrapBootstrapExpression(current.expression);
       if (!ts.isPropertyAccessExpression(called) || called.questionDotToken) fail("Schedule expressions require direct fluent property calls.", current);
       if (ts.isIdentifier(called.expression) && called.expression.text === registryName) {
         if (called.name.text !== "job" && called.name.text !== "task") fail(`Unsupported schedule registry method ${called.name.text}().`, called.name);
-        const target = current.arguments[0];
-        if (!target || (called.name.text === "task" && current.arguments.length !== 1)) fail(`schedule.${called.name.text}() requires ${called.name.text === "task" ? "one target" : "a target and optional static arguments"}.`, current);
+        const arguments_ = metadata.arguments(current, "SCHEDULE_POLICY_INVALID");
+        const target = arguments_[0];
+        if (!target || (called.name.text === "task" && arguments_.length !== 1)) fail(`schedule.${called.name.text}() requires ${called.name.text === "task" ? "one target" : "a target and optional static arguments"}.`, current);
         const cadenceNames = fluent.filter((entry) => ["cron", "everyMinute", "hourlyAt", "dailyAt"].includes(entry.name));
         if (cadenceNames.length !== 1) fail("Every central schedule requires exactly one cadence call.", statement);
         const modifierNames = new Set<string>();
@@ -67,10 +70,11 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
           if (modifierNames.has(entry.name)) fail(`Schedule builder method ${entry.name}() may only be used once.`, entry.node);
           modifierNames.add(entry.name);
         }
-        entries.push(Object.freeze({ execution: called.name.text === "job" ? "job" : "direct", target, arguments: Object.freeze(current.arguments.slice(1)), calls: Object.freeze(fluent.reverse()), node: statement }));
+        metadata.emitDeclaration(statement);
+        entries.push(Object.freeze({ execution: called.name.text === "job" ? "job" : "direct", target, arguments: Object.freeze(arguments_.slice(1)), calls: Object.freeze(fluent.reverse()), node: statement }));
         rooted = true; break;
       }
-      fluent.push(Object.freeze({ name: called.name.text, arguments: Object.freeze([...current.arguments]), node: current }));
+      fluent.push(Object.freeze({ name: called.name.text, arguments: metadata.arguments(current, "SCHEDULE_POLICY_INVALID"), node: current }));
       current = unwrapBootstrapExpression(called.expression);
     }
     if (!rooted) fail("Schedule expressions must begin with the callback's schedule.job() or schedule.task().", statement);

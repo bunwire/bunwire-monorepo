@@ -1,10 +1,13 @@
-import { afterAll, describe, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { createPolicyHarness } from "./policy-test-support.js";
 
 const { analyzePolicy, expectFailure, cleanup } = createPolicyHarness("callback");
 afterAll(cleanup);
 
 describe("Middleware Redesign 12D — invalid policy callback syntax", () => {
+  it("accepts known argument spreads", () => {
+    expect(analyzePolicy("defineApp().withMiddlewares((registry) => { registry.use(...[AuthMiddleware]); })")().classes).toBeTruthy();
+  });
   it("rejects repeated and indirect withMiddlewares callbacks", () => {
     expectFailure(analyzePolicy(
       "defineApp().withMiddlewares((registry) => {}).withMiddlewares((registry) => {})",
@@ -43,7 +46,6 @@ describe("Middleware Redesign 12D — invalid policy callback syntax", () => {
     ["wrong receiver", "defineApp().withMiddlewares((registry) => { other.use(AuthMiddleware); })"],
     ["computed method", "defineApp().withMiddlewares((registry) => { registry[\"use\"](AuthMiddleware); })"],
     ["optional method", "defineApp().withMiddlewares((registry) => { registry?.use(AuthMiddleware); })"],
-    ["spread arguments", "defineApp().withMiddlewares((registry) => { registry.use(...[AuthMiddleware]); })"],
   ])("rejects forbidden callback form: %s", (_label, body) => {
     expectFailure(analyzePolicy(body), "MIDDLEWARE_POLICY_INVALID");
   });

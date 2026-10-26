@@ -1,7 +1,7 @@
 import { realpathSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.js";
+import { BunwireCompilerError, type BunwireRelatedLocation, type BunwireSourceLocation } from "./diagnostics.js";
 import { canonicalCompilerPath } from "./path-identity.js";
 
 export const STATIC_LIMITS = Object.freeze({ depth: 64, nodes: 100_000, declarations: 10_000 });
@@ -12,7 +12,8 @@ export type StaticValue = (
   | { readonly kind: "array"; readonly items: readonly StaticValue[] }
   | { readonly kind: "object"; readonly properties: Readonly<Record<string, StaticValue>>; readonly keyOrigins: Readonly<Record<string, BunwireSourceLocation>> }
   | { readonly kind: "reference"; readonly symbol: ts.Symbol }
-) & { readonly origin: BunwireSourceLocation; readonly helperPath?: string; readonly loopPath?: string };
+) & { readonly origin: BunwireSourceLocation; readonly helperPath?: string; readonly loopPath?: string;
+  readonly related?: readonly BunwireRelatedLocation[] };
 
 export interface StaticResolution {
   readonly value: StaticValue;
@@ -144,8 +145,16 @@ export class StaticExpressionResolver {
       const at = location(entry);
       return `${entry.getText().slice(0, 100)} (${at.filePath}:${at.line}:${at.column})`;
     }).join(" -> ");
+    const primary = location(node);
+    const related = [
+      ...this.chain.map((entry) => ({ label: "Referenced here", location: location(entry) })),
+      ...[...this.active].flatMap((symbol) => symbol.valueDeclaration
+        ? [{ label: "Static declaration", location: location(symbol.valueDeclaration) }] : []),
+    ]
+      .filter((entry) => entry.location.filePath !== primary.filePath
+        || entry.location.line !== primary.line || entry.location.column !== primary.column);
     throw new BunwireCompilerError("DECORATOR_ARGUMENT_INVALID",
-      `Unsupported static expression: ${reason}. Resolution path: ${chain}`, { location: location(node) });
+      `Unsupported static expression: ${reason}. Resolution path: ${chain}`, { location: primary, related });
   }
 
   private charge(node: ts.Node, depth: number): void {

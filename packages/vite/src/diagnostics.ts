@@ -46,9 +46,15 @@ export interface BunwireSourceLocation {
   readonly endColumn: number;
 }
 
+export interface BunwireRelatedLocation {
+  readonly label: string;
+  readonly location: BunwireSourceLocation;
+}
+
 export interface BunwireCompilerErrorOptions {
   readonly filePath?: string;
   readonly location?: BunwireSourceLocation;
+  readonly related?: readonly BunwireRelatedLocation[];
   readonly cause?: unknown;
 }
 
@@ -56,6 +62,7 @@ export class BunwireCompilerError extends Error {
   readonly code: BunwireCompilerErrorCode;
   readonly filePath: string | undefined;
   readonly location: BunwireSourceLocation | undefined;
+  readonly related: readonly BunwireRelatedLocation[];
 
   constructor(
     code: BunwireCompilerErrorCode,
@@ -67,5 +74,6 @@ export class BunwireCompilerError extends Error {
     this.code = code;
     this.filePath = options.filePath ?? options.location?.filePath;
     this.location = options.location;
+    this.related = Object.freeze([...(options.related ?? [])]);
   }
 }

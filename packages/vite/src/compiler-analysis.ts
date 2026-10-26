@@ -1,4 +1,5 @@
 import path from "node:path";
+import { realpathSync } from "node:fs";
 import {
   Inject,
   CONTROLLER_KIND,
@@ -24,6 +25,7 @@ import ts from "typescript";
 import type { DiscoveredCompilerExtensions } from "./extensions.js";
 import {
   BunwireCompilerError,
+  type BunwireRelatedLocation,
   type BunwireSourceLocation,
 } from "./diagnostics.js";
 import {
@@ -165,6 +167,8 @@ export interface BunwireCompilerAnalysis {
   readonly context: BunwireProgramContext;
   readonly classes: readonly AnalyzedManagedClass[];
   readonly schedules: readonly AnalyzedScheduleDefinition[];
+  /** Project-local source files consumed while resolving static metadata and policies. */
+  readonly dependencies: readonly string[];
 }
 export interface AnalyzedScheduleDefinition extends Omit<DefineRuntimeScheduleOptions, "target"> { readonly target: CompilerRuntimeReference }
 
@@ -1738,12 +1742,15 @@ type PolicyReference = AnalyzedMiddlewareAttachment | {
   readonly node: BunwireSourceLocation;
 };
 
-function withPolicyPaths(cause: unknown, helperPath?: string, loopPath?: string): never {
+function withPolicyPaths(cause: unknown, helperPath?: string, loopPath?: string,
+  related: readonly BunwireRelatedLocation[] = []): never {
   if (cause instanceof BunwireCompilerError) {
     const helper = helperPath && !cause.message.includes("Policy helper path:") ? ` Policy helper path: ${helperPath}.` : "";
     const loop = loopPath && !cause.message.includes("Policy loop path:") ? ` Policy loop path: ${loopPath}.` : "";
     if (helper || loop) throw new BunwireCompilerError(cause.code, `${cause.message}${helper}${loop}`,
-      { ...(cause.location ? { location: cause.location } : {}), cause });
+      { ...(cause.location ? { location: cause.location } : {}), related: [...cause.related, ...related], cause });
+    if (related.length && !cause.related.length) throw new BunwireCompilerError(cause.code, cause.message,
+      { ...(cause.location ? { location: cause.location } : {}), related, cause });
   }
   throw cause;
 }
@@ -1840,7 +1847,7 @@ function resolveMiddlewarePolicy(
         work(declaration.node);
         attachments.push(reference);
       }
-      } catch (cause) { withPolicyPaths(cause, expression.helperPath, expression.loopPath); }
+      } catch (cause) { withPolicyPaths(cause, expression.helperPath, expression.loopPath, expression.related); }
     }
     stack.pop();
     const frozen = Object.freeze(attachments);
@@ -1850,7 +1857,8 @@ function resolveMiddlewarePolicy(
   };
   for (const name of groupSyntax.keys()) {
     try { expandGroup(name); }
-    catch (cause) { withPolicyPaths(cause, groupSyntax.get(name)?.references[0]?.helperPath, groupSyntax.get(name)?.references[0]?.loopPath); }
+    catch (cause) { const reference = groupSyntax.get(name)?.references[0];
+      withPolicyPaths(cause, reference?.helperPath, reference?.loopPath, reference?.related); }
   }
 
   const expandReferences = (references: readonly StaticValue[]): readonly AnalyzedMiddlewareAttachment[] => {
@@ -1872,7 +1880,7 @@ function resolveMiddlewarePolicy(
         metadata.emitDeclaration(syntax.node!);
         attachments.push(attachment);
       }
-      } catch (cause) { withPolicyPaths(cause, expression.helperPath, expression.loopPath); }
+      } catch (cause) { withPolicyPaths(cause, expression.helperPath, expression.loopPath, expression.related); }
     }
     return Object.freeze(attachments);
   };
@@ -2618,6 +2626,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
   const schedules: AnalyzedScheduleDefinition[] = [];
   const scheduleOrigins = new Map<AnalyzedScheduleDefinition, BunwireSourceLocation>();
   const schedulePaths = new Map<AnalyzedScheduleDefinition, string>();
+  const scheduleRelated = new Map<AnalyzedScheduleDefinition, readonly BunwireRelatedLocation[]>();
   if (scheduleHandler) {
     const allowedJobs = new Set(scheduleHandler.jobClassKindIds); const allowedTasks = new Set(scheduleHandler.taskClassKindIds);
     for (const kindId of [...allowedJobs, ...allowedTasks]) if (!options.extensions.classKinds.some((kind) => kind.id === kindId)) {
@@ -2639,17 +2648,19 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
     }
     for (const [index, syntax] of scheduleSyntax.entries.entries()) {
       const helperPath = syntax.target.helperPath;
-      const withPath = (message: string) => `${message}${helperPath ? ` Policy helper path: ${helperPath}.` : ""}`;
+      const loopPath = syntax.target.loopPath;
+      const related = syntax.target.related ?? [];
+      const withPath = (message: string) => `${message}${helperPath ? ` Policy helper path: ${helperPath}.` : ""}${loopPath ? ` Policy loop path: ${loopPath}.` : ""}`;
       const symbol = syntax.target.kind === "reference" ? syntax.target.symbol : undefined;
       const managed = symbol && managedBySymbol.get(canonicalSymbol(checker, symbol));
       const entry = managed && normalizedClasses.find((candidate) => canonicalCompilerPath(candidate.location.filePath) === canonicalCompilerPath(managed.declaration.getSourceFile().fileName)
         && candidate.name === managed.declaration.name?.text);
       const allowed = syntax.execution === "job" ? allowedJobs : allowedTasks;
-      if (!entry || !allowed.has(entry.kind.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", withPath(`schedule.${syntax.execution === "job" ? "job" : "task"}() must reference a generated class of an allowed canonical kind.`), { location: syntax.target.origin });
+      if (!entry || !allowed.has(entry.kind.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", withPath(`schedule.${syntax.execution === "job" ? "job" : "task"}() must reference a generated class of an allowed canonical kind.`), { location: syntax.target.origin, related });
       const intrinsic = entry.methods.length === 1 ? entry.methods[0] : undefined;
       if (!intrinsic || (syntax.execution === "direct" && syntax.arguments.length > 0)
         || (syntax.execution === "job" && (syntax.arguments.length < intrinsic.minimumCallerArguments || (intrinsic.maximumCallerArguments !== null && syntax.arguments.length > intrinsic.maximumCallerArguments)))) {
-        throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", withPath(`Scheduled ${syntax.execution} arguments do not satisfy the target handle contract.`), { location: locationOf(syntax.node) });
+        throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", withPath(`Scheduled ${syntax.execution} arguments do not satisfy the target handle contract.`), { location: locationOf(syntax.node), related });
       }
       let argumentData: readonly unknown[];
       let callData: readonly { readonly name: string; readonly arguments: readonly unknown[] }[];
@@ -2657,7 +2668,7 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
         argumentData = Object.freeze(syntax.arguments.map((value) => metadata.materialize(value, "SCHEDULE_POLICY_INVALID")));
         callData = Object.freeze(syntax.calls.map((call) => Object.freeze({ name: call.name, arguments: Object.freeze(call.arguments.map((value) => metadata.materialize(value, "SCHEDULE_POLICY_INVALID"))) })));
       } catch (cause) {
-        if (cause instanceof BunwireCompilerError) throw new BunwireCompilerError(cause.code, withPath(cause.message), { ...(cause.location ? { location: cause.location } : {}), cause });
+        if (cause instanceof BunwireCompilerError) throw new BunwireCompilerError(cause.code, withPath(cause.message), { ...(cause.location ? { location: cause.location } : {}), related: [...cause.related, ...related], cause });
         throw cause;
       }
       try {
@@ -2669,24 +2680,31 @@ export function analyzeBunwireProgram(options: BunwireAnalysisOptions): BunwireC
         schedules.push(schedule);
         scheduleOrigins.set(schedule, syntax.calls.find((call) => call.name === "id")?.arguments[0]?.origin ?? locationOf(syntax.node));
         if (helperPath) schedulePaths.set(schedule, helperPath);
+        if (related.length) scheduleRelated.set(schedule, related);
       } catch (cause) {
         if (cause instanceof BunwireCompilerError) throw new BunwireCompilerError(cause.code, withPath(cause.message),
-          { ...(cause.location ? { location: cause.location } : {}), cause });
+          { ...(cause.location ? { location: cause.location } : {}), related: [...cause.related, ...related], cause });
         const source = cause instanceof Error && isObject(cause.cause) ? cause.cause : undefined;
         const index = source && Number.isSafeInteger(source.index) && (source.index as number) >= 0 ? source.index as number : undefined;
         const callIndex = source ? callData.findIndex((call) => call === source.value) : -1;
         const call = syntax.calls[callIndex];
         const origin = source?.value === argumentData && index !== undefined ? syntax.arguments[index]?.origin
           : call ? (index === undefined ? undefined : call.arguments[index]?.origin) ?? locationOf(call.node) : undefined;
-        throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", withPath(`Invalid central schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`), { location: origin ?? locationOf(syntax.node), cause });
+        throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", withPath(`Invalid central schedule for "${entry.name}": ${cause instanceof Error ? cause.message : String(cause)}`), { location: origin ?? locationOf(syntax.node), related, cause });
       }
     }
   }
   const ids = new Set<string>();
   for (const schedule of schedules) {
-    if (ids.has(schedule.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Duplicate generated schedule identity "${schedule.id}".${schedulePaths.has(schedule) ? ` Policy helper path: ${schedulePaths.get(schedule)}.` : ""}`, { location: scheduleOrigins.get(schedule)! });
+    if (ids.has(schedule.id)) throw new BunwireCompilerError("SCHEDULE_POLICY_INVALID", `Duplicate generated schedule identity "${schedule.id}".${schedulePaths.has(schedule) ? ` Policy helper path: ${schedulePaths.get(schedule)}.` : ""}`, { location: scheduleOrigins.get(schedule)!, ...(scheduleRelated.has(schedule) ? { related: scheduleRelated.get(schedule)! } : {}) });
     ids.add(schedule.id);
   }
   metadata.validateMutations();
-  return Object.freeze({ context, classes: Object.freeze(normalizedClasses), schedules: Object.freeze(schedules) });
+  const projectRoot = canonicalCompilerPath(realpathSync(options.projectRoot));
+  const dependencies = [...metadata.dependencies].filter((filePath) => {
+    const relative = path.relative(projectRoot, canonicalCompilerPath(filePath));
+    return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  }).sort();
+  return Object.freeze({ context, classes: Object.freeze(normalizedClasses), schedules: Object.freeze(schedules),
+    dependencies: Object.freeze(dependencies) });
 }

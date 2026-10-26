@@ -11,6 +11,7 @@ export {
   BunwireCompilerError,
   type BunwireCompilerErrorCode,
   type BunwireCompilerErrorOptions,
+  type BunwireRelatedLocation,
   type BunwireSourceLocation,
 } from "./diagnostics.js";
 export {

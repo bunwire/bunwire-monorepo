@@ -1,6 +1,6 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestones 15–20 are complete; Milestones 21–22 are not started.
+Status: Project Milestones 15–21 are complete; Milestone 22 is not started.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
@@ -151,7 +151,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 | 18 | Static policy helpers across files | 17 | Complete |
 | 19 | Multiple Application policy blocks | 18 | Complete |
 | 20 | Bounded static `for...of` expansion | 19 | Complete |
-| 21 | Dependency invalidation and diagnostic integration | 20 | Planned |
+| 21 | Dependency invalidation and diagnostic integration | 20 | Complete |
 | 22 | Cross-package hardening and completion | 21 | Planned |
 
 Earlier milestones collect dependencies and provenance immediately; Milestone 21 completes their development-server integration. Helpers and expression APIs remain internal compiler infrastructure unless a public analysis result must expose dependency information for the plugin.
@@ -385,7 +385,7 @@ Expected behavior: all agreed syntax forms are accepted in direct compilation. N
 
 # Milestone 21 — Dependency Invalidation and Diagnostic Integration
 
-Status: Planned. Depends on Milestone 20.
+Status: Complete. Depends on Milestone 20. See [implementation record](progress/milestone-21.md).
 
 ## Goal and packages affected
 
@@ -403,20 +403,20 @@ Make expression/helper dependencies reliable in Vite development and manual gene
 
 ## Required automated tests
 
-- [ ] **[Automated / Integration]** Real Vite changes to imported constants, helper bodies, and intermediate re-export files regenerate the affected metadata and invalidate relevant modules.
-- [ ] **[Automated / Integration]** Deleting a dependency produces a diagnostic; restoring/fixing it recovers without restarting the compiler session.
-- [ ] **[Automated / Integration]** Changing an import/helper dependency refreshes the watched dependency set and does not reuse stale analysis.
-- [ ] **[Automated / Integration]** Referenced project-local files outside managed source roots are watched without expanding automatic discovery.
-- [ ] **[Automated / Generated Output]** Unchanged generation preserves file bytes and avoids writes; generated files never cause watch feedback.
-- [ ] **[Automated / Compiler Fixture]** Nested expression/helper/loop failures expose primary and related locations, including paths containing spaces.
-- [ ] **[Automated / Integration]** Existing config/bootstrap/source/page watching and manual artifact generation remain correct.
+- [x] **[Automated / Integration]** Real Vite changes to imported constants, helper bodies, and intermediate re-export files regenerate the affected metadata and invalidate relevant modules.
+- [x] **[Automated / Integration]** Deleting a dependency produces a diagnostic; restoring/fixing it recovers without restarting the compiler session.
+- [x] **[Automated / Integration]** Changing an import/helper dependency refreshes the watched dependency set and does not reuse stale analysis.
+- [x] **[Automated / Integration]** Referenced project-local files outside managed source roots are watched without expanding automatic discovery.
+- [x] **[Automated / Generated Output]** Unchanged generation preserves file bytes and avoids writes; generated files never cause watch feedback.
+- [x] **[Automated / Compiler Fixture]** Nested expression/helper/loop failures expose primary and related locations, including paths containing spaces.
+- [x] **[Automated / Integration]** Existing config/bootstrap/source/page watching and manual artifact generation remain correct.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Every supported source relationship participates in invalidation and recovery.
-- [ ] Compiler errors remain actionable across file and helper boundaries.
-- [ ] Manual and Vite paths agree on records and diagnostics.
-- [ ] Required real watcher and regression checks pass and are recorded.
+- [x] Every supported source relationship participates in invalidation and recovery.
+- [x] Compiler errors remain actionable across file and helper boundaries.
+- [x] Manual and Vite paths agree on records and diagnostics.
+- [x] Required real watcher and regression checks pass and are recorded.
 
 Expected behavior: the complete syntax works during iterative development. Not expected yet: final cross-package release verification, which belongs to Milestone 22.
 

@@ -47,6 +47,7 @@ interface BunwirePluginHooks {
   load(id: string): Promise<string | undefined>;
   watchChange(this: BunwirePluginContext, id: string): Promise<void>;
   handleHotUpdate(context: HmrContext): Promise<ModuleNode[] | undefined>;
+  closeBundle(): Promise<void>;
 }
 
 interface BunwirePluginContext {
@@ -72,6 +73,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
   let generatedPaths = resolveGeneratedArtifactPaths(viteRoot, options);
   let resolvedViteConfig: ResolvedConfig | undefined;
   let pageServerManifest: { protocol: 1; serverEntry: string } | undefined;
+  let closing = false;
 
   const outputPathIdentities = (): ReadonlySet<string> => new Set([
     generatedPaths.registry,
@@ -81,6 +83,11 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
   ].filter((filePath): filePath is string => typeof filePath === "string")
     .map((filePath) => canonicalCompilerPath(filePath)));
 
+  const externalDependencyDirectories = (application: AnalyzedBunwireApplication): readonly string[] =>
+    [...new Set(application.analysis.dependencies
+      .filter((filePath) => !application.config.sourceRoots.some((root) => isWithin(root, filePath)))
+      .map((filePath) => path.dirname(filePath)))];
+
   const analyze = (): Promise<AnalyzedBunwireApplication> => {
     analyzedApplication ??= analyzeBunwireApplication({
       ...options,
@@ -88,11 +95,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     }).then((application) => {
       latestApplication = application;
       generatedPaths = resolveGeneratedArtifactPaths(application.config.root, options);
-      devServer?.watcher.add([
-        application.config.configFile,
-        application.config.bootstrap,
-        ...application.config.sourceRoots,
-      ]);
+      devServer?.watcher.add(watchedPaths(application));
       return application;
     });
     return analyzedApplication;
@@ -107,6 +110,8 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     application.config.bootstrap,
     ...application.config.sourceRoots,
     ...application.sourceFiles,
+    ...application.analysis.dependencies,
+    ...externalDependencyDirectories(application),
     ...(application.config.pages ? [application.config.pages.root, application.config.pages.entry,
       ...(application.config.pages.ssrEntry ? [application.config.pages.ssrEntry] : [])] : []),
   ]);
@@ -149,6 +154,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       return true;
     }
     return application.config.sourceRoots.some((root) => isWithin(root, resolved))
+      || application.analysis.dependencies.some((filePath) => identity === canonicalCompilerPath(filePath))
       || (application.config.pages !== undefined
         && (identity === canonicalCompilerPath(application.config.pages.entry)
           || (application.config.pages.ssrEntry !== undefined && identity === canonicalCompilerPath(application.config.pages.ssrEntry))
@@ -270,20 +276,36 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       return undefined;
     },
     async watchChange(id): Promise<void> {
-      if (!isRelevantChange(id)) return;
-      await queueRefresh(typeof this.addWatchFile === "function" ? this : undefined);
+      if (closing || !isRelevantChange(id)) return;
+      try {
+        await queueRefresh(typeof this.addWatchFile === "function" ? this : undefined);
+      } catch (cause) {
+        if (!devServer) throw cause;
+        const error = cause instanceof Error ? cause : new Error(String(cause));
+        devServer.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? error.message,
+          plugin: "bunwire" } });
+      }
     },
     async handleHotUpdate(context): Promise<ModuleNode[] | undefined> {
-      if (!isRelevantChange(context.file)) return undefined;
-      await queueRefresh();
+      if (closing || !isRelevantChange(context.file)) return undefined;
       const affected = new Set(context.modules);
-      for (const id of [BUNWIRE_RESOLVED_REGISTRY_MODULE_ID, BUNWIRE_RESOLVED_CLIENT_MODULE_ID, BUNWIRE_RESOLVED_PAGES_MODULE_ID]) {
-        const module = context.server.moduleGraph.getModuleById(id);
-        if (!module) continue;
-        context.server.moduleGraph.invalidateModule(module);
-        affected.add(module);
+      try {
+        await queueRefresh();
+      } finally {
+        for (const id of [BUNWIRE_RESOLVED_REGISTRY_MODULE_ID, BUNWIRE_RESOLVED_CLIENT_MODULE_ID, BUNWIRE_RESOLVED_PAGES_MODULE_ID]) {
+          const module = context.server.moduleGraph.getModuleById(id);
+          if (!module) continue;
+          context.server.moduleGraph.invalidateModule(module);
+          affected.add(module);
+        }
       }
       return [...affected];
+    },
+    async closeBundle(): Promise<void> {
+      if (!devServer) return;
+      closing = true;
+      await refreshQueue.catch(() => undefined);
+      devServer = undefined;
     },
   };
 

@@ -81,7 +81,7 @@ export class ManagedMetadataResolver {
       return result.value;
     } catch (cause) {
       if (cause instanceof BunwireCompilerError) throw new BunwireCompilerError(code, cause.message,
-        { ...(cause.location ? { location: cause.location } : {}), cause });
+        { ...(cause.location ? { location: cause.location } : {}), related: cause.related, cause });
       throw cause;
     }
   }

@@ -25,6 +25,7 @@ export interface GenerateBunwireArtifactsOptions extends AnalyzeBunwireApplicati
 
 export interface GeneratedBunwireArtifacts {
   readonly paths: BunwireGeneratedArtifactPaths;
+  readonly dependencies: readonly string[];
   readonly registryHash: string;
   readonly clientHash: string;
   readonly pagesHash?: string;
@@ -95,6 +96,7 @@ export async function generateBunwireArtifactsFromApplication(
     if (await writeIfChanged(filePath, contents)) changedPaths.push(filePath);
   }
   return Object.freeze({
+    dependencies: application.analysis.dependencies,
     paths: pages ? paths : Object.freeze({
       registry: paths.registry,
       client: paths.client,

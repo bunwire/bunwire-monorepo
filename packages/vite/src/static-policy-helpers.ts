@@ -1,6 +1,6 @@
 import path from "node:path";
 import ts from "typescript";
-import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.js";
+import { BunwireCompilerError, type BunwireRelatedLocation, type BunwireSourceLocation } from "./diagnostics.js";
 import { type ManagedMetadataResolver } from "./managed-metadata.js";
 import type { StaticValue } from "./static-expression.js";
 import { unwrapBootstrapExpression } from "./bootstrap-discovery.js";
@@ -134,12 +134,23 @@ export class StaticPolicyHelpers {
       : undefined;
   }
 
+  private relatedPath(): readonly BunwireRelatedLocation[] {
+    return Object.freeze([
+      ...this.stack.flatMap((frame) => [
+        { label: "Policy helper definition", location: at(frame.body) },
+        { label: "Policy helper call", location: at(frame.call) },
+      ]),
+      ...this.loopFrames.map((frame) => ({ label: `Policy loop iteration ${frame.index}`, location: at(frame.node) })),
+    ]);
+  }
+
   annotate(value: StaticValue, node: ts.Node): StaticValue {
     const helperPath = this.path();
     const loopPath = this.loopPath();
     if (!helperPath && !loopPath) return value;
     if (helperPath) this.metadata.work(node, this.depth() + 1);
-    const paths = { ...(helperPath ? { helperPath } : {}), ...(loopPath ? { loopPath } : {}) };
+    const paths = { ...(helperPath ? { helperPath } : {}), ...(loopPath ? { loopPath } : {}),
+      related: Object.freeze([...(value.related ?? []), ...this.relatedPath()]) };
     if (value.kind === "array") return Object.freeze({ ...value, ...paths,
       items: Object.freeze(value.items.map((item) => this.annotate(item, node))) });
     if (value.kind === "object") {
@@ -179,7 +190,8 @@ export class StaticPolicyHelpers {
     } catch (cause) {
       if (cause instanceof BunwireCompilerError && !cause.message.includes("Policy helper path:")) {
         const chain = this.stack.map((frame) => `${frame.body.name?.getText() ?? "<callback>"} (${at(frame.body).filePath}:${at(frame.body).line}) called at ${at(frame.call).filePath}:${at(frame.call).line}`).join(" -> ");
-        throw new BunwireCompilerError(cause.code, `${cause.message} Policy helper path: ${chain}.`, { ...(cause.location ? { location: cause.location } : {}), cause });
+        throw new BunwireCompilerError(cause.code, `${cause.message} Policy helper path: ${chain}.`,
+          { ...(cause.location ? { location: cause.location } : {}), related: [...cause.related, ...this.relatedPath()], cause });
       }
       throw cause;
     } finally { if (registryPushed) this.registryFrames.pop(); this.stack.pop(); }
@@ -255,7 +267,7 @@ export class StaticPolicyHelpers {
         if (cause instanceof BunwireCompilerError && !cause.message.includes("Policy loop path:")) {
           const path = this.loopFrames.map((frame) => `${at(frame.node).filePath}:${at(frame.node).line} [iteration ${frame.index}]`).join(" -> ");
           throw new BunwireCompilerError(cause.code, `${cause.message} Policy loop path: ${path}.`,
-            { ...(cause.location ? { location: cause.location } : {}), cause });
+            { ...(cause.location ? { location: cause.location } : {}), related: [...cause.related, ...this.relatedPath()], cause });
         }
         throw cause;
       } finally { this.loopFrames.pop(); }

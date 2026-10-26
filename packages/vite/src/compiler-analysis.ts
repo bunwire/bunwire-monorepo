@@ -1738,10 +1738,13 @@ type PolicyReference = AnalyzedMiddlewareAttachment | {
   readonly node: BunwireSourceLocation;
 };
 
-function withPolicyHelperPath(cause: unknown, helperPath?: string): never {
-  if (cause instanceof BunwireCompilerError && helperPath && !cause.message.includes("Policy helper path:"))
-    throw new BunwireCompilerError(cause.code, `${cause.message} Policy helper path: ${helperPath}.`,
+function withPolicyPaths(cause: unknown, helperPath?: string, loopPath?: string): never {
+  if (cause instanceof BunwireCompilerError) {
+    const helper = helperPath && !cause.message.includes("Policy helper path:") ? ` Policy helper path: ${helperPath}.` : "";
+    const loop = loopPath && !cause.message.includes("Policy loop path:") ? ` Policy loop path: ${loopPath}.` : "";
+    if (helper || loop) throw new BunwireCompilerError(cause.code, `${cause.message}${helper}${loop}`,
       { ...(cause.location ? { location: cause.location } : {}), cause });
+  }
   throw cause;
 }
 
@@ -1837,7 +1840,7 @@ function resolveMiddlewarePolicy(
         work(declaration.node);
         attachments.push(reference);
       }
-      } catch (cause) { withPolicyHelperPath(cause, expression.helperPath); }
+      } catch (cause) { withPolicyPaths(cause, expression.helperPath, expression.loopPath); }
     }
     stack.pop();
     const frozen = Object.freeze(attachments);
@@ -1847,7 +1850,7 @@ function resolveMiddlewarePolicy(
   };
   for (const name of groupSyntax.keys()) {
     try { expandGroup(name); }
-    catch (cause) { withPolicyHelperPath(cause, groupSyntax.get(name)?.references[0]?.helperPath); }
+    catch (cause) { withPolicyPaths(cause, groupSyntax.get(name)?.references[0]?.helperPath, groupSyntax.get(name)?.references[0]?.loopPath); }
   }
 
   const expandReferences = (references: readonly StaticValue[]): readonly AnalyzedMiddlewareAttachment[] => {
@@ -1869,7 +1872,7 @@ function resolveMiddlewarePolicy(
         metadata.emitDeclaration(syntax.node!);
         attachments.push(attachment);
       }
-      } catch (cause) { withPolicyHelperPath(cause, expression.helperPath); }
+      } catch (cause) { withPolicyPaths(cause, expression.helperPath, expression.loopPath); }
     }
     return Object.freeze(attachments);
   };

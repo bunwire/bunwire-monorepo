@@ -2,9 +2,9 @@
 
 ## Current Status
 
-Current milestone: Project Milestone 19 — multiple Application policy blocks (complete). Project Milestone 20 is next.
+Current milestone: Project Milestone 20 — bounded static `for...of` expansion (complete). Project Milestone 21 is next.
 
-The [static expressions and modular composition track, Milestones 15–22](STATIC_COMPOSITION_MILESTONES.md), has started. See [Milestone 18 details](progress/milestone-18.md). These project milestone numbers are separate from Bun package numbering.
+The [static expressions and modular composition track, Milestones 15–22](STATIC_COMPOSITION_MILESTONES.md), has started. These project milestone numbers are separate from Bun package numbering.
 
 Post-completion Bun maintenance: [source layout reorganization](../packages/bun/progress/source-layout-2026-10-23.md); all public entrypoints remain available.
 
@@ -37,7 +37,8 @@ Overall status:
 - Milestone 17: Complete — [details](progress/milestone-17.md)
 - Milestone 18: Complete — [details](progress/milestone-18.md)
 - Milestone 19: Complete — [details](progress/milestone-19.md)
-- Milestones 20–22: Not started — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
+- Milestone 20: Complete — [details](progress/milestone-20.md)
+- Milestones 21–22: Not started — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
 - Project Milestones 15–22: In progress — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
 - `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
 - `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
@@ -96,6 +97,7 @@ Overall status:
 - Milestone 17 adds reusable middleware collections/mappings and schedule values, canonical target checks, imported value/key diagnostics, bounded group expansion, and verified generated middleware/scheduler execution.
 - Milestone 18 adds typed static middleware and schedule helpers across project-local files, named callbacks, nested/local helpers, lexical bindings, call-path diagnostics, and verified Bun, Electrobun, and generic adapter execution.
 - Milestone 19 composes repeated middleware and schedule blocks in exported-chain order, with forward middleware group references, cross-block duplicate checks, and verified Bun/Electrobun/generic runtime behavior.
+- Milestone 20 expands bounded static `for...of` loops over known arrays in policy callbacks and helpers, with lexical iteration bindings, fixed budgets, loop-path diagnostics, and verified generated/runtime behavior.
 - `@bunwire/bun` Milestone 1 adds the public Bun adapter package, immutable runtime roles, generated-registry consumption, Core-owned terminal shutdown and startup rollback, signal cleanup, a minimal Bun example, and complete workspace/release verification.
 - `@bunwire/bun` Milestone 2 adds public Bun execution scopes, isolated contextual bindings, per-scope service caching, nested WebSocket scope identity, deterministic explicit disposal, active-run shutdown coordination, and global-context architecture enforcement.
 - `@bunwire/bun` Milestone 3 adds Core Controller-based HTTP decorators, compiler-validated generated native routes, explicit frozen HTTP context, request-scope inheritance into Core invocation, deterministic 404/405/500 behavior, and graceful `Bun.serve()` lifecycle integration.
@@ -124,12 +126,12 @@ Overall status:
 ## Current Work
 
 - No Bun v2 milestone is in progress.
-- Project Milestone 19 is complete; no project milestone is currently in progress.
+- Project Milestone 20 is complete; no project milestone is currently in progress.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- Project Milestone 20 — bounded static `for...of` expansion, followed by Milestones 21–22 in the [detailed roadmap](STATIC_COMPOSITION_MILESTONES.md).
+- Project Milestone 21 — dependency invalidation and diagnostic integration, followed by Milestone 22 in the [detailed roadmap](STATIC_COMPOSITION_MILESTONES.md).
 - Optional backend packages remain separate future work.
 
 ## Blockers
@@ -165,6 +167,7 @@ Overall status:
 - [Milestone 17](progress/milestone-17.md)
 - [Milestone 18](progress/milestone-18.md)
 - [Milestone 19](progress/milestone-19.md)
+- [Milestone 20](progress/milestone-20.md)
 - [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)
 - [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
 - [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)

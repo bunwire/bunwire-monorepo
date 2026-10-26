@@ -12,7 +12,7 @@ export type StaticValue = (
   | { readonly kind: "array"; readonly items: readonly StaticValue[] }
   | { readonly kind: "object"; readonly properties: Readonly<Record<string, StaticValue>>; readonly keyOrigins: Readonly<Record<string, BunwireSourceLocation>> }
   | { readonly kind: "reference"; readonly symbol: ts.Symbol }
-) & { readonly origin: BunwireSourceLocation; readonly helperPath?: string };
+) & { readonly origin: BunwireSourceLocation; readonly helperPath?: string; readonly loopPath?: string };
 
 export interface StaticResolution {
   readonly value: StaticValue;

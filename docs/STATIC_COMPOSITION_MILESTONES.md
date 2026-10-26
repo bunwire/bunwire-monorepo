@@ -1,6 +1,6 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestones 15–19 are complete; Milestones 20–22 are not started.
+Status: Project Milestones 15–20 are complete; Milestones 21–22 are not started.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
@@ -150,7 +150,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 | 17 | Composable middleware and schedule values | 16 | Complete |
 | 18 | Static policy helpers across files | 17 | Complete |
 | 19 | Multiple Application policy blocks | 18 | Complete |
-| 20 | Bounded static `for...of` expansion | 19 | Planned |
+| 20 | Bounded static `for...of` expansion | 19 | Complete |
 | 21 | Dependency invalidation and diagnostic integration | 20 | Planned |
 | 22 | Cross-package hardening and completion | 21 | Planned |
 
@@ -348,7 +348,7 @@ Expected behavior: multiple policy blocks compose. Not expected yet: static iter
 
 # Milestone 20 — Bounded Static for...of Expansion
 
-Status: Planned. Depends on Milestone 19.
+Status: Complete. Depends on Milestone 19. See [implementation record](progress/milestone-20.md).
 
 ## Goal and packages affected
 
@@ -364,20 +364,20 @@ Allow policy callbacks/helpers to iterate over statically known arrays using a b
 
 ## Required automated tests
 
-- [ ] **[Automated / Compiler Fixture]** The previously rejected shared job-array example compiles and emits the intended schedule.
-- [ ] **[Automated / Compiler Fixture]** Empty/imported arrays, nested loops, helper calls inside loops, loops inside helpers, and lexical shadowing work.
-- [ ] **[Automated / Compiler Fixture]** Loop-bound middleware/job classes preserve canonical identity; invalid targets cannot become authorized through iteration.
-- [ ] **[Automated / Compiler Fixture]** Reject unsupported iteration forms, mutable bindings, runtime collections, mutation, and recursive helper/loop combinations.
-- [ ] **[Automated / Unit]** Exactly 10,000 emitted declarations are within the declaration budget; 10,001 exceed it. Test other budgets independently with suitable fixtures.
-- [ ] **[Automated / Generated Output]** Expanded declarations match equivalent inline policy, including duplicate errors and order.
-- [ ] **[Automated / Behavioral]** Loop expansion never invokes application code.
+- [x] **[Automated / Compiler Fixture]** The previously rejected shared job-array example compiles and emits the intended schedule.
+- [x] **[Automated / Compiler Fixture]** Empty/imported arrays, nested loops, helper calls inside loops, loops inside helpers, and lexical shadowing work.
+- [x] **[Automated / Compiler Fixture]** Loop-bound middleware/job classes preserve canonical identity; invalid targets cannot become authorized through iteration.
+- [x] **[Automated / Compiler Fixture]** Reject unsupported iteration forms, mutable bindings, runtime collections, mutation, and recursive helper/loop combinations.
+- [x] **[Automated / Unit]** Exactly 10,000 emitted declarations are within the declaration budget; 10,001 exceed it. Test other budgets independently with suitable fixtures.
+- [x] **[Automated / Generated Output]** Expanded declarations match equivalent inline policy, including duplicate errors and order.
+- [x] **[Automated / Behavioral]** Loop expansion never invokes application code.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Supported loops work in both callbacks and helper bodies.
-- [ ] Empty and nested loops behave predictably within the fixed budgets.
-- [ ] Overflow and unsupported loops produce actionable diagnostics without successful partial output.
-- [ ] Required tests pass and results are recorded.
+- [x] Supported loops work in both callbacks and helper bodies.
+- [x] Empty and nested loops behave predictably within the fixed budgets.
+- [x] Overflow and unsupported loops produce actionable diagnostics without successful partial output.
+- [x] Required tests pass and results are recorded.
 
 Expected behavior: all agreed syntax forms are accepted in direct compilation. Not expected yet: general JavaScript control flow or automatic dependency invalidation for every new source relationship.
 

@@ -109,33 +109,29 @@ export function analyzeMiddlewarePolicySyntax(
     return ts.isPropertyAccessExpression(called) && called.name.text === "withMiddlewares";
   });
   if (policyCalls.length === 0) return EMPTY_POLICY;
-  if (policyCalls.length > 1) {
-    fail("The exported Application chain may contain at most one withMiddlewares() block.", policyCalls[1]!);
-  }
-  const policyCall = policyCalls[0]!;
-  const calledPolicy = unwrapBootstrapExpression(policyCall.expression) as ts.PropertyAccessExpression;
-  if (policyCall.questionDotToken || calledPolicy.questionDotToken) {
-    fail("withMiddlewares() must use direct non-optional property access.", policyCall.expression);
-  }
-  const callbackExpression = policyCall.arguments[0];
-  if (policyCall.arguments.length !== 1 || !callbackExpression) {
-    fail("withMiddlewares() requires one direct configuration callback.", policyCall);
-  }
-  const callback = unwrapBootstrapExpression(callbackExpression);
-  if (!(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
-    || ts.isIdentifier(callback) || ts.isPropertyAccessExpression(callback))) {
-    fail(
-      "withMiddlewares() requires a synchronous callback or a named policy helper.",
-      callbackExpression,
-    );
-  }
+  // The chain collector walks from the exported outer call toward defineApp().
+  policyCalls.reverse();
   const helpers = new StaticPolicyHelpers(program, metadata, "MIDDLEWARE_POLICY_INVALID");
   const global: StaticValue[] = [];
   const groups: MiddlewarePolicyGroupSyntax[] = [];
   const controllers: MiddlewareControllerMappingSyntax[] = [];
   const groupNames = new Set<string>();
 
-  helpers.expand(callbackExpression, policyCall, (statement) => {
+  for (const policyCall of policyCalls) {
+    const calledPolicy = unwrapBootstrapExpression(policyCall.expression) as ts.PropertyAccessExpression;
+    if (policyCall.questionDotToken || calledPolicy.questionDotToken) {
+      fail("withMiddlewares() must use direct non-optional property access.", policyCall.expression);
+    }
+    const callbackExpression = policyCall.arguments[0];
+    if (policyCall.arguments.length !== 1 || !callbackExpression) {
+      fail("withMiddlewares() requires one direct configuration callback.", policyCall);
+    }
+    const callback = unwrapBootstrapExpression(callbackExpression);
+    if (!(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
+      || ts.isIdentifier(callback) || ts.isPropertyAccessExpression(callback))) {
+      fail("withMiddlewares() requires a synchronous callback or a named policy helper.", callbackExpression);
+    }
+    helpers.expand(callbackExpression, policyCall, (statement) => {
     const expression = unwrapBootstrapExpression(statement.expression);
     if (!ts.isCallExpression(expression)) {
       fail("Middleware policy statements must call registry.use(), registry.group(), or registry.controllers().", statement);
@@ -205,9 +201,10 @@ export function analyzeMiddlewarePolicySyntax(
       default:
         fail(`Unsupported middleware policy call registry.${called.name.text}().`, called.name);
     }
-  });
+    });
+  }
   return Object.freeze({
-    node: policyCall,
+    node: policyCalls[0]!,
     configured: true,
     global: Object.freeze(global),
     groups: Object.freeze(groups),

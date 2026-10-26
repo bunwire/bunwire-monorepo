@@ -8,10 +8,10 @@ describe("Middleware Redesign 12D — invalid policy callback syntax", () => {
   it("accepts known argument spreads", () => {
     expect(analyzePolicy("defineApp().withMiddlewares((registry) => { registry.use(...[AuthMiddleware]); })")().classes).toBeTruthy();
   });
-  it("rejects repeated withMiddlewares callbacks", () => {
-    expectFailure(analyzePolicy(
-      "defineApp().withMiddlewares((registry) => {}).withMiddlewares((registry) => {})",
-    ), "MIDDLEWARE_POLICY_INVALID", "at most one");
+  it("accepts repeated withMiddlewares callbacks", () => {
+    expect(analyzePolicy(
+      "defineApp().withMiddlewares((registry) => { registry.use(AuthMiddleware); }).withMiddlewares((registry) => { registry.use(AuditMiddleware); })",
+    )().classes).toBeTruthy();
   });
 
   it("accepts a supported named callback and local const", () => {

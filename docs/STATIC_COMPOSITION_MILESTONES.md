@@ -1,10 +1,10 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestones 15–18 are complete; Milestones 19–22 are not started.
+Status: Project Milestones 15–19 are complete; Milestones 20–22 are not started.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
-These are project milestones following project Milestone 14, not the separately numbered `@bunwire/bun` milestones. This document specifies the track's target behavior; each milestone status distinguishes implemented and planned behavior. Existing direct-literal and once-only restrictions remain the current implementation until the corresponding milestone changes them and updates the authoritative architecture documentation.
+These are project milestones following project Milestone 14, not the separately numbered `@bunwire/bun` milestones. This document specifies the track's target behavior; each milestone status distinguishes implemented and planned behavior. The remaining unsupported syntax retains its current restrictions until the corresponding milestone changes them and updates the authoritative architecture documentation.
 
 ## Purpose and completion target
 
@@ -149,7 +149,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 | 16 | Expressions throughout managed metadata | 15 | Complete |
 | 17 | Composable middleware and schedule values | 16 | Complete |
 | 18 | Static policy helpers across files | 17 | Complete |
-| 19 | Multiple Application policy blocks | 18 | Planned |
+| 19 | Multiple Application policy blocks | 18 | Complete |
 | 20 | Bounded static `for...of` expansion | 19 | Planned |
 | 21 | Dependency invalidation and diagnostic integration | 20 | Planned |
 | 22 | Cross-package hardening and completion | 21 | Planned |
@@ -310,7 +310,7 @@ Expected behavior: one policy block can compose supported domain helpers, or use
 
 # Milestone 19 — Multiple Application Policy Blocks
 
-Status: Planned. Depends on Milestone 18.
+Status: Complete. Depends on Milestone 18. See [implementation record](progress/milestone-19.md).
 
 ## Goal and packages affected
 
@@ -328,19 +328,19 @@ Change Core's public `withMiddlewares()` and `withSchedule()` configuration rule
 
 ## Required automated tests
 
-- [ ] **[Automated / Behavioral]** Repeated Core configuration calls succeed before startup and return the same Application.
-- [ ] **[Automated / Behavioral]** Invalid callbacks and configuration after startup/shutdown remain rejected; callbacks are never executed or retained as runtime work.
-- [ ] **[Automated / Compiler Fixture]** Multiple blocks, imported helpers across blocks, forward group references, and interleaved schedule/middleware calls compose correctly.
-- [ ] **[Automated / Compiler Fixture]** Duplicate groups, cross-block cycles, duplicate schedule IDs, and malformed chain access remain errors; unrelated chains are ignored.
-- [ ] **[Automated / Integration]** Middleware executes in the documented layered order and generated schedules contain every valid composed declaration.
-- [ ] **[Automated / Generated Output]** Previously valid single-block applications retain equivalent generated behavior.
+- [x] **[Automated / Behavioral]** Repeated Core configuration calls succeed before startup and return the same Application.
+- [x] **[Automated / Behavioral]** Invalid callbacks and configuration after startup/shutdown remain rejected; callbacks are never executed or retained as runtime work.
+- [x] **[Automated / Compiler Fixture]** Multiple blocks, imported helpers across blocks, forward group references, and interleaved schedule/middleware calls compose correctly.
+- [x] **[Automated / Compiler Fixture]** Duplicate groups, cross-block cycles, duplicate schedule IDs, and malformed chain access remain errors; unrelated chains are ignored.
+- [x] **[Automated / Integration]** Middleware executes in the documented layered order and generated schedules contain every valid composed declaration.
+- [x] **[Automated / Generated Output]** Previously valid single-block applications retain equivalent generated behavior.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Both repeated APIs work through Core and Vite with one documented composition contract.
-- [ ] Duplicate behavior and ordering are tested across blocks and helper boundaries.
-- [ ] Current architecture and API docs describe repeated configuration accurately.
-- [ ] Core, compiler, and affected adapter checks pass and are recorded.
+- [x] Both repeated APIs work through Core and Vite with one documented composition contract.
+- [x] Duplicate behavior and ordering are tested across blocks and helper boundaries.
+- [x] Current architecture and API docs describe repeated configuration accurately.
+- [x] Core, compiler, and affected adapter checks pass and are recorded.
 
 Expected behavior: multiple policy blocks compose. Not expected yet: static iteration or complete imported-dependency HMR coverage.
 

@@ -70,8 +70,6 @@ export class Application<ApplicationContext = unknown> {
   readonly #invocationEngine = new InvocationEngine();
   #adapter: Adapter<any> | undefined;
   #runtimeRegistry: RuntimeRegistry = defineRuntimeRegistry();
-  #hasMiddlewarePolicy = false;
-  #hasSchedule = false;
   #startPromise: Promise<void> | undefined;
   #stopPromise: Promise<void> | undefined;
   #adapterStopPromise: Promise<void> | undefined;
@@ -111,12 +109,6 @@ export class Application<ApplicationContext = unknown> {
     if (typeof configuration !== "function") {
       throw new TypeError("Application.withMiddlewares() requires a configuration callback.");
     }
-    if (this.#hasMiddlewarePolicy) {
-      throw new ApplicationStateError(
-        "Application.withMiddlewares() may be configured at most once.",
-      );
-    }
-    this.#hasMiddlewarePolicy = true;
     return this;
   }
 
@@ -124,8 +116,6 @@ export class Application<ApplicationContext = unknown> {
   withSchedule(configuration: ApplicationScheduleConfiguration): this {
     this.assertConfiguring("withSchedule()");
     if (typeof configuration !== "function") throw new TypeError("Application.withSchedule() requires a configuration callback.");
-    if (this.#hasSchedule) throw new ApplicationStateError("Application.withSchedule() may be configured at most once.");
-    this.#hasSchedule = true;
     return this;
   }
 

@@ -32,7 +32,7 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
   const applicationCalls = applicationCallChain(exported[0]!.expression, collectImportBindings(source), source.fileName);
   for (const call of applicationCalls) {
     const expression = unwrapBootstrapExpression(call.expression);
-    if (ts.isElementAccessExpression(expression) && ts.isStringLiteral(expression.argumentExpression) && expression.argumentExpression.text === "withSchedule") {
+    if (ts.isElementAccessExpression(expression)) {
       fail("withSchedule() must use direct non-computed property access.", call);
     }
   }
@@ -41,16 +41,18 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
     return ts.isPropertyAccessExpression(expression) && expression.name.text === "withSchedule";
   });
   if (!calls.length) return EMPTY;
-  if (calls.length > 1) fail("The exported Application chain may contain at most one withSchedule() block.", calls[1]!);
-  const policyCall = calls[0]!; const property = unwrapBootstrapExpression(policyCall.expression);
-  if (!ts.isPropertyAccessExpression(property) || property.questionDotToken || policyCall.questionDotToken) fail("withSchedule() must use direct non-optional property access.", policyCall);
-  const callbackExpression = policyCall.arguments[0]; const callback = callbackExpression && unwrapBootstrapExpression(callbackExpression);
-  if (policyCall.arguments.length !== 1 || !callback || !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
-    || ts.isIdentifier(callback) || ts.isPropertyAccessExpression(callback))) {
-    fail("withSchedule() requires one synchronous callback or a named policy helper.", policyCall);
-  }
+  calls.reverse();
   const helpers = new StaticPolicyHelpers(program, metadata, "SCHEDULE_POLICY_INVALID"); const entries: ScheduleEntrySyntax[] = [];
-  helpers.expand(callbackExpression!, policyCall, (statement) => {
+  for (const policyCall of calls) {
+    const property = unwrapBootstrapExpression(policyCall.expression);
+    if (!ts.isPropertyAccessExpression(property) || property.questionDotToken || policyCall.questionDotToken)
+      fail("withSchedule() must use direct non-optional property access.", policyCall);
+    const callbackExpression = policyCall.arguments[0]; const callback = callbackExpression && unwrapBootstrapExpression(callbackExpression);
+    if (policyCall.arguments.length !== 1 || !callback || !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
+      || ts.isIdentifier(callback) || ts.isPropertyAccessExpression(callback))) {
+      fail("withSchedule() requires one synchronous callback or a named policy helper.", policyCall);
+    }
+    helpers.expand(callbackExpression!, policyCall, (statement) => {
     let current = unwrapBootstrapExpression(statement.expression); const fluent: ScheduleCallSyntax[] = []; let rooted = false;
     while (ts.isCallExpression(current)) {
       if (current.questionDotToken) fail("Schedule expressions do not support optional calls.", current);
@@ -79,6 +81,7 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
       current = unwrapBootstrapExpression(called.expression);
     }
     if (!rooted) fail("Schedule expressions must begin with the callback's schedule.job() or schedule.task().", statement);
-  });
+    });
+  }
   return Object.freeze({ configured: true, entries: Object.freeze(entries) });
 }

@@ -13,7 +13,7 @@ describe("Middleware Redesign 12D — Core middleware policy composition", () =>
     expectTypeOf<MiddlewarePolicyRegistry["controllers"]>().toBeFunction();
   });
 
-  it("accepts one callback without invoking or retaining it for startup", async () => {
+  it("accepts a callback without invoking or retaining it for startup", async () => {
     let executions = 0;
     const callback = () => { executions += 1; };
     const app = defineApp().withMiddlewares(callback);
@@ -23,11 +23,8 @@ describe("Middleware Redesign 12D — Core middleware policy composition", () =>
     expect(executions).toBe(0);
   });
 
-  it("rejects malformed, repeated, and post-configuration calls", async () => {
+  it("rejects malformed and post-configuration calls", async () => {
     expect(() => defineApp().withMiddlewares(undefined as never)).toThrow(TypeError);
-
-    const repeated = defineApp().withMiddlewares(() => undefined);
-    expect(() => repeated.withMiddlewares(() => undefined)).toThrow(ApplicationStateError);
 
     const started = defineApp();
     await started.start();

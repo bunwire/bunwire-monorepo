@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ApplicationStateError, defineApp, defineRuntimeRegistry, defineRuntimeSchedule } from "@bunwire/core";
 class Work { handle(value: string): void { void value; } }
 describe("Core schedule declarations", () => {
-  it("exposes a compile-only one-shot Application policy without executing arbitrary callbacks", async () => {
+  it("exposes a compile-only Application policy without executing arbitrary callbacks", async () => {
     let executions = 0; const app = defineApp().withSchedule(() => { executions++; }); expect(executions).toBe(0);
-    expect(() => app.withSchedule(() => undefined)).toThrow(ApplicationStateError); await app.start(); expect(executions).toBe(0); await app.stop();
+    await app.start(); expect(executions).toBe(0); await app.stop();
     expect(() => app.withSchedule(() => undefined)).toThrow(ApplicationStateError);
   });
   it("normalizes immutable optional runtime schedule records and accepts legacy omitted sidecars", () => {

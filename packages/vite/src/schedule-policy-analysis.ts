@@ -5,6 +5,7 @@ import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.
 import { canonicalCompilerPath } from "./path-identity.js";
 import type { ManagedMetadataResolver } from "./managed-metadata.js";
 import type { StaticValue } from "./static-expression.js";
+import { StaticPolicyHelpers } from "./static-policy-helpers.js";
 
 export interface ScheduleCallSyntax { readonly name: string; readonly arguments: readonly StaticValue[]; readonly node: ts.CallExpression }
 export interface ScheduleEntrySyntax {
@@ -44,22 +45,21 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
   const policyCall = calls[0]!; const property = unwrapBootstrapExpression(policyCall.expression);
   if (!ts.isPropertyAccessExpression(property) || property.questionDotToken || policyCall.questionDotToken) fail("withSchedule() must use direct non-optional property access.", policyCall);
   const callbackExpression = policyCall.arguments[0]; const callback = callbackExpression && unwrapBootstrapExpression(callbackExpression);
-  if (policyCall.arguments.length !== 1 || !callback || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
-    || callback.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) || callback.asteriskToken
-    || callback.parameters.length !== 1 || !ts.isIdentifier(callback.parameters[0]!.name) || !ts.isBlock(callback.body)) {
-    fail("withSchedule() requires one synchronous direct callback with an identifier parameter and block body.", policyCall);
+  if (policyCall.arguments.length !== 1 || !callback || !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
+    || ts.isIdentifier(callback) || ts.isPropertyAccessExpression(callback))) {
+    fail("withSchedule() requires one synchronous callback or a named policy helper.", policyCall);
   }
-  const registryName = callback.parameters[0]!.name.text; const entries: ScheduleEntrySyntax[] = [];
-  for (const statement of callback.body.statements) {
-    if (!ts.isExpressionStatement(statement)) fail("Schedule callbacks may contain only direct fluent schedule expressions.", statement);
+  const helpers = new StaticPolicyHelpers(program, metadata, "SCHEDULE_POLICY_INVALID"); const entries: ScheduleEntrySyntax[] = [];
+  helpers.expand(callbackExpression!, policyCall, (statement) => {
     let current = unwrapBootstrapExpression(statement.expression); const fluent: ScheduleCallSyntax[] = []; let rooted = false;
     while (ts.isCallExpression(current)) {
       if (current.questionDotToken) fail("Schedule expressions do not support optional calls.", current);
       const called = unwrapBootstrapExpression(current.expression);
       if (!ts.isPropertyAccessExpression(called) || called.questionDotToken) fail("Schedule expressions require direct fluent property calls.", current);
-      if (ts.isIdentifier(called.expression) && called.expression.text === registryName) {
+      if (helpers.isRegistry(called.expression)) {
         if (called.name.text !== "job" && called.name.text !== "task") fail(`Unsupported schedule registry method ${called.name.text}().`, called.name);
-        const arguments_ = metadata.arguments(current, "SCHEDULE_POLICY_INVALID");
+        const arguments_ = metadata.arguments(current, "SCHEDULE_POLICY_INVALID")
+          .map((value) => helpers.annotate(value, current));
         const target = arguments_[0];
         if (!target || (called.name.text === "task" && arguments_.length !== 1)) fail(`schedule.${called.name.text}() requires ${called.name.text === "task" ? "one target" : "a target and optional static arguments"}.`, current);
         const cadenceNames = fluent.filter((entry) => ["cron", "everyMinute", "hourlyAt", "dailyAt"].includes(entry.name));
@@ -74,10 +74,11 @@ export function analyzeSchedulePolicySyntax(program: ts.Program, bootstrapPath: 
         entries.push(Object.freeze({ execution: called.name.text === "job" ? "job" : "direct", target, arguments: Object.freeze(arguments_.slice(1)), calls: Object.freeze(fluent.reverse()), node: statement }));
         rooted = true; break;
       }
-      fluent.push(Object.freeze({ name: called.name.text, arguments: metadata.arguments(current, "SCHEDULE_POLICY_INVALID"), node: current }));
+      fluent.push(Object.freeze({ name: called.name.text, arguments: metadata.arguments(current, "SCHEDULE_POLICY_INVALID")
+        .map((value) => helpers.annotate(value, current)), node: current }));
       current = unwrapBootstrapExpression(called.expression);
     }
     if (!rooted) fail("Schedule expressions must begin with the callback's schedule.job() or schedule.task().", statement);
-  }
+  });
   return Object.freeze({ configured: true, entries: Object.freeze(entries) });
 }

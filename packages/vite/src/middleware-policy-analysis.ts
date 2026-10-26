@@ -9,6 +9,7 @@ import { BunwireCompilerError, type BunwireSourceLocation } from "./diagnostics.
 import { canonicalCompilerPath } from "./path-identity.js";
 import type { ManagedMetadataResolver } from "./managed-metadata.js";
 import type { StaticValue } from "./static-expression.js";
+import { StaticPolicyHelpers } from "./static-policy-helpers.js";
 
 export interface MiddlewarePolicyGroupSyntax {
   readonly name: string;
@@ -22,6 +23,7 @@ export interface MiddlewareControllerMappingSyntax {
   readonly references: readonly StaticValue[];
   readonly node: ts.Node;
   readonly origin: BunwireSourceLocation;
+  readonly helperPath?: string;
 }
 
 export interface MiddlewarePolicySyntax {
@@ -120,27 +122,20 @@ export function analyzeMiddlewarePolicySyntax(
     fail("withMiddlewares() requires one direct configuration callback.", policyCall);
   }
   const callback = unwrapBootstrapExpression(callbackExpression);
-  if ((!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
-    || callback.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
-    || callback.asteriskToken
-    || callback.parameters.length !== 1
-    || !ts.isIdentifier(callback.parameters[0]!.name)
-    || !ts.isBlock(callback.body)) {
+  if (!(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)
+    || ts.isIdentifier(callback) || ts.isPropertyAccessExpression(callback))) {
     fail(
-      "withMiddlewares() requires a synchronous direct callback with one identifier parameter and a block body.",
+      "withMiddlewares() requires a synchronous callback or a named policy helper.",
       callbackExpression,
     );
   }
-  const registryName = callback.parameters[0]!.name.text;
+  const helpers = new StaticPolicyHelpers(program, metadata, "MIDDLEWARE_POLICY_INVALID");
   const global: StaticValue[] = [];
   const groups: MiddlewarePolicyGroupSyntax[] = [];
   const controllers: MiddlewareControllerMappingSyntax[] = [];
   const groupNames = new Set<string>();
 
-  for (const statement of callback.body.statements) {
-    if (!ts.isExpressionStatement(statement)) {
-      fail("Middleware policy callbacks may contain only direct registry call expression statements.", statement);
-    }
+  helpers.expand(callbackExpression, policyCall, (statement) => {
     const expression = unwrapBootstrapExpression(statement.expression);
     if (!ts.isCallExpression(expression)) {
       fail("Middleware policy statements must call registry.use(), registry.group(), or registry.controllers().", statement);
@@ -148,13 +143,13 @@ export function analyzeMiddlewarePolicySyntax(
     const called = unwrapBootstrapExpression(expression.expression);
     if (!ts.isPropertyAccessExpression(called)
       || called.questionDotToken
-      || !ts.isIdentifier(called.expression)
-      || called.expression.text !== registryName) {
+      || !helpers.isRegistry(called.expression)) {
       fail("Middleware policy calls must directly target the callback registry parameter.", expression.expression);
     }
     if (expression.questionDotToken) fail("Middleware policy calls must be non-optional.", expression);
     if (!["use", "group", "controllers"].includes(called.name.text)) fail(`Unsupported middleware policy call registry.${called.name.text}().`, called.name);
-    const arguments_ = metadata.arguments(expression, "MIDDLEWARE_POLICY_INVALID");
+    const arguments_ = metadata.arguments(expression, "MIDDLEWARE_POLICY_INVALID")
+      .map((value) => helpers.annotate(value, expression));
     switch (called.name.text) {
       case "use": {
         if (arguments_.length === 0) {
@@ -202,6 +197,7 @@ export function analyzeMiddlewarePolicySyntax(
             references: value.kind === "array" ? referenceArray(value, `Controller mapping ${JSON.stringify(pattern)}`) : Object.freeze([value]),
             node: expression,
             origin: mapping.keyOrigins[pattern]!,
+            ...(mapping.helperPath ? { helperPath: mapping.helperPath } : {}),
           }));
         }
         break;
@@ -209,7 +205,7 @@ export function analyzeMiddlewarePolicySyntax(
       default:
         fail(`Unsupported middleware policy call registry.${called.name.text}().`, called.name);
     }
-  }
+  });
   return Object.freeze({
     node: policyCall,
     configured: true,

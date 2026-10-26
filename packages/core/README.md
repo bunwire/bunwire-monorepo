@@ -105,7 +105,11 @@ class AuditMiddleware implements Middleware<AuditContext, string> {
 
 `Application.withMiddlewares(callback)` marks one compiler-owned middleware policy block during composition. It accepts exactly one function while the Application is configuring, rejects repeated or late calls, and intentionally never invokes or retains the callback at runtime. The callback receives the type-only `MiddlewarePolicyRegistry` surface: `use()`, `group()`, and `controllers()`. Generated or manually supplied runtime registries are authoritative; Core never rebuilds policy from application source.
 
+The callback may call supported typed helpers or name one directly. Vite expands reached synchronous helper bodies at compile time, including project-local imports and nested calls. Core's callback type and runtime behavior are unchanged.
+
 `Application.withSchedule(callback)` is the equivalent compile-only boundary for platform-neutral scheduling declarations. Its typed registry supports existing managed job/task targets and cadence builders, but Core never executes the callback or interprets cron. Vite and an adapter-supplied generic schedule compilation handler emit frozen `RuntimeScheduleDefinition` records; the owning runtime package supplies execution, timezone, and lock semantics. Runtime registry validation ensures schedule IDs are unique and every target is a canonical generated class.
+
+Typed schedule helpers use the same static expansion rules. Helper parameters can receive the registry capability and supported static values; the owning adapter still validates the resulting schedule data.
 
 Every engine owns a `ManagedClassKindRegistry` seeded with Service, Controller, Provider, and Middleware and a `ManagedMethodKindRegistry` for explicitly contributed method kinds. Applications register extensions through `withManagedClassKind()` and `withManagedMethodKind()` while still configuring; adapters register their declared contributions automatically. The same descriptor may be registered repeatedly, but a missing registration or different descriptor using the same ID is rejected before invocation. Runtime plan validation also checks all parameter discriminants and source-specific fields, boolean optionality, runtime tokens, resolver IDs, and middleware callability before execution.
 

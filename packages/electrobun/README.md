@@ -2,7 +2,7 @@
 
 Bunwire's Electrobun adapter owns the normal native RPC and main-window bootstrap:
 
-Registered decorator metadata, Controller prefixes, Route/Message names, middleware aliases/filters, and string-valued `@Use()` arguments accept the shared compiler static expression language, including imported project-local constants and known collections. Existing endpoint/filter validators and canonical Window/Webview/Context injection remain unchanged. Compilation never executes application modules; detected mutation of consumed metadata is rejected. Project Milestone 17 also supports shared middleware arrays, positional spreads, mapping objects, object spreads, and computed Controller patterns in the central Application middleware callback. Helpers, multiple blocks, and loops remain deferred.
+Registered decorator metadata, Controller prefixes, Route/Message names, middleware aliases/filters, and string-valued `@Use()` arguments accept the shared compiler static expression language, including imported project-local constants and known collections. Existing endpoint/filter validators and canonical Window/Webview/Context injection remain unchanged. Compilation never executes application modules; detected mutation of consumed metadata is rejected. Project Milestone 17 also supports shared middleware arrays, positional spreads, mapping objects, object spreads, and computed Controller patterns in the central Application middleware callback. Project Milestone 18 permits typed project-local middleware helpers, nested helper calls, and supported named callbacks. Compilation expands them statically. Multiple blocks and loops remain deferred.
 
 ```ts
 import { defineApp } from "@bunwire/core";

@@ -8,14 +8,15 @@ describe("Middleware Redesign 12D — invalid policy callback syntax", () => {
   it("accepts known argument spreads", () => {
     expect(analyzePolicy("defineApp().withMiddlewares((registry) => { registry.use(...[AuthMiddleware]); })")().classes).toBeTruthy();
   });
-  it("rejects repeated and indirect withMiddlewares callbacks", () => {
+  it("rejects repeated withMiddlewares callbacks", () => {
     expectFailure(analyzePolicy(
       "defineApp().withMiddlewares((registry) => {}).withMiddlewares((registry) => {})",
     ), "MIDDLEWARE_POLICY_INVALID", "at most one");
-    expectFailure(analyzePolicy(
-      "defineApp().withMiddlewares(configure)",
-      "const configure = (registry: any) => { registry.use(AuthMiddleware); };",
-    ), "MIDDLEWARE_POLICY_INVALID", "direct callback");
+  });
+
+  it("accepts a supported named callback and local const", () => {
+    expect(analyzePolicy("defineApp().withMiddlewares(configure)",
+      "const configure = (registry: any) => { const value = AuthMiddleware; registry.use(value); };")().classes).toBeTruthy();
   });
 
   it("rejects computed and optional application-chain access", () => {
@@ -40,7 +41,6 @@ describe("Middleware Redesign 12D — invalid policy callback syntax", () => {
     ["missing parameter", "defineApp().withMiddlewares(() => {})"],
     ["destructured parameter", "defineApp().withMiddlewares(({ use }) => {})"],
     ["return", "defineApp().withMiddlewares((registry) => { return; })"],
-    ["variable", "defineApp().withMiddlewares((registry) => { const value = AuthMiddleware; })"],
     ["control flow", "defineApp().withMiddlewares((registry) => { if (true) registry.use(AuthMiddleware); })"],
     ["helper", "defineApp().withMiddlewares((registry) => { helper(registry); })"],
     ["wrong receiver", "defineApp().withMiddlewares((registry) => { other.use(AuthMiddleware); })"],

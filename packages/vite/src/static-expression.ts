@@ -12,7 +12,7 @@ export type StaticValue = (
   | { readonly kind: "array"; readonly items: readonly StaticValue[] }
   | { readonly kind: "object"; readonly properties: Readonly<Record<string, StaticValue>>; readonly keyOrigins: Readonly<Record<string, BunwireSourceLocation>> }
   | { readonly kind: "reference"; readonly symbol: ts.Symbol }
-) & { readonly origin: BunwireSourceLocation };
+) & { readonly origin: BunwireSourceLocation; readonly helperPath?: string };
 
 export interface StaticResolution {
   readonly value: StaticValue;
@@ -66,6 +66,8 @@ export class StaticExpressionResolver {
   private readonly frames: Frame[] = [];
   private readonly chain: ts.Node[] = [];
   private readonly paths = new Map<string, string>();
+  private readonly bindingFrames: ReadonlyMap<ts.Symbol, StaticValue>[] = [];
+  private bindingDepth = 0;
   private nodes = 0;
   private declarations = 0;
 
@@ -78,7 +80,7 @@ export class StaticExpressionResolver {
     const frame: Frame = { depth: 0, steps: [], files: new Set(), origins: new Map() };
     this.frames.push(frame);
     try {
-      const value = this.evaluate(expression, 1);
+      const value = this.evaluate(expression, this.bindingDepth + 1);
       if (ts.isPropertyDeclaration(expression.parent) && expression.parent.initializer === expression) {
         const symbol = this.symbol(expression.parent.name);
         if (symbol) { this.consumed.add(symbol); this.consumedProperties.set(symbol, value); }
@@ -87,6 +89,44 @@ export class StaticExpressionResolver {
       return Object.freeze({ value, dependencies: Object.freeze([...frame.files].sort()),
         provenance: Object.freeze([...frame.origins.values()]) });
     } finally { this.frames.pop(); }
+  }
+
+  /** Bind a reached policy helper's parameters/locals for one lexical expansion. */
+  withBindings<T>(bindings: ReadonlyMap<ts.Symbol, StaticValue>, depth: number, run: () => T): T {
+    const previous = this.bindingDepth;
+    this.bindingDepth = depth;
+    this.bindingFrames.push(bindings);
+    try { return run(); }
+    finally { this.bindingFrames.pop(); this.bindingDepth = previous; }
+  }
+
+  /** Follow real import/re-export syntax when a policy helper is reached. */
+  inspectPolicyReference(expression: ts.Expression, raw: ts.Symbol, depth: number): { readonly symbol: ts.Symbol; readonly dependencies: readonly string[] } {
+    const frame: Frame = { depth, steps: [], files: new Set(), origins: new Map() };
+    this.frames.push(frame);
+    try {
+      const target = this.canonical(raw);
+      this.charge(expression, depth);
+      this.traceAliases(raw, target, depth + 1, false);
+      const base = ts.isPropertyAccessExpression(expression) ? unwrapped(expression.expression) : undefined;
+      const namespace = base && this.checker.getSymbolAtLocation(base)?.declarations?.find(ts.isNamespaceImport);
+      if (namespace) {
+        if (namespace.parent.isTypeOnly) this.fail(namespace, "type-only namespaces have no runtime value");
+        const module = namespace.parent.parent.moduleSpecifier;
+        if (ts.isStringLiteralLike(module) && ts.isPropertyAccessExpression(expression))
+          this.exportPath(module, expression.name.text, target, depth + 1);
+      }
+      const declaration = target.valueDeclaration;
+      if (!declaration) this.fail(expression, "policy helper has no runtime source declaration");
+      this.file(declaration.getSourceFile());
+      return { symbol: target, dependencies: [...frame.files] };
+    } finally { this.frames.pop(); }
+  }
+
+  inspectPolicyNode(node: ts.Node, depth: number): string {
+    this.charge(node, depth);
+    this.file(node.getSourceFile());
+    return this.paths.get(node.getSourceFile().fileName)!;
   }
 
   /** Shared accounting hook for policy expansion in subsequent milestones. */
@@ -217,6 +257,10 @@ export class StaticExpressionResolver {
 
   private resolveReference(node: ts.Expression, raw: ts.Symbol, depth: number): StaticValue {
     const symbol = this.canonical(raw);
+    for (let index = this.bindingFrames.length - 1; index >= 0; index--) {
+      const value = this.bindingFrames[index]!.get(symbol);
+      if (value) { this.consumed.add(symbol); return value; }
+    }
     const authorized = this.options.isCanonicalReference?.(symbol) === true;
     this.traceAliases(raw, symbol, depth, authorized);
     const declaration = symbol.valueDeclaration;

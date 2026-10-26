@@ -6,14 +6,31 @@ import { StaticExpressionResolver, type StaticValue } from "./static-expression.
 export class ManagedMetadataResolver {
   private readonly consumers = new Set<ts.CallExpression>();
   private readonly references = new Set<ts.Symbol>();
+  private readonly policyMethods = new Set<ts.Symbol>();
   private readonly resolver: StaticExpressionResolver;
   readonly dependencies = new Set<string>();
   readonly provenance: BunwireSourceLocation[] = [];
 
   constructor(private readonly program: ts.Program, projectRoot: string) {
+    const checker = program.getTypeChecker();
+    const contracts = ["MiddlewarePolicyRegistry", "ApplicationScheduleRegistry", "ScheduleCadenceBuilder", "ConfiguredScheduleBuilder"];
+    for (const source of program.getSourceFiles()) for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)
+        || statement.moduleSpecifier.text !== "@bunwire/core") continue;
+      const module = checker.getSymbolAtLocation(statement.moduleSpecifier);
+      if (!module) continue;
+      for (const name of contracts) {
+        const exported = checker.getExportsOfModule(module).find((symbol) => symbol.name === name);
+        if (!exported) continue;
+        const symbol = exported.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(exported) : exported;
+        for (const member of checker.getDeclaredTypeOfSymbol(symbol).getProperties()) this.policyMethods.add(member);
+      }
+    }
     this.resolver = new StaticExpressionResolver({ program, projectRoot, deferMutationChecks: true,
       isCanonicalReference: (symbol) => this.references.has(symbol),
-      isMetadataConsumer: (call) => ts.isCallExpression(call) && this.consumers.has(call) });
+      isMetadataConsumer: (call) => ts.isCallExpression(call) && (this.consumers.has(call)
+        || (ts.isPropertyAccessExpression(call.expression)
+          && this.policyMethods.has(checker.getSymbolAtLocation(call.expression.name)!))) });
   }
 
   allowDecorator(call: ts.CallExpression | undefined): void {
@@ -21,6 +38,18 @@ export class ManagedMetadataResolver {
   }
 
   allowReference(symbol: ts.Symbol): void { this.references.add(symbol); }
+
+  withBindings<T>(bindings: ReadonlyMap<ts.Symbol, StaticValue>, depth: number, run: () => T): T {
+    return this.resolver.withBindings(bindings, depth, run);
+  }
+
+  inspectPolicyReference(expression: ts.Expression, symbol: ts.Symbol, depth: number): ts.Symbol {
+    const result = this.resolver.inspectPolicyReference(expression, symbol, depth);
+    for (const file of result.dependencies) this.dependencies.add(file);
+    return result.symbol;
+  }
+
+  inspectPolicyNode(node: ts.Node, depth: number): void { this.dependencies.add(this.resolver.inspectPolicyNode(node, depth)); }
 
   sourceText(origin: BunwireSourceLocation): string {
     const file = this.program.getSourceFile(origin.filePath);

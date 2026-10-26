@@ -1,6 +1,6 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestones 15–17 are complete; Milestones 18–22 are not started.
+Status: Project Milestones 15–18 are complete; Milestones 19–22 are not started.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
@@ -148,7 +148,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 | 15 | Shared static expression resolver | Completed project baseline | Complete |
 | 16 | Expressions throughout managed metadata | 15 | Complete |
 | 17 | Composable middleware and schedule values | 16 | Complete |
-| 18 | Static policy helpers across files | 17 | Planned |
+| 18 | Static policy helpers across files | 17 | Complete |
 | 19 | Multiple Application policy blocks | 18 | Planned |
 | 20 | Bounded static `for...of` expansion | 19 | Planned |
 | 21 | Dependency invalidation and diagnostic integration | 20 | Planned |
@@ -272,7 +272,7 @@ Expected behavior: central callbacks accept reusable values and collections. Not
 
 # Milestone 18 — Static Policy Helpers Across Files
 
-Status: Planned. Depends on Milestone 17.
+Status: Complete. Depends on Milestone 17. See [implementation record](progress/milestone-18.md).
 
 ## Goal and packages affected
 
@@ -289,20 +289,20 @@ Enable domain-owned middleware/schedule declarations through ordinary typed help
 
 ## Required automated tests
 
-- [ ] **[Automated / Compiler Fixture]** Imported `registerBillingSchedules(schedule)` and analogous middleware-group helpers produce the intended declarations.
-- [ ] **[Automated / Compiler Fixture]** Named callbacks, local arrows/functions, nested helpers, aliases/re-exports, lexical constants, parameter substitution, and shadowing work.
-- [ ] **[Automated / Compiler Fixture]** Repeated helper calls expand in order and preserve existing duplicate-policy errors.
-- [ ] **[Automated / Compiler Fixture]** Reject direct/indirect recursion, async/generator helpers, dynamic targets, wrong arity, registry escape, wrong registry methods, and unsupported statements.
-- [ ] **[Automated / Behavioral]** Application module side effects and helper bodies are never executed by compilation; verify through an external sentinel around analysis, not a function that must be invoked to inspect the result.
-- [ ] **[Automated / Generated Output]** Helper-based policy records match equivalent inline records.
-- [ ] **[Automated / Type-level]** Public registry callback types support the ordinary typed helper examples without an additional registration API.
+- [x] **[Automated / Compiler Fixture]** Imported `registerBillingSchedules(schedule)` and analogous middleware-group helpers produce the intended declarations.
+- [x] **[Automated / Compiler Fixture]** Named callbacks, local arrows/functions, nested helpers, aliases/re-exports, lexical constants, parameter substitution, and shadowing work.
+- [x] **[Automated / Compiler Fixture]** Repeated helper calls expand in order and preserve existing duplicate-policy errors.
+- [x] **[Automated / Compiler Fixture]** Reject direct/indirect recursion, async/generator helpers, dynamic targets, wrong arity, registry escape, wrong registry methods, and unsupported statements.
+- [x] **[Automated / Behavioral]** Application module side effects and helper bodies are never executed by compilation; verify through an external sentinel around analysis, not a function that must be invoked to inspect the result.
+- [x] **[Automated / Generated Output]** Helper-based policy records match equivalent inline records.
+- [x] **[Automated / Type-level]** Public registry callback types support the ordinary typed helper examples without an additional registration API.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Domain helper files compose both policy types without runtime execution.
-- [ ] Every expansion preserves canonical identity, lexical bindings, source order, and validation.
-- [ ] Unsupported helper constructs produce precise call-path diagnostics.
-- [ ] Required tests pass and results are recorded.
+- [x] Domain helper files compose both policy types without runtime execution.
+- [x] Every expansion preserves canonical identity, lexical bindings, source order, and validation.
+- [x] Unsupported helper constructs produce precise call-path diagnostics.
+- [x] Required tests pass and results are recorded.
 
 Expected behavior: one policy block can compose supported domain helpers, or use a named callback directly. Not expected yet: multiple Application blocks or iteration.
 

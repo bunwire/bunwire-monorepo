@@ -19,6 +19,8 @@
       "@bunwire/core": ["packages/core/src/index.ts"],
       "@bunwire/validation": ["packages/validation/src/index.ts"],
       "@bunwire/vite": ["packages/vite/src/index.ts"],
+      "@bunwire/vite/compiler": ["packages/vite/src/compiler.ts"],
+      "@bunwire/cli": ["packages/cli/src/index.ts"],
       "@bunwire/electrobun": ["packages/electrobun/src/index.ts"],
       "@bunwire/test-analysis-extensions": ["tests/fixtures/milestone-8-analysis/extensions.ts"],
       "@bunwire/fake-queue": ["examples/fake-queue-app/src/adapter.ts"]

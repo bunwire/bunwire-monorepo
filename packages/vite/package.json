@@ -14,7 +14,10 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./compiler": { "types": "./dist/compiler.d.ts", "import": "./dist/compiler.js" }
+  },
   "files": ["dist/**/*.js", "dist/**/*.d.ts", "dist/**/*.map", "README.md", "LICENSE"],
   "publishConfig": {
     "access": "public"
@@ -30,5 +33,8 @@
   },
   "peerDependencies": {
     "vite": "^7.3.6"
+  },
+  "peerDependenciesMeta": {
+    "vite": { "optional": true }
   }
 }

@@ -1363,6 +1363,14 @@ The compiler owns resolution and expansion; Core owns Application configuration 
 
 ---
 
+# CLI and Scaffolding — Milestones 23–28
+
+Status: Milestone 23 complete; Milestones 24–28 remain planned.
+
+The command catalog, architectural boundaries, implementation order, required tests, and acceptance criteria are defined in [CLI_SCAFFOLDING_MILESTONES.md](CLI_SCAFFOLDING_MILESTONES.md). This project-wide track adds one executable for physical generation and watching, compiler-backed inspection, managed source generators (including middleware), Bun runtime command dispatch, and project scaffolding. It follows the completed static composition track and remains separate from the Bun package's milestone numbering.
+
+---
+
 # Release Checkpoints
 
 ## Checkpoint A — Core Runtime Kernel

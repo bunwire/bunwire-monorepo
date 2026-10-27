@@ -2,6 +2,8 @@
 
 `@bunwire/vite` provides Bunwire's bounded discovery, TypeScript analysis, deterministic registry/client generation, and Vite virtual-module layer.
 
+For Node tooling without Vite installed, import `generateBunwireArtifacts()` and the compiler diagnostics from the public `@bunwire/vite/compiler` subpath. The package's `vite` peer is optional for this use; the `bunwire()` Vite plugin still requires Vite in applications that use it. The `@bunwire/cli` executable calls this compiler boundary for `bunwire generate`.
+
 ## Configuration
 
 Place one `bunwire.config.*` file at the project root:

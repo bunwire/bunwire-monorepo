@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const releasePackages = ["core", "vite", "electrobun", "bun"];
+const releasePackages = ["core", "vite", "electrobun", "bun", "cli"];
 const temporaryRoot = await mkdtemp(path.join(tmpdir(), "bunwire-release-pack-"));
 const packRoot = path.join(temporaryRoot, "packs");
 const consumerRoot = path.join(temporaryRoot, "consumer");
@@ -96,6 +96,7 @@ try {
       "@bunwire/bun": packedBun,
       "@bunwire/core": packedCore,
       "@bunwire/vite": `file:${tarballs.get("vite").replaceAll("\\", "/")}`,
+      "@bunwire/cli": `file:${tarballs.get("cli").replaceAll("\\", "/")}`,
       "@bunwire/electrobun": `file:${tarballs.get("electrobun").replaceAll("\\", "/")}`,
       typescript: "5.9.3",
       vite: "7.3.6",

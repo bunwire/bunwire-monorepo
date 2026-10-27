@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "node generate.mjs",
+    "generate": "bunwire generate",
     "build": "pnpm generate && tsc -b",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
     "@bunwire/core": "workspace:*",
+    "@bunwire/cli": "workspace:*",
     "@bunwire/electrobun": "workspace:*",
     "@bunwire/vite": "workspace:*"
   }

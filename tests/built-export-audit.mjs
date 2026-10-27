@@ -8,7 +8,7 @@ const allowlist = JSON.parse(await readFile(
   path.join(repositoryRoot, "tests/fixtures/milestone-13-public-exports.json"),
   "utf8",
 ));
-const packageNames = ["core", "vite", "electrobun", "bun", "validation"];
+const packageNames = ["core", "vite", "electrobun", "bun", "validation", "cli"];
 
 for (const packageName of packageNames) {
   const packageRoot = path.join(repositoryRoot, "packages", packageName);
@@ -39,6 +39,12 @@ for (const packageName of packageNames) {
   if (JSON.stringify(declarationExports) !== JSON.stringify(allowlist[packageName].declarations)) {
     throw new Error(`Built declaration exports for @bunwire/${packageName} differ from the committed release allowlist.\nExpected: ${JSON.stringify(allowlist[packageName].declarations)}\nReceived: ${JSON.stringify(declarationExports)}`);
   }
+}
+
+const compilerPath = path.join(repositoryRoot, "packages/vite/dist/compiler.js");
+const compiler = await import(`${pathToFileURL(compilerPath).href}?audit=${Date.now()}`);
+for (const name of ["generateBunwireArtifacts", "analyzeBunwireApplication", "BunwireCompilerError"]) {
+  if (typeof compiler[name] !== "function") throw new Error(`Compiler-only subpath is missing ${name}.`);
 }
 
 for (const [subpath, allowlistKey, fileName] of [["client", "bunClient", "client"], ["react", "bunReact", "react"], ["react/server", "bunReactServer", "react-server"], ["testing", "bunTesting", "testing"]]) {

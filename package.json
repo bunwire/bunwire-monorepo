@@ -11,6 +11,7 @@
     "test:electrobun-native": "node tests/electrobun-native-smoke.mjs",
     "test:built-exports": "node tests/built-export-audit.mjs",
     "test:release-pack": "node tests/release-package-audit.mjs",
+    "test:cli-pack": "node tests/milestone-23/packed-no-vite.mjs",
     "test:clean-install": "node tests/clean-install.mjs",
     "performance:sanity": "node tests/performance-sanity.mjs",
     "performance:sanity:bun": "vitest run --config vitest.config.ts tests/bun/milestone-16/example-process.test.ts tests/bun/milestone-16/scheduler-worker.test.ts",
@@ -20,6 +21,7 @@
   },
   "devDependencies": {
     "@bunwire/bun": "workspace:*",
+    "@bunwire/cli": "workspace:*",
     "@bunwire/core": "workspace:*",
     "@bunwire/electrobun": "workspace:*",
     "@bunwire/validation": "workspace:*",

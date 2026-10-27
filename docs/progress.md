@@ -2,7 +2,9 @@
 
 ## Current Status
 
-Current milestone: None. Project Milestones 15–22 — static expressions and modular composition — are complete.
+Current milestone: None. Milestone 23 — executable and physical generation — is complete — [details](progress/milestone-23.md).
+
+Current track: Project Milestones 23–28 — [CLI and scaffolding](CLI_SCAFFOLDING_MILESTONES.md).
 
 The [static expressions and modular composition track, Milestones 15–22](STATIC_COMPOSITION_MILESTONES.md), is complete. These project milestone numbers are separate from Bun package numbering.
 
@@ -41,6 +43,8 @@ Overall status:
 - Milestone 21: Complete — [details](progress/milestone-21.md)
 - Milestone 22: Complete — [details](progress/milestone-22.md)
 - Project Milestones 15–22: Complete — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
+- Milestone 23: Complete — [details](progress/milestone-23.md)
+- Project Milestones 24–28: Planned — [CLI and scaffolding roadmap](CLI_SCAFFOLDING_MILESTONES.md)
 - `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
 - `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
 - `@bunwire/bun` Milestone 3: Complete — [details](../packages/bun/progress/milestone-03.md)
@@ -124,18 +128,19 @@ Overall status:
 - `@bunwire/bun` Milestone 22 adds negotiated partial/deferred page responses and optional separate SSR.
 - `@bunwire/bun` Milestone 23 adds validated opt-in WebSocket envelopes and authorized channel helpers.
 - `@bunwire/bun` Milestone 24 verifies combined real Bun flows and compatibility, documents security/resource boundaries, and fixes outgoing envelope validation. Its broad suite had two failures resolved in focused reruns; see the milestone record.
+- Project Milestone 23 adds a Node-compatible `bunwire` executable for help, command listing, and physical generation through a public compiler-only subpath. Bun and Electrobun examples use it, and packed installation without Vite or Bun passes.
 - Post-completion Bun review fixes serialize async page renders and prevent overlapping readiness checks; see the Milestone 22 and 19 records.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
 - No Bun v2 milestone is in progress.
-- Project Milestone 22 is complete; no project milestone is currently in progress.
+- No project milestone is currently in progress. Project Milestone 23 is complete.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- The static composition track is complete; future project work is not yet scheduled in the roadmap.
+- Begin project Milestone 24 — standalone watch lifecycle — when the next CLI track work starts.
 - Optional backend packages remain separate future work.
 
 ## Blockers
@@ -174,6 +179,7 @@ Overall status:
 - [Milestone 20](progress/milestone-20.md)
 - [Milestone 21](progress/milestone-21.md)
 - [Milestone 22](progress/milestone-22.md)
+- [Milestone 23](progress/milestone-23.md)
 - [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)
 - [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
 - [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)

@@ -9,7 +9,8 @@ const forbiddenCoreSpecifiers = [
   /^@bunwire\/electrobun(?:\/|$)/,
   /^@bunwire\/bun(?:\/|$)/,
   /^@bunwire\/validation(?:\/|$)/,
-  /(?:^|\/)packages\/(?:vite|electrobun|bun|validation)(?:\/|$)/,
+  /^@bunwire\/cli(?:\/|$)/,
+  /(?:^|\/)packages\/(?:vite|electrobun|bun|validation|cli)(?:\/|$)/,
 ];
 
 const forbiddenRuntimeDiscoverySpecifiers = [/^node:fs(?:\/|$)/, /^fs(?:\/|$)/];
@@ -26,7 +27,7 @@ const forbiddenVitePlatformTerms = [
   /\bBUN_COMPILER_DESCRIPTOR\b/,
   /\bBunAdapter\b/,
 ];
-const crossPackageSourceSpecifier = /(?:^|\/)packages\/(core|vite|electrobun|bun|validation)\/src(?:\/|$)/;
+const crossPackageSourceSpecifier = /(?:^|\/)packages\/(core|vite|electrobun|bun|validation|cli)\/src(?:\/|$)/;
 
 const importPattern = /(?:import|export)\s+(?:type\s+)?(?:[^"']*?\s+from\s+)?["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
 
@@ -109,19 +110,20 @@ export async function checkCoreBoundaries(rootDirectory) {
 }
 
 export async function checkReleaseBoundaries(rootDirectory) {
-  const [core, vite, electrobun, bun, validation] = await Promise.all([
+  const [core, vite, electrobun, bun, validation, cli] = await Promise.all([
     relativeSourceFiles(rootDirectory, "core"),
     relativeSourceFiles(rootDirectory, "vite"),
     relativeSourceFiles(rootDirectory, "electrobun"),
     relativeSourceFiles(rootDirectory, "bun"),
     relativeSourceFiles(rootDirectory, "validation"),
+    relativeSourceFiles(rootDirectory, "cli"),
   ]);
   return {
     coreImports: findForbiddenCoreImports(core),
     vitePlatformTerms: findVitePlatformTerms(vite),
     runtimeDiscoveryImports: findForbiddenRuntimeDiscoveryImports([...core, ...electrobun, ...bun, ...validation]),
     bunGlobalContext: findForbiddenBunGlobalContext(bun),
-    crossPackageSourceImports: findCrossPackageSourceImports([...core, ...vite, ...electrobun, ...bun, ...validation]),
+    crossPackageSourceImports: findCrossPackageSourceImports([...core, ...vite, ...electrobun, ...bun, ...validation, ...cli]),
   };
 }
 

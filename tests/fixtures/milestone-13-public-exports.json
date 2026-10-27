@@ -1174,6 +1174,10 @@
       "url"
     ]
   },
+  "cli": {
+    "runtime": ["runBunwireCli"],
+    "declarations": ["BunwireCliIO", "BunwireCliOptions", "runBunwireCli"]
+  },
   "bunReactServer": {
     "runtime": [
       "renderBunwireReactPage"

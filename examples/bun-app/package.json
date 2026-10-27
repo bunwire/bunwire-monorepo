@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "node generate.mjs",
+    "generate": "bunwire generate && bunwire generate --root worker && bunwire generate --root scheduler && bunwire generate --root command && bunwire generate --root websocket",
     "build": "pnpm generate && vite build && vite build --ssr src/page-server.ts --outDir dist/server && tsc -b",
     "dev:pages": "vite",
     "worker": "bun dist/worker/main.js",
@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@bunwire/bun": "workspace:*",
+    "@bunwire/cli": "workspace:*",
     "@bunwire/core": "workspace:*",
     "@bunwire/vite": "workspace:*",
     "react": "19.1.1",

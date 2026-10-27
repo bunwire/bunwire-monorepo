@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { bunwire, generateBunwireArtifacts } from "@bunwire/vite";
+import { analyzeBunwireApplication, bunwire, generateBunwireArtifacts } from "@bunwire/vite";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const source = path.join(repositoryRoot, "tests/fixtures/milestone-22-billing");
@@ -151,4 +151,41 @@ describe.sequential("Milestone 22 — integrated billing Vite regeneration", () 
       catch { return false; }
     }, "Vite did not recover after fixing excessive expansion");
   }, 300_000);
+
+  it("recovers when a newly imported helper outside source roots is created", async () => {
+    await server?.close();
+    server = await createServer({ root, configFile: false, appType: "custom",
+      resolve: { alias: { "@bunwire/core": path.join(repositoryRoot, "packages/core/src/index.ts"),
+        "@bunwire/bun": path.join(repositoryRoot, "packages/bun/src/index.ts") } },
+      plugins: [bunwire({ root, compilerOptions: options() })], server: { middlewareMode: true } });
+    expect((await server.transformRequest("virtual:bunwire/registry"))?.code).toContain("billing.daily");
+
+    const bootstrap = path.join(root, "src/bootstrap.ts");
+    const original = await fs.readFile(bootstrap, "utf8");
+    const before = await fs.readFile(registry, "utf8");
+    const added = path.join(root, "shared/new-policy.ts");
+    const websocket = vi.spyOn(server.ws, "send");
+    await fs.writeFile(bootstrap, 'import { registerLate } from "../shared/new-policy.js";\n'
+      + original.replace("registerSecurity(registry);", "registerSecurity(registry); registerLate(registry);"));
+    await waitFor(async () => websocket.mock.calls.some(([message]) => {
+      const event = message as unknown as { type?: string; err?: { message?: string } };
+      return event?.type === "error" && /new-policy|helper|module|source/i.test(event.err?.message ?? "");
+    }), "Missing new helper did not produce a Vite diagnostic", 20_000);
+    await expect(generateBunwireArtifacts({ root, compilerOptions: options() })).rejects.toThrow();
+    expect(await fs.readFile(registry, "utf8")).toBe(before);
+
+    await fs.writeFile(added, [
+      'import { Service, type MiddlewarePolicyRegistry } from "@bunwire/core";',
+      '@Service() export class UnmanagedHelperClass {}',
+      'export function registerLate(registry: MiddlewarePolicyRegistry) { registry.use("billing-audit:late"); }',
+    ].join("\n"));
+    await waitFor(async () => (await fs.readFile(registry, "utf8")).includes('["late"]'),
+      "Creating a new helper did not recover Vite without another source edit", 20_000);
+    expect((await server.transformRequest("virtual:bunwire/registry"))?.code).toContain('["late"]');
+    const recovered = await analyzeBunwireApplication({ root, compilerOptions: options() });
+    expect(recovered.analysis.dependencies.some((file) => file.endsWith("new-policy.ts"))).toBe(true);
+    expect(recovered.sourceFiles).not.toContain(added);
+    expect(recovered.analysis.classes.map((entry) => entry.name)).not.toContain("UnmanagedHelperClass");
+    expect((await generateBunwireArtifacts({ root, compilerOptions: options() })).changedPaths).toEqual([]);
+  }, 90_000);
 });

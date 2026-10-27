@@ -65,3 +65,10 @@ Status: Complete
 ## Next
 
 - Project Milestone 22: cross-package hardening and final release verification.
+
+## Post-Completion Review Fix — 2026-10-27
+
+- After a failed Vite refresh, the plugin now gathers TypeScript's unresolved project-local import/re-export lookup candidates from the current source graph, watches their directories, and retries when a candidate is created. A successful refresh clears the temporary candidate relevance set. Managed-class discovery remains bounded by configured source roots.
+- Added a real Vite regression: after a valid build, importing a missing helper outside `sourceRoots` reports an error without rewriting artifacts; creating it alone regenerates the registry, and a managed class in that helper is not auto-discovered. The focused case passed (1 passed, 1 filtered). The affected Milestone 18/21/22 suites passed 57/57 tests across 6 files before a final helper-alias adjustment.
+- Final `pnpm quality` passed after the alias adjustment: package boundaries, typecheck, Electrobun SDK contract, full Vitest suite, all workspace builds, and built-export audit.
+- The original deletion/restoration and dependency-watching results above remain historical evidence for Milestone 21.

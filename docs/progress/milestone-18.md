@@ -75,3 +75,10 @@ Status: Complete
 ## Next
 
 - Project Milestone 19 — compose repeated Application middleware and schedule policy blocks.
+
+## Post-Completion Review Fix — 2026-10-27
+
+- Restricted callable local policy declarations to direct arrow/function expressions or aliases resolving to supported helpers. An arbitrary initializer call that returns a function now receives a policy diagnostic instead of being silently ignored; local helper aliases remain accepted.
+- Added middleware and schedule regression cases asserting the diagnostic at the initializer and a positive local helper-alias case. The focused callable/alias selection passed 4 tests (39 filtered). The complete Milestone 18 suite passed 43/43 after the final helper change. Before the alias-preservation adjustment, the affected Milestone 18/21/22 suites passed 57/57 tests across 6 files.
+- Final `pnpm quality` passed after the alias adjustment: package boundaries, typecheck, Electrobun SDK contract, full Vitest suite, all workspace builds, and built-export audit.
+- The milestone's original acceptance and test history above remain the record of its completion at that checkpoint.

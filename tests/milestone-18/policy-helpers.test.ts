@@ -322,4 +322,29 @@ describe("Milestone 18 — static policy helpers", () => {
     const fixture = await scheduleCase(body, prelude);
     expect(fixture.run).toThrowError(expect.objectContaining({ code: "SCHEDULE_POLICY_INVALID", message: expect.stringMatching(message) }));
   });
+
+  it("rejects a callable result from an arbitrary middleware local initializer", async () => {
+    const fixture = await policyCase('const ignored = factory(); registry.use("auth");',
+      'function factory() { return () => "auth"; }');
+    expect(fixture.run).toThrowError(expect.objectContaining({
+      code: "MIDDLEWARE_POLICY_INVALID", message: expect.stringMatching(/arbitrary calls are unsupported/),
+      location: expect.objectContaining({ filePath: fixture.bootstrap, line: 2 }),
+    }));
+  });
+
+  it("preserves a local const alias to a supported policy helper", async () => {
+    const fixture = await policyCase('const alias = configure; alias(registry);',
+      'function configure(r: import("@bunwire/core").MiddlewarePolicyRegistry) { r.use("auth"); }');
+    expect(fixture.run().classes.find((entry) => entry.name === "Panel")!.methods[0]!.middleware[0]!.target.symbolName)
+      .toBe("Auth");
+  });
+
+  it("rejects a callable result from an arbitrary schedule local initializer", async () => {
+    const fixture = await scheduleCase('const ignored = factory(); schedule.job(Report).dailyAt("04:00");',
+      'function factory() { return () => "ignored"; }');
+    expect(fixture.run).toThrowError(expect.objectContaining({
+      code: "SCHEDULE_POLICY_INVALID", message: expect.stringMatching(/arbitrary calls are unsupported/),
+      location: expect.objectContaining({ filePath: fixture.bootstrap, line: 2 }),
+    }));
+  });
 });

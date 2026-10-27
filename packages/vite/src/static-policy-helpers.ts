@@ -210,8 +210,12 @@ export class StaticPolicyHelpers {
           const symbol = this.symbol(declaration.name);
           if (!symbol) this.fail("Policy helper local has no TypeScript symbol.", declaration);
           const initializer = unwrapBootstrapExpression(declaration.initializer);
-          if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)
-            || this.checker.getTypeAtLocation(initializer).getCallSignatures().length) continue;
+          if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) continue;
+          if ((ts.isIdentifier(initializer) || ts.isPropertyAccessExpression(initializer))
+            && this.checker.getTypeAtLocation(initializer).getCallSignatures().length) {
+            this.helper(initializer);
+            continue;
+          }
           bindings.set(symbol, this.metadata.resolve(declaration.initializer, this.code));
         }
         continue;

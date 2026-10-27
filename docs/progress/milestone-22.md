@@ -100,3 +100,9 @@ Status: Complete
 ## Historical Restrictions Superseded
 
 - Milestone 15's direct static-resolver foundation and Milestones 16–17's initial inline/value restrictions describe those checkpoints only. Milestones 18–20 added typed imported helpers, repeated policy blocks, and bounded `for...of` expansion; Milestone 21 added imported-dependency watching and recovery. Earlier progress files remain historical evidence and are not rewritten to imply the later syntax existed at their checkpoints.
+
+## Post-Completion Review Fix — 2026-10-27
+
+- Corrected the roadmap sequence table's stale Milestone 22 "Planned" status to "Complete".
+- Expanded the real Vite billing fixture with a newly imported helper outside `sourceRoots`: the invalid import preserves the last artifact, and creating the helper alone recovers generated output without discovering the helper's managed class. The focused case passed (1 passed, 1 filtered), and the affected Milestone 18/21/22 suites passed 57/57 tests across 6 files before a final helper-alias adjustment.
+- Final `pnpm quality` passed after the helper-alias adjustment: package boundaries, typecheck, Electrobun SDK contract, full Vitest suite, all workspace builds, and built-export audit. The original release-gate history above remains the evidence for Milestone 22 completion.

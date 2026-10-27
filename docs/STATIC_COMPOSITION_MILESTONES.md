@@ -152,7 +152,7 @@ Rejected examples must include `fetch(...)`, `process.env.QUEUE` in compiled met
 | 19 | Multiple Application policy blocks | 18 | Complete |
 | 20 | Bounded static `for...of` expansion | 19 | Complete |
 | 21 | Dependency invalidation and diagnostic integration | 20 | Complete |
-| 22 | Cross-package hardening and completion | 21 | Planned |
+| 22 | Cross-package hardening and completion | 21 | Complete |
 
 Earlier milestones collect dependencies and provenance immediately; Milestone 21 completes their development-server integration. Helpers and expression APIs remain internal compiler infrastructure unless a public analysis result must expose dependency information for the plugin.
 

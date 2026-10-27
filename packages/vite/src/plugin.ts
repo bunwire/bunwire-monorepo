@@ -1,6 +1,8 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import ts from "typescript";
 import type {
   HmrContext,
   ModuleNode,
@@ -15,6 +17,7 @@ import {
   type GenerateBunwireArtifactsOptions,
 } from "./artifact-generator.js";
 import { generateCallerContractModule } from "./caller-contract-generator.js";
+import { createBunwireProgram } from "./compiler-analysis.js";
 import {
   analyzeBunwireApplication,
   type AnalyzedBunwireApplication,
@@ -22,6 +25,7 @@ import {
 import { BunwireCompilerError } from "./diagnostics.js";
 import { canonicalCompilerPath } from "./path-identity.js";
 import { generateRuntimeRegistryModule } from "./registry-generator.js";
+import { discoverBunwireSourceFiles } from "./source-discovery.js";
 import { generateBunwirePageModule, renderBunwirePageManifest, type BunwirePageAssetManifest } from "./page-generator.js";
 import {
   BUNWIRE_CLIENT_MODULE_ID,
@@ -74,6 +78,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
   let resolvedViteConfig: ResolvedConfig | undefined;
   let pageServerManifest: { protocol: 1; serverEntry: string } | undefined;
   let closing = false;
+  let missingProjectImports = new Map<string, string>();
 
   const outputPathIdentities = (): ReadonlySet<string> => new Set([
     generatedPaths.registry,
@@ -129,7 +134,54 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     const application = await analyze();
     registerWatchFiles(context, application);
     await generateBunwireArtifactsFromApplication(application, options);
+    missingProjectImports.clear();
     return application;
+  };
+
+  const watchMissingProjectImports = async (): Promise<void> => {
+    const application = latestApplication;
+    if (!application || !devServer) return;
+    try {
+      const sourceFiles = await discoverBunwireSourceFiles(application.config);
+      const { program } = createBunwireProgram({
+        projectRoot: application.config.root,
+        bootstrapPath: application.config.bootstrap,
+        sourceFiles,
+        ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
+        ...(options.compilerOptions ? { compilerOptions: options.compilerOptions } : {}),
+      });
+      const candidates = new Map<string, string>();
+      const root = application.config.root;
+      for (const source of program.getSourceFiles()) {
+        if (source.isDeclarationFile || !isWithin(root, source.fileName)
+          || path.relative(root, source.fileName).split(path.sep).includes("node_modules")) continue;
+        for (const imported of ts.preProcessFile(source.text, true, true).importedFiles) {
+          const resolution = ts.resolveModuleName(imported.fileName, source.fileName, program.getCompilerOptions(), ts.sys);
+          if (resolution.resolvedModule) continue;
+          // TypeScript records these paths at runtime but omits them from its public result type.
+          const failedLookups = (resolution as typeof resolution & { failedLookupLocations?: readonly string[] }).failedLookupLocations ?? [];
+          for (const failedPath of failedLookups) {
+            const candidate = path.resolve(failedPath);
+            const relative = path.relative(root, candidate);
+            if (!isWithin(root, candidate) || relative.split(path.sep).some((part) =>
+              ["node_modules", ".git", ".bunwire"].includes(part))
+              || !/\.(?:[cm]?[jt]sx?)$/i.test(candidate)
+              || /\.d\.(?:ts|mts|cts)$/i.test(candidate)) continue;
+            candidates.set(canonicalCompilerPath(candidate), candidate);
+          }
+        }
+      }
+      missingProjectImports = candidates;
+      const directories = new Set<string>();
+      for (const candidate of candidates.values()) {
+        let directory = path.dirname(candidate);
+        while (!existsSync(directory) && isWithin(root, directory) && directory !== root) directory = path.dirname(directory);
+        if (isWithin(root, directory) && statSync(directory).isDirectory()) directories.add(directory);
+      }
+      devServer.watcher.add([...directories]);
+    } catch {
+      // Preserve the original compiler diagnostic if recovery-watch discovery also fails.
+    }
   };
 
   const queueRefresh = (
@@ -147,6 +199,8 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     const resolved = path.resolve(filePath);
     const identity = canonicalCompilerPath(resolved);
     if (outputPathIdentities().has(identity)) return false;
+    if (missingProjectImports.has(identity)
+      || [...missingProjectImports.values()].some((candidate) => isWithin(resolved, candidate))) return true;
     const application = latestApplication;
     if (!application) return isWithin(viteRoot, resolved);
     if (identity === canonicalCompilerPath(application.config.configFile)
@@ -205,6 +259,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     try {
       await queueRefresh(context);
     } catch (cause) {
+      await watchMissingProjectImports();
       if (!devServer) throw cause;
       const error = cause instanceof Error ? cause : new Error(String(cause));
       devServer.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? error.message,
@@ -228,7 +283,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     configureServer(server): void {
       devServer = server;
       if (latestApplication) server.watcher.add(watchedPaths(latestApplication));
-      for (const event of ["add", "unlink"] as const) {
+      for (const event of ["add", "addDir", "unlink"] as const) {
         server.watcher.on(event, (filePath) => { void refreshForWatchedChange(filePath); });
       }
     },
@@ -311,6 +366,9 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       const affected = new Set(context.modules);
       try {
         await queueRefresh();
+      } catch (cause) {
+        await watchMissingProjectImports();
+        throw cause;
       } finally {
         for (const module of invalidateVirtualModules(context.server)) affected.add(module);
       }

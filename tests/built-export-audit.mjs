@@ -43,7 +43,8 @@ for (const packageName of packageNames) {
 
 const compilerPath = path.join(repositoryRoot, "packages/vite/dist/compiler.js");
 const compiler = await import(`${pathToFileURL(compilerPath).href}?audit=${Date.now()}`);
-for (const name of ["generateBunwireArtifacts", "analyzeBunwireApplication", "BunwireCompilerError"]) {
+for (const name of ["generateBunwireArtifacts", "generateBunwireArtifactsFromApplication", "analyzeBunwireApplication",
+  "bunwireWatchedPaths", "discoverMissingProjectImports", "isBunwireRelevantChange", "BunwireCompilerError"]) {
   if (typeof compiler[name] !== "function") throw new Error(`Compiler-only subpath is missing ${name}.`);
 }
 

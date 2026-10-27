@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, readdir, rm, cp, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -10,6 +10,7 @@ const packRoot = path.join(temporaryRoot, "packs");
 const consumerRoot = path.join(temporaryRoot, "consumer");
 const pnpmPath = process.env.npm_execpath;
 if (!pnpmPath) throw new Error("Run this check through pnpm test:cli-pack.");
+let watchChild;
 
 function run(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout: 180_000 });
@@ -21,6 +22,15 @@ function run(command, args, cwd) {
 
 function pnpm(args, cwd) {
   return run(process.execPath, [pnpmPath, ...args], cwd);
+}
+
+async function waitFor(check, message) {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    if (await check()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(message);
 }
 
 try {
@@ -67,8 +77,27 @@ try {
   run(process.execPath, [bin, "generate"], consumerRoot);
   const registry = await readFile(path.join(consumerRoot, ".bunwire/registry.ts"), "utf8");
   if (!registry.includes("applicationRegistry")) throw new Error("CLI did not generate the expected registry.");
-  console.log("Packed CLI generated Electrobun artifacts without Vite or Bun installed.");
+  watchChild = spawn(process.execPath, [bin, "watch"], { cwd: consumerRoot, stdio: ["ignore", "pipe", "pipe"] });
+  let output = "";
+  let errors = "";
+  watchChild.stdout.setEncoding("utf8").on("data", (chunk) => { output += chunk; });
+  watchChild.stderr.setEncoding("utf8").on("data", (chunk) => { errors += chunk; });
+  await waitFor(() => output.includes("Watching Bunwire project") && output.includes("Generated Bunwire artifacts"),
+    `Packed watcher did not start. ${errors}`);
+  const source = path.join(consumerRoot, "src/bun/application.ts");
+  await writeFile(source, (await readFile(source, "utf8")).replace('@Route("get")', '@Route("packedWatch")'));
+  await waitFor(async () => {
+    try { return (await readFile(path.join(consumerRoot, ".bunwire/client.ts"), "utf8")).includes('"users/packedWatch"'); }
+    catch { return false; }
+  }, `Packed watcher did not regenerate after source edit. ${errors}`);
+  if (errors.trim()) throw new Error(`Packed watcher reported an error: ${errors}`);
+  console.log("Packed CLI generated and watched Electrobun artifacts without Vite or Bun installed.");
 } finally {
+  if (watchChild && watchChild.exitCode === null && watchChild.signalCode === null) {
+    const exited = new Promise((resolve) => watchChild.once("exit", resolve));
+    watchChild.kill("SIGTERM");
+    await exited;
+  }
   if (path.dirname(temporaryRoot) !== tmpdir() || !path.basename(temporaryRoot).startsWith("bunwire-cli-packed-")) {
     throw new Error("Unsafe temporary cleanup path.");
   }

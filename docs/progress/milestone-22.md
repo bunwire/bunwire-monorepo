@@ -106,3 +106,7 @@ Status: Complete
 - Corrected the roadmap sequence table's stale Milestone 22 "Planned" status to "Complete".
 - Expanded the real Vite billing fixture with a newly imported helper outside `sourceRoots`: the invalid import preserves the last artifact, and creating the helper alone recovers generated output without discovering the helper's managed class. The focused case passed (1 passed, 1 filtered), and the affected Milestone 18/21/22 suites passed 57/57 tests across 6 files before a final helper-alias adjustment.
 - Final `pnpm quality` passed after the helper-alias adjustment: package boundaries, typecheck, Electrobun SDK contract, full Vitest suite, all workspace builds, and built-export audit. The original release-gate history above remains the evidence for Milestone 22 completion.
+
+## Post-Completion Test Timing Adjustment — 2026-10-27
+
+- During Project Milestone 24 regression verification, the billing Vite file's second test reached its former 90-second timeout when run after the first test's large expansion workload. The second test passed alone in about 69 seconds. Its timeout was raised to 180 seconds without changing its assertions, and the complete billing Vite file passed 2/2. This does not alter Milestone 22 behavior or acceptance criteria.

@@ -1,8 +1,6 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import ts from "typescript";
 import type {
   HmrContext,
   ModuleNode,
@@ -17,7 +15,6 @@ import {
   type GenerateBunwireArtifactsOptions,
 } from "./artifact-generator.js";
 import { generateCallerContractModule } from "./caller-contract-generator.js";
-import { createBunwireProgram } from "./compiler-analysis.js";
 import {
   analyzeBunwireApplication,
   type AnalyzedBunwireApplication,
@@ -25,7 +22,12 @@ import {
 import { BunwireCompilerError } from "./diagnostics.js";
 import { canonicalCompilerPath } from "./path-identity.js";
 import { generateRuntimeRegistryModule } from "./registry-generator.js";
-import { discoverBunwireSourceFiles } from "./source-discovery.js";
+import {
+  bunwireWatchedPaths,
+  discoverMissingProjectImports,
+  isBunwireRelevantChange,
+  missingProjectImportDirectories,
+} from "./watch-inputs.js";
 import { generateBunwirePageModule, renderBunwirePageManifest, type BunwirePageAssetManifest } from "./page-generator.js";
 import {
   BUNWIRE_CLIENT_MODULE_ID,
@@ -61,13 +63,6 @@ interface BunwirePluginContext {
 
 export type BunwireVitePlugin = Plugin & BunwirePluginHooks;
 
-function isWithin(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  return relative === "" || (!relative.startsWith(`..${path.sep}`)
-    && relative !== ".."
-    && !path.isAbsolute(relative));
-}
-
 export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlugin {
   let viteRoot = path.resolve(options.root ?? process.cwd());
   let analyzedApplication: Promise<AnalyzedBunwireApplication> | undefined;
@@ -78,20 +73,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
   let resolvedViteConfig: ResolvedConfig | undefined;
   let pageServerManifest: { protocol: 1; serverEntry: string } | undefined;
   let closing = false;
-  let missingProjectImports = new Map<string, string>();
-
-  const outputPathIdentities = (): ReadonlySet<string> => new Set([
-    generatedPaths.registry,
-    generatedPaths.client,
-    generatedPaths.declarations,
-    generatedPaths.pages,
-  ].filter((filePath): filePath is string => typeof filePath === "string")
-    .map((filePath) => canonicalCompilerPath(filePath)));
-
-  const externalDependencyDirectories = (application: AnalyzedBunwireApplication): readonly string[] =>
-    [...new Set(application.analysis.dependencies
-      .filter((filePath) => !application.config.sourceRoots.some((root) => isWithin(root, filePath)))
-      .map((filePath) => path.dirname(filePath)))];
+  let missingProjectImports: readonly string[] = [];
 
   const analyze = (): Promise<AnalyzedBunwireApplication> => {
     analyzedApplication ??= analyzeBunwireApplication({
@@ -100,7 +82,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     }).then((application) => {
       latestApplication = application;
       generatedPaths = resolveGeneratedArtifactPaths(application.config.root, options);
-      devServer?.watcher.add(watchedPaths(application));
+      devServer?.watcher.add(bunwireWatchedPaths(application));
       return application;
     });
     return analyzedApplication;
@@ -110,22 +92,11 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     analyzedApplication = undefined;
   };
 
-  const watchedPaths = (application: AnalyzedBunwireApplication): readonly string[] => Object.freeze([
-    application.config.configFile,
-    application.config.bootstrap,
-    ...application.config.sourceRoots,
-    ...application.sourceFiles,
-    ...application.analysis.dependencies,
-    ...externalDependencyDirectories(application),
-    ...(application.config.pages ? [application.config.pages.root, application.config.pages.entry,
-      ...(application.config.pages.ssrEntry ? [application.config.pages.ssrEntry] : [])] : []),
-  ]);
-
   const registerWatchFiles = (
     context: BunwirePluginContext | undefined,
     application: AnalyzedBunwireApplication,
   ): void => {
-    for (const filePath of watchedPaths(application)) context?.addWatchFile(filePath);
+    for (const filePath of bunwireWatchedPaths(application)) context?.addWatchFile(filePath);
   };
 
   const refreshArtifacts = async (
@@ -134,7 +105,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     const application = await analyze();
     registerWatchFiles(context, application);
     await generateBunwireArtifactsFromApplication(application, options);
-    missingProjectImports.clear();
+    missingProjectImports = [];
     return application;
   };
 
@@ -142,43 +113,8 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     const application = latestApplication;
     if (!application || !devServer) return;
     try {
-      const sourceFiles = await discoverBunwireSourceFiles(application.config);
-      const { program } = createBunwireProgram({
-        projectRoot: application.config.root,
-        bootstrapPath: application.config.bootstrap,
-        sourceFiles,
-        ...(options.tsconfigPath ? { tsconfigPath: options.tsconfigPath } : {}),
-        ...(options.compilerOptions ? { compilerOptions: options.compilerOptions } : {}),
-      });
-      const candidates = new Map<string, string>();
-      const root = application.config.root;
-      for (const source of program.getSourceFiles()) {
-        if (source.isDeclarationFile || !isWithin(root, source.fileName)
-          || path.relative(root, source.fileName).split(path.sep).includes("node_modules")) continue;
-        for (const imported of ts.preProcessFile(source.text, true, true).importedFiles) {
-          const resolution = ts.resolveModuleName(imported.fileName, source.fileName, program.getCompilerOptions(), ts.sys);
-          if (resolution.resolvedModule) continue;
-          // TypeScript records these paths at runtime but omits them from its public result type.
-          const failedLookups = (resolution as typeof resolution & { failedLookupLocations?: readonly string[] }).failedLookupLocations ?? [];
-          for (const failedPath of failedLookups) {
-            const candidate = path.resolve(failedPath);
-            const relative = path.relative(root, candidate);
-            if (!isWithin(root, candidate) || relative.split(path.sep).some((part) =>
-              ["node_modules", ".git", ".bunwire"].includes(part))
-              || !/\.(?:[cm]?[jt]sx?)$/i.test(candidate)
-              || /\.d\.(?:ts|mts|cts)$/i.test(candidate)) continue;
-            candidates.set(canonicalCompilerPath(candidate), candidate);
-          }
-        }
-      }
-      missingProjectImports = candidates;
-      const directories = new Set<string>();
-      for (const candidate of candidates.values()) {
-        let directory = path.dirname(candidate);
-        while (!existsSync(directory) && isWithin(root, directory) && directory !== root) directory = path.dirname(directory);
-        if (isWithin(root, directory) && statSync(directory).isDirectory()) directories.add(directory);
-      }
-      devServer.watcher.add([...directories]);
+      missingProjectImports = await discoverMissingProjectImports(application, options);
+      devServer.watcher.add(missingProjectImportDirectories(application.config.root, missingProjectImports));
     } catch {
       // Preserve the original compiler diagnostic if recovery-watch discovery also fails.
     }
@@ -195,25 +131,9 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     return refresh;
   };
 
-  const isRelevantChange = (filePath: string): boolean => {
-    const resolved = path.resolve(filePath);
-    const identity = canonicalCompilerPath(resolved);
-    if (outputPathIdentities().has(identity)) return false;
-    if (missingProjectImports.has(identity)
-      || [...missingProjectImports.values()].some((candidate) => isWithin(resolved, candidate))) return true;
-    const application = latestApplication;
-    if (!application) return isWithin(viteRoot, resolved);
-    if (identity === canonicalCompilerPath(application.config.configFile)
-      || identity === canonicalCompilerPath(application.config.bootstrap)) {
-      return true;
-    }
-    return application.config.sourceRoots.some((root) => isWithin(root, resolved))
-      || application.analysis.dependencies.some((filePath) => identity === canonicalCompilerPath(filePath))
-      || (application.config.pages !== undefined
-        && (identity === canonicalCompilerPath(application.config.pages.entry)
-          || (application.config.pages.ssrEntry !== undefined && identity === canonicalCompilerPath(application.config.pages.ssrEntry))
-          || isWithin(application.config.pages.root, resolved)));
-  };
+  const isRelevantChange = (filePath: string): boolean => isBunwireRelevantChange(
+    filePath, viteRoot, latestApplication, generatedPaths, missingProjectImports,
+  );
 
   const loadRegistry = async (): Promise<string> => {
     const application = await analyze();
@@ -282,7 +202,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     },
     configureServer(server): void {
       devServer = server;
-      if (latestApplication) server.watcher.add(watchedPaths(latestApplication));
+      if (latestApplication) server.watcher.add(bunwireWatchedPaths(latestApplication));
       for (const event of ["add", "addDir", "unlink"] as const) {
         server.watcher.on(event, (filePath) => { void refreshForWatchedChange(filePath); });
       }

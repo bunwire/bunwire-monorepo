@@ -21,7 +21,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b --pretty false",
-    "test": "vitest run --config ../../vitest.config.ts tests/milestone-23"
+    "test": "vitest run --config ../../vitest.config.ts tests/milestone-23 tests/milestone-24"
   },
   "dependencies": { "@bunwire/vite": "workspace:^" }
 }

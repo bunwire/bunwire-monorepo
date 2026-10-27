@@ -40,7 +40,7 @@ describe.sequential("Milestone 23 — CLI physical generation", () => {
     const list = run(["list"], parent);
     expect(list.status).toBe(0);
     expect(list.stdout).toContain("generate");
-    expect(list.stdout).not.toContain("watch");
+    expect(list.stdout).toContain("watch");
   });
 
   it("generates API-identical artifacts and preserves unchanged modification times", async () => {

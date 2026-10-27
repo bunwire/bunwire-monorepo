@@ -187,5 +187,5 @@ describe.sequential("Milestone 22 — integrated billing Vite regeneration", () 
     expect(recovered.sourceFiles).not.toContain(added);
     expect(recovered.analysis.classes.map((entry) => entry.name)).not.toContain("UnmanagedHelperClass");
     expect((await generateBunwireArtifacts({ root, compilerOptions: options() })).changedPaths).toEqual([]);
-  }, 90_000);
+  }, 180_000);
 });

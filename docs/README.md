@@ -1155,6 +1155,8 @@ Generated runtime references preserve the public import identity used by applica
 
 Project Milestone 23 exposes this physical generator through the Node-compatible `@bunwire/vite/compiler` public subpath and the `@bunwire/cli` binary. `bunwire generate [--root path]` targets exactly one Bunwire config, defaults to the current directory, and preserves unchanged artifacts. `bunwire help` and `bunwire list` are available without loading a project. Vite is an optional peer for compiler-only consumers; projects using the Vite plugin still install Vite. The CLI does not import or start the application to generate artifacts.
 
+Project Milestone 24 adds `bunwire watch [--root path]` for standalone physical generation. Compiler-owned watch-input and unresolved project-local import analysis is shared with Vite, while the CLI owns Node filesystem watchers and shutdown. The watcher keeps last successful artifacts through analysis failures and remains active for source, config, and missing-import recovery. It never starts the Application or executes Providers.
+
 ---
 
 # 26. Generic Adapter Class/Method Registries

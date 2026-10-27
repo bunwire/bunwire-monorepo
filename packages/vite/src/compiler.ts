@@ -18,6 +18,16 @@ export {
 } from "./discovery.js";
 export {
   generateBunwireArtifacts,
+  generateBunwireArtifactsFromApplication,
+  resolveGeneratedArtifactPaths,
   type GenerateBunwireArtifactsOptions,
   type GeneratedBunwireArtifacts,
 } from "./artifact-generator.js";
+export {
+  bunwireDiscoveryWatchedPaths,
+  bunwireWatchedPaths,
+  discoverMissingProjectImports,
+  isBunwirePathWithin,
+  isBunwireRelevantChange,
+  missingProjectImportDirectories,
+} from "./watch-inputs.js";

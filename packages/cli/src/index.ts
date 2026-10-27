@@ -3,6 +3,7 @@ import {
   BunwireCompilerError,
   generateBunwireArtifacts,
 } from "@bunwire/vite/compiler";
+import { watchBunwireProject } from "./watch.js";
 
 export interface BunwireCliIO {
   readonly stdout: (text: string) => void;
@@ -12,12 +13,14 @@ export interface BunwireCliIO {
 export interface BunwireCliOptions {
   readonly cwd?: string;
   readonly io?: BunwireCliIO;
+  readonly signal?: AbortSignal;
 }
 
 const commands = Object.freeze([
   ["help", "Show command help."],
   ["list", "List available commands."],
   ["generate", "Generate physical Bunwire artifacts for one project."],
+  ["watch", "Regenerate physical artifacts when project inputs change."],
 ] as const);
 
 const defaultIO: BunwireCliIO = {
@@ -31,6 +34,7 @@ function commandList(): string {
 
 function help(command?: string): string {
   if (command === "generate") return "Usage: bunwire generate [--root path]\nGenerate physical Bunwire artifacts for one configured project.";
+  if (command === "watch") return "Usage: bunwire watch [--root path]\nRegenerate physical Bunwire artifacts when project inputs change.";
   if (command === "list") return "Usage: bunwire list\nList available commands.";
   if (command === "help") return "Usage: bunwire help [command]\nShow general or per-command help.";
   return `Usage: bunwire <command> [options]\n\n${commandList()}\n\nOptions:\n  --root path  Select one project root (default: current working directory).`;
@@ -88,6 +92,10 @@ export async function runBunwireCli(argv: readonly string[], options: BunwireCli
       const result = await generateBunwireArtifacts({ root: path.resolve(cwd, root ?? ".") });
       io.stdout(`Generated Bunwire artifacts in ${path.dirname(result.paths.registry)} (${result.changedPaths.length} changed).`);
       return 0;
+    }
+    if (command === "watch") {
+      if (args.length) throw new Error("watch does not accept positional arguments.");
+      return await watchBunwireProject(path.resolve(cwd, root ?? "."), io, options.signal, diagnostic);
     }
     throw new Error(`Unknown command "${command}". Run "bunwire help" to list commands.`);
   } catch (error) {

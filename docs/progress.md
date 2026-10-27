@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Current milestone: Milestone 24 — standalone watch lifecycle complete — [details](progress/milestone-24.md). Milestone 25 is next.
+Current milestone: Milestone 25 — compiler-backed project inspection complete — [details](progress/milestone-25.md). Milestone 26 is next.
 
 Current track: Project Milestones 23–28 — [CLI and scaffolding](CLI_SCAFFOLDING_MILESTONES.md).
 
@@ -45,7 +45,8 @@ Overall status:
 - Project Milestones 15–22: Complete — [roadmap](STATIC_COMPOSITION_MILESTONES.md)
 - Milestone 23: Complete — [details](progress/milestone-23.md)
 - Milestone 24: Complete — [details](progress/milestone-24.md)
-- Project Milestones 25–28: Planned — [CLI and scaffolding roadmap](CLI_SCAFFOLDING_MILESTONES.md)
+- Milestone 25: Complete — [details](progress/milestone-25.md)
+- Project Milestones 26–28: Planned — [CLI and scaffolding roadmap](CLI_SCAFFOLDING_MILESTONES.md)
 - `@bunwire/bun` Milestone 1: Complete — [details](../packages/bun/progress/milestone-01.md)
 - `@bunwire/bun` Milestone 2: Complete — [details](../packages/bun/progress/milestone-02.md)
 - `@bunwire/bun` Milestone 3: Complete — [details](../packages/bun/progress/milestone-03.md)
@@ -131,18 +132,19 @@ Overall status:
 - `@bunwire/bun` Milestone 24 verifies combined real Bun flows and compatibility, documents security/resource boundaries, and fixes outgoing envelope validation. Its broad suite had two failures resolved in focused reruns; see the milestone record.
 - Project Milestone 23 adds a Node-compatible `bunwire` executable for help, command listing, and physical generation through a public compiler-only subpath. Bun and Electrobun examples use it, and packed installation without Vite or Bun passes.
 - Project Milestone 24 adds standalone `bunwire watch` with recovery and input tracking for Bun and Electrobun applications.
+- Project Milestone 25 adds ten compiler-backed read-only inspection commands with adapter-owned descriptions, deterministic human and JSON output, and runtime-list parity checks.
 - Post-completion Bun review fixes serialize async page renders and prevent overlapping readiness checks; see the Milestone 22 and 19 records.
 - All test definitions, clean-install automation, and fixtures centralized beneath `tests/`.
 
 ## Current Work
 
 - No Bun v2 milestone is in progress.
-- No project CLI milestone is in progress; Milestone 25 is next.
+- No project CLI milestone is in progress; Milestone 26 is next.
 - [Detailed Bun package progress](../packages/bun/progress.md)
 
 ## Next
 
-- Begin Project Milestone 25 — compiler-backed project inspection.
+- Begin Project Milestone 26 — Core source generators.
 - Optional backend packages remain separate future work.
 
 ## Blockers
@@ -183,6 +185,7 @@ Overall status:
 - [Milestone 22](progress/milestone-22.md)
 - [Milestone 23](progress/milestone-23.md)
 - [Milestone 24](progress/milestone-24.md)
+- [Milestone 25](progress/milestone-25.md)
 - [`@bunwire/bun` Milestone 1](../packages/bun/progress/milestone-01.md)
 - [`@bunwire/bun` Milestone 2](../packages/bun/progress/milestone-02.md)
 - [`@bunwire/bun` Milestone 3](../packages/bun/progress/milestone-03.md)

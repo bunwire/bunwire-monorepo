@@ -104,8 +104,10 @@ describe.sequential("Milestone 24 — standalone watch lifecycle", () => {
     await fs.writeFile(valuesA, (await fs.readFile(valuesA, "utf8")).replace('"getA"', '"getA2"'));
     await waitFor(async () => (await fs.readFile(client, "utf8")).includes('"users/getA2"'), "Consumed helper edit was not compiled.");
 
+    const beforeReexport = active.stdout.length;
     await fs.writeFile(barrel, 'export { ROUTE } from "./values-b.js";\n');
     await waitFor(async () => (await fs.readFile(client, "utf8")).includes('"users/getB"'), "Re-export change was not compiled.");
+    await waitFor(() => active!.stdout.length > beforeReexport, "Re-export refresh was not logged.");
     const count = active.stdout.length;
     await fs.writeFile(valuesA, 'export const ROUTE = "unused";\n');
     await new Promise<void>((resolve) => setTimeout(resolve, 650));

@@ -266,6 +266,7 @@ export {
   type ManagedClassCompilationHandlerData,
   type ManagedClassIdentityHandlerData,
   type ApplicationScheduleCompilationHandlerData,
+  type ProjectInspectionHandlerData,
   type DefineAdapterCompilerDescriptorOptions,
   type DefineCompilerMetadataHandlerOptions,
 } from "./adapters/compiler-descriptor.js";

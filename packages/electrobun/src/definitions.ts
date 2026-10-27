@@ -3,6 +3,7 @@ import {
   createParameterResolverId,
   defineAdapterCompilerDescriptor,
   defineCompilerMetadataHandler,
+  type ProjectInspectionHandlerData,
   defineManagedMethodDecorator,
   defineMethodKind,
   defineParameterInjector,
@@ -105,10 +106,31 @@ export const ELECTROBUN_CALLER_CONTRACT_HANDLER = defineCompilerMetadataHandler(
   }),
 });
 
+export const ELECTROBUN_PROJECT_INSPECTION_HANDLER = defineCompilerMetadataHandler({
+  id: "electrobun.project-inspection",
+  data: Object.freeze({
+    type: "bunwire.project-inspection",
+    methods: Object.freeze([
+      ...([ELECTROBUN_ROUTE_KIND, ELECTROBUN_MESSAGE_KIND] as const).map((kind) => Object.freeze({
+        kindId: kind.id,
+        command: "routes:list" as const,
+        describe: (input: { readonly ownerData: unknown; readonly methodData: unknown; readonly methodName: string }) => {
+          const owner = input.ownerData as { readonly prefix?: string } | undefined;
+          const method = input.methodData as ElectrobunMethodMetadata | undefined;
+          return {
+            transport: kind === ELECTROBUN_ROUTE_KIND ? "electrobun-request" : "electrobun-message",
+            path: normalizeElectrobunPath(owner?.prefix, method?.path, input.methodName),
+          };
+        },
+      })),
+    ]),
+  } satisfies ProjectInspectionHandlerData),
+});
+
 export const ELECTROBUN_COMPILER_DESCRIPTOR = defineAdapterCompilerDescriptor({
   id: "electrobun.adapter",
   methodKinds: [ELECTROBUN_ROUTE_KIND, ELECTROBUN_MESSAGE_KIND],
   methodDecorators: [Route.definition, Message.definition],
   parameterInjectors: [Window.definition, Webview.definition, Context.definition],
-  metadataHandlers: [ELECTROBUN_CALLER_CONTRACT_HANDLER],
+  metadataHandlers: [ELECTROBUN_CALLER_CONTRACT_HANDLER, ELECTROBUN_PROJECT_INSPECTION_HANDLER],
 });

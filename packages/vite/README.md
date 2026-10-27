@@ -136,6 +136,8 @@ Each analyzed managed method carries its final pipeline in global → matching C
 
 ## Generated artifacts and development lifecycle
 
+`inspectBunwireApplication()` from `@bunwire/vite/compiler` returns a read-only, versioned project inspection snapshot from the same static analysis used by generation. The result has ten command-keyed sorted item lists with canonical identities, source locations, scalar compiled details, and relationships. Adapter compiler descriptors may contribute a pure `bunwire.project-inspection` metadata handler for adapter-specific class and method descriptions. The generic inspector never imports application modules or interprets host-specific route, queue, or command metadata itself.
+
 `generateBunwireArtifacts()` is the shared manual/non-Vite generation boundary. By default it writes `.bunwire/registry.ts`, `.bunwire/client.ts`, and `.bunwire/virtual-modules.d.ts`; page-enabled applications also receive `.bunwire/pages.ts`. Custom output paths are supported. It returns the generated hashes, resolved output paths, and only the paths whose bytes changed. Existing files are not rewritten when output is identical.
 
 The declaration artifact gives editors and `tsc` exact application-specific types for `virtual:bunwire/registry`, `virtual:bunwire/client`, and configured `virtual:bunwire/pages`. The page module maps stable root-relative component names to lazy imports. Include `.bunwire/**/*.ts` in the application's TypeScript project. Physical generated files remain the manual/non-Vite escape hatch.

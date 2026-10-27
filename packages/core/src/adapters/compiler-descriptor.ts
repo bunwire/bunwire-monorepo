@@ -79,6 +79,31 @@ export interface ApplicationScheduleCompilationHandlerData {
   }) => Omit<DefineRuntimeScheduleOptions, "target"> | undefined;
 }
 
+/** Pure, compiler-only descriptions for project inspection; never receives live host objects. */
+export interface ProjectInspectionHandlerData {
+  readonly type: "bunwire.project-inspection";
+  readonly classes?: readonly {
+    readonly kindId: string;
+    readonly command: "jobs:list" | "commands:list";
+    readonly describe: (input: { readonly name: string; readonly data: unknown }) => Readonly<Record<string, string | number | boolean | null | undefined>>;
+  }[];
+  readonly methods?: readonly {
+    readonly kindId: string;
+    readonly command: "routes:list";
+    readonly describe: (input: {
+      readonly ownerKindId: string;
+      readonly ownerData: unknown;
+      readonly methodData: unknown;
+      readonly methodName: string;
+      readonly transportParameterCount: number;
+    }) => Readonly<Record<string, string | number | boolean | null | undefined>>;
+  }[];
+  readonly listenerAttachments?: readonly {
+    readonly definitionId: string;
+    readonly delivery: string;
+  }[];
+}
+
 export interface CompilerMetadataHandlerDescriptor<
   Id extends string = string,
   Data = unknown,

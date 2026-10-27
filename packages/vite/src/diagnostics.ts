@@ -36,6 +36,7 @@ export type BunwireCompilerErrorCode =
   | "PARAMETER_SOURCE_CONFLICT"
   | "DECORATOR_ARGUMENT_INVALID"
   | "REGISTRY_GENERATION_INVALID"
+  | "INSPECTION_INVALID"
   | "VIRTUAL_MODULE_INVALID";
 
 export interface BunwireSourceLocation {

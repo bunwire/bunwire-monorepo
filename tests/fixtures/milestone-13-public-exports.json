@@ -246,6 +246,7 @@
       "ParameterResolverId",
       "ParameterResolverRegistry",
       "ParameterSourceKind",
+      "ProjectInspectionHandlerData",
       "Provider",
       "ProviderClassMetadata",
       "ProviderConstructor",

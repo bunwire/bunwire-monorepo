@@ -31,3 +31,13 @@ export {
   isBunwireRelevantChange,
   missingProjectImportDirectories,
 } from "./watch-inputs.js";
+export {
+  BUNWIRE_INSPECTION_COMMANDS,
+  inspectBunwireApplication,
+  inspectBunwireApplicationFromAnalysis,
+  type BunwireInspectionCommand,
+  type BunwireInspectionDetail,
+  type BunwireInspectionItem,
+  type BunwireInspectionLocation,
+  type BunwireProjectInspection,
+} from "./project-inspection.js";

@@ -44,8 +44,12 @@ for (const packageName of packageNames) {
 const compilerPath = path.join(repositoryRoot, "packages/vite/dist/compiler.js");
 const compiler = await import(`${pathToFileURL(compilerPath).href}?audit=${Date.now()}`);
 for (const name of ["generateBunwireArtifacts", "generateBunwireArtifactsFromApplication", "analyzeBunwireApplication",
-  "bunwireWatchedPaths", "discoverMissingProjectImports", "isBunwireRelevantChange", "BunwireCompilerError"]) {
+  "bunwireWatchedPaths", "discoverMissingProjectImports", "isBunwireRelevantChange", "BunwireCompilerError",
+  "inspectBunwireApplication", "inspectBunwireApplicationFromAnalysis"]) {
   if (typeof compiler[name] !== "function") throw new Error(`Compiler-only subpath is missing ${name}.`);
+}
+if (!Array.isArray(compiler.BUNWIRE_INSPECTION_COMMANDS) || compiler.BUNWIRE_INSPECTION_COMMANDS.length !== 10) {
+  throw new Error("Compiler-only subpath is missing the inspection command catalog.");
 }
 
 for (const [subpath, allowlistKey, fileName] of [["client", "bunClient", "client"], ["react", "bunReact", "react"], ["react/server", "bunReactServer", "react-server"], ["testing", "bunTesting", "testing"]]) {

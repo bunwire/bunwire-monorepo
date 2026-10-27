@@ -1157,6 +1157,8 @@ Project Milestone 23 exposes this physical generator through the Node-compatible
 
 Project Milestone 24 adds `bunwire watch [--root path]` for standalone physical generation. Compiler-owned watch-input and unresolved project-local import analysis is shared with Vite, while the CLI owns Node filesystem watchers and shutdown. The watcher keeps last successful artifacts through analysis failures and remains active for source, config, and missing-import recovery. It never starts the Application or executes Providers.
 
+Project Milestone 25 adds compiler-backed inspection through the same Node-compatible subpath. `inspectBunwireApplication()` returns a versioned, deterministic snapshot of managed classes, methods, event/listener relationships, schedules, statically established Provider references, and adapter-owned middleware definitions. Adapter compiler descriptors may contribute a pure `bunwire.project-inspection` handler that maps their own class and method kinds to list categories and scalar details. Bun and Electrobun descriptions remain in their adapter packages; generic compiler and CLI code do not interpret their host-specific metadata. The ten `bunwire *:list` inspection commands provide human tables and a stable `--json` envelope without importing the application, running Providers, or writing generated artifacts. Existing direct Bun runtime list commands continue to use the generated runtime registry.
+
 ---
 
 # 26. Generic Adapter Class/Method Registries

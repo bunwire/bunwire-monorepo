@@ -77,6 +77,11 @@ try {
   run(process.execPath, [bin, "generate"], consumerRoot);
   const registry = await readFile(path.join(consumerRoot, ".bunwire/registry.ts"), "utf8");
   if (!registry.includes("applicationRegistry")) throw new Error("CLI did not generate the expected registry.");
+  const inspected = JSON.parse(run(process.execPath, [bin, "routes:list", "--json"], consumerRoot).stdout);
+  if (inspected.schemaVersion !== 1 || inspected.command !== "routes:list"
+    || !inspected.items.some((entry) => entry.details.path === "users/get")) {
+    throw new Error("Packed CLI did not inspect Electrobun routes without Vite or Bun.");
+  }
   watchChild = spawn(process.execPath, [bin, "watch"], { cwd: consumerRoot, stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   let errors = "";

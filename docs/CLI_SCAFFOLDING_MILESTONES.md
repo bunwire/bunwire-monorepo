@@ -1,6 +1,6 @@
 # Bunwire CLI and Scaffolding Milestones
 
-Status: Milestones 23–24 complete; Milestones 25–28 planned.
+Status: Milestones 23–25 complete; Milestones 26–28 planned.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
@@ -56,7 +56,7 @@ Project tooling names and built-in Bun command names are reserved in the unified
 |---|---|---|---|
 | 23 | Executable and physical generation | Complete | `@bunwire/cli`, root resolution, `help`, `list`, `generate` |
 | 24 | Standalone watch lifecycle | Complete | `watch` with dependency invalidation and missing-import recovery |
-| 25 | Compiler-backed project inspection | Planned | Static list commands, JSON output, runtime-list agreement |
+| 25 | Compiler-backed project inspection | Complete | Static list commands, JSON output, runtime-list agreement |
 | 26 | Core source generators | Planned | Controller, Service, Provider, Middleware, Event, Listener |
 | 27 | Bun source generators and command dispatch | Planned | Job, Schedule, Command, Bun runtime operation bridge |
 | 28 | Project scaffolding and release hardening | Planned | Maintained starters, end-to-end use, documentation and package checks |

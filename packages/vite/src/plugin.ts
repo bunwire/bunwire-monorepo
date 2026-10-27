@@ -189,6 +189,31 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     return generated.code;
   };
 
+  const invalidateVirtualModules = (server: ViteDevServer): ModuleNode[] => {
+    const affected: ModuleNode[] = [];
+    for (const id of [BUNWIRE_RESOLVED_REGISTRY_MODULE_ID, BUNWIRE_RESOLVED_CLIENT_MODULE_ID, BUNWIRE_RESOLVED_PAGES_MODULE_ID]) {
+      const module = server.moduleGraph.getModuleById(id);
+      if (!module) continue;
+      server.moduleGraph.invalidateModule(module);
+      affected.push(module);
+    }
+    return affected;
+  };
+
+  const refreshForWatchedChange = async (id: string, context?: BunwirePluginContext): Promise<void> => {
+    if (closing || !isRelevantChange(id)) return;
+    try {
+      await queueRefresh(context);
+    } catch (cause) {
+      if (!devServer) throw cause;
+      const error = cause instanceof Error ? cause : new Error(String(cause));
+      devServer.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? error.message,
+        plugin: "bunwire" } });
+    } finally {
+      if (devServer) invalidateVirtualModules(devServer);
+    }
+  };
+
   const plugin: BunwirePluginHooks = {
     name: "bunwire",
     enforce: "pre",
@@ -203,6 +228,9 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
     configureServer(server): void {
       devServer = server;
       if (latestApplication) server.watcher.add(watchedPaths(latestApplication));
+      for (const event of ["add", "unlink"] as const) {
+        server.watcher.on(event, (filePath) => { void refreshForWatchedChange(filePath); });
+      }
     },
     async buildStart(): Promise<void> {
       resetAnalysis();
@@ -276,15 +304,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       return undefined;
     },
     async watchChange(id): Promise<void> {
-      if (closing || !isRelevantChange(id)) return;
-      try {
-        await queueRefresh(typeof this.addWatchFile === "function" ? this : undefined);
-      } catch (cause) {
-        if (!devServer) throw cause;
-        const error = cause instanceof Error ? cause : new Error(String(cause));
-        devServer.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? error.message,
-          plugin: "bunwire" } });
-      }
+      await refreshForWatchedChange(id, typeof this.addWatchFile === "function" ? this : undefined);
     },
     async handleHotUpdate(context): Promise<ModuleNode[] | undefined> {
       if (closing || !isRelevantChange(context.file)) return undefined;
@@ -292,12 +312,7 @@ export function bunwire(options: BunwireVitePluginOptions = {}): BunwireVitePlug
       try {
         await queueRefresh();
       } finally {
-        for (const id of [BUNWIRE_RESOLVED_REGISTRY_MODULE_ID, BUNWIRE_RESOLVED_CLIENT_MODULE_ID, BUNWIRE_RESOLVED_PAGES_MODULE_ID]) {
-          const module = context.server.moduleGraph.getModuleById(id);
-          if (!module) continue;
-          context.server.moduleGraph.invalidateModule(module);
-          affected.add(module);
-        }
+        for (const module of invalidateVirtualModules(context.server)) affected.add(module);
       }
       return [...affected];
     },

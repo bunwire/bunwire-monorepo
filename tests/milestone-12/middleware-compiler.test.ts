@@ -58,7 +58,7 @@ describe("Milestone 12 — generated middleware attachment", () => {
   it("rejects a non-callable generated middleware reference", () => {
     expect(() => analyze("invalid-use-value.ts")).toThrowError(expect.objectContaining({
       code: "MIDDLEWARE_ATTACHMENT_INVALID",
-      message: expect.stringMatching(/direct middleware class reference or string literal/i),
+      message: expect.stringMatching(/canonical managed middleware class or static string reference/i),
     }));
   });
 });

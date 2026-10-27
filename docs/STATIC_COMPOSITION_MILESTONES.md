@@ -1,6 +1,6 @@
 # Bunwire Static Expressions and Modular Composition Milestones
 
-Status: Project Milestones 15–21 are complete; Milestone 22 is not started.
+Status: Project Milestones 15–22 are complete.
 
 Architecture: [README.md](README.md). Project roadmap: [MILESTONES.md](MILESTONES.md). Status index: [progress.md](progress.md).
 
@@ -424,7 +424,7 @@ Expected behavior: the complete syntax works during iterative development. Not e
 
 # Milestone 22 — Cross-Package Hardening and Completion
 
-Status: Planned. Depends on Milestone 21.
+Status: Complete. Depends on Milestone 21. See [implementation record](progress/milestone-22.md).
 
 ## Goal and packages affected
 
@@ -442,25 +442,25 @@ Prove the entire feature through generated applications, verify affected package
 
 ## Required automated tests
 
-- [ ] **[Automated / E2E]** A real Bun process consumes generated artifacts and exercises scheduling, queue dispatch, middleware, and job policy using the new syntax. Use existing supported test drivers; durable storage is not a prerequisite.
-- [ ] **[Automated / Integration]** Electrobun metadata, invocation, and middleware behavior remain correct with composed policies.
-- [ ] **[Automated / Integration]** A generic adapter consumes the same expression/helper facilities without concrete adapter branches in compiler code.
-- [ ] **[Automated / Architecture]** Package boundaries hold; application helpers/Providers are not executed during analysis; runtime packages do not acquire static evaluators.
-- [ ] **[Automated / Type-level]** Helper signatures, canonical targets, scheduled arguments, Application methods, and caller-visible contracts remain sound.
-- [ ] **[Automated / Generated Output]** Repeated runs and equivalent declaration forms preserve deterministic metadata, imports, and hashes where semantic ordering is identical.
-- [ ] **[Automated / Build]** Root `pnpm quality` passes, covering boundaries, typechecking, Electrobun SDK contracts, the full test suite, workspace builds, and built exports.
-- [ ] **[Automated / Build]** `pnpm test:release-pack` and `pnpm test:clean-install` pass.
-- [ ] **[Automated / E2E]** Run `pnpm test:electrobun-native` for the changed generated middleware/metadata path; record any concrete environment blocker rather than claiming it passed.
-- [ ] **[Automated / Behavioral]** Existing performance sanity checks plus bounded-expansion fixtures show no runaway evaluation or rebuild churn; record measurements without inventing an unsupported speed guarantee.
+- [x] **[Automated / E2E]** A real Bun process consumes generated artifacts and exercises scheduling, queue dispatch, middleware, and job policy using the new syntax. Use existing supported test drivers; durable storage is not a prerequisite.
+- [x] **[Automated / Integration]** Electrobun metadata, invocation, and middleware behavior remain correct with composed policies.
+- [x] **[Automated / Integration]** A generic adapter consumes the same expression/helper facilities without concrete adapter branches in compiler code.
+- [x] **[Automated / Architecture]** Package boundaries hold; application helpers/Providers are not executed during analysis; runtime packages do not acquire static evaluators.
+- [x] **[Automated / Type-level]** Helper signatures, canonical targets, scheduled arguments, Application methods, and caller-visible contracts remain sound.
+- [x] **[Automated / Generated Output]** Repeated runs and equivalent declaration forms preserve deterministic metadata, imports, and hashes where semantic ordering is identical.
+- [x] **[Automated / Build]** Root `pnpm quality` passes, covering boundaries, typechecking, Electrobun SDK contracts, the full test suite, workspace builds, and built exports.
+- [x] **[Automated / Build]** `pnpm test:release-pack` and `pnpm test:clean-install` pass.
+- [x] **[Automated / E2E]** Run `pnpm test:electrobun-native` for the changed generated middleware/metadata path; record any concrete environment blocker rather than claiming it passed.
+- [x] **[Automated / Behavioral]** Existing performance sanity checks plus bounded-expansion fixtures show no runaway evaluation or rebuild churn; record measurements without inventing an unsupported speed guarantee.
 
 ## Acceptance criteria and completion gate
 
-- [ ] Every agreed rejected example has an automated test demonstrating accepted syntax and intended generated behavior.
-- [ ] Required runtime scenarios pass, including representative Bun, Electrobun, and generic adapter coverage.
-- [ ] All required quality/release checks pass; a missing required gate leaves the milestone incomplete with a concrete blocker.
-- [ ] No runtime rediscovery, application-code execution during analysis, or platform-specific compiler branch was introduced.
-- [ ] Current architecture/package documentation agrees with implemented syntax and public configuration behavior.
-- [ ] All eight milestone records and the project index accurately describe completion, evidence, and exclusions.
+- [x] Every agreed rejected example has an automated test demonstrating accepted syntax and intended generated behavior.
+- [x] Required runtime scenarios pass, including representative Bun, Electrobun, and generic adapter coverage.
+- [x] All required quality/release checks pass; a missing required gate leaves the milestone incomplete with a concrete blocker.
+- [x] No runtime rediscovery, application-code execution during analysis, or platform-specific compiler branch was introduced.
+- [x] Current architecture/package documentation agrees with implemented syntax and public configuration behavior.
+- [x] All eight milestone records and the project index accurately describe completion, evidence, and exclusions.
 
 Expected behavior: the full static composition language is usable through manual generation and Vite, across managed metadata and policy consumers. Intentionally unsupported: general JavaScript execution/control flow, dynamic metadata, arbitrary package helper evaluation, config/adapter-discovery expansion, and runtime mutation of compiled metadata.
 
@@ -503,7 +503,7 @@ Completion requires implementation, passing required tests, affected package ver
 
 ## Documentation-task verification
 
-Creating this roadmap does not begin implementation. Its own completion requires:
+This section records the original roadmap-only change; the current implementation status is above. Creating the roadmap did not begin implementation. Its own completion required:
 
 - [x] This document contains all eight milestones, required tests, acceptance criteria, and explicit exclusions.
 - [x] `MILESTONES.md` links this track and identifies project numbering 15–22.

@@ -71,6 +71,39 @@ Milestone 16 integrates this internal foundation into registered decorator and p
 
 ## Generated registry module
 
+### Static composition syntax at the Milestone 22 checkpoint
+
+| Accepted in managed metadata or policy bodies | Rejected during analysis |
+|---|---|
+| Project-local `const` values, imports, aliases, namespace members, and re-exports | Runtime variables, ambient/type-only values, dependency-package helper bodies, and dynamic imports |
+| Literal arrays/objects, spreads, known own properties, computed string/number keys, and finite arithmetic | Getters, prototype lookup, holes, implicit coercion, arbitrary calls, environment reads, and non-finite results |
+| Canonical managed class/token references where the consuming API permits them | Name-matching strings, plain classes, counterfeit decorators, and unsupported targets |
+| Synchronous typed helpers with identifier parameters, block bodies, local `const`, and direct nested calls | Recursive, async/generator, value-returning, destructured/default/rest parameter, or registry-escaping helpers |
+| Repeated `withMiddlewares()`/`withSchedule()` calls and `for (const item of knownArray) { ... }` | General `for`/`while`/`for await`, runtime iterables, conditionals, assignment, and optional/computed policy calls |
+
+For example, replace repeated inline middleware calls with a project-local helper and a known collection:
+
+```ts
+// billing-policy.ts
+import type { MiddlewarePolicyRegistry } from "@bunwire/core";
+export const SECURITY = ["billing-auth", "billing-audit:strict"] as const;
+export function addBilling(registry: MiddlewarePolicyRegistry) {
+  for (const middleware of SECURITY) { registry.use(middleware); }
+}
+
+// bootstrap.ts — composition only; the host entrypoint calls app.start()
+import { defineApp } from "@bunwire/core";
+import { BunAdapter } from "@bunwire/bun";
+import { addBilling } from "./billing-policy.js";
+export default defineApp()
+  .withAdapter(new BunAdapter({ role: "http" }))
+  .withMiddlewares(addBilling);
+```
+
+Use an explicit runtime token for arbitrary values or interfaces; static resolution of a value does not register a container binding. For jobs, move fixed queue/retry/timeout values to project-local exported `const` declarations and import them into protected metadata fields. Move fixed schedule declarations into typed helpers called from `withSchedule()`; keep runtime decisions inside ordinary application code instead of trying to run them in a compile-only callback.
+
+The source boundary is the canonical project root. Imported local files outside managed discovery roots may supply values and helpers but do not contribute managed classes. Analysis rejects detected mutation within its TypeScript graph and emits a snapshot; `const` and `as const` do not freeze runtime objects. Fixed per-compilation budgets are 64 levels, 100,000 evaluated nodes, and 10,000 emitted policy declarations, with repeated work charged. Unsupported syntax fails compilation without executing application modules or policy callbacks.
+
 Supplementary adapter class decorators use Core's generic `classAttachments` compiler contributions. Vite resolves their exact canonical symbols (including re-exports), accepts supported static factory metadata on declared allowed managed kinds, and rejects duplicate, misplaced, inherited or counterfeit attachments. It emits frozen `defineManagedClassAttachment()` sidecar records without replacing canonical owning class/Event/Listener entries. `ManagedClassIdentityHandlerData` (`bunwire.managed-class-identity`) can validate a shared identity namespace across selected class kinds and supplementary metadata; callbacks receive compiler data only. An unrelated fake-adapter fixture verifies these extension points without platform-specific names or branches.
 
 `generateRuntimeRegistryModule()` converts the completed analysis into deterministic TypeScript containing class metadata, constructor dependencies, Providers, managed-method plans, resolver IDs, adapter metadata, attachment-only middleware arrays, and optional platform-neutral schedule records. Middleware entries use `defineMiddlewareAttachment()` with a canonical class import plus immutable parameters; schedule entries use `defineRuntimeSchedule()` with a canonical managed target and static data. Functions, aliases, groups, mappings, and source syntax never reach runtime. Imports and records are sorted independently of filesystem enumeration order, and `BUNWIRE_REGISTRY_HASH` identifies the byte-stable generated body.

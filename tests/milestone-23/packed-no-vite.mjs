@@ -82,6 +82,15 @@ try {
     || !inspected.items.some((entry) => entry.details.path === "users/get")) {
     throw new Error("Packed CLI did not inspect Electrobun routes without Vite or Bun.");
   }
+  run(process.execPath, [bin, "make:event", "PackedEvent"], consumerRoot);
+  run(process.execPath, [bin, "make:listener", "PackedListener", "--event", "src/bun/events/packed-event.ts#PackedEvent"], consumerRoot);
+  run(process.execPath, [bin, "make:middleware", "PackedMiddleware", "--alias", "packed-middleware"], consumerRoot);
+  const packedEvents = JSON.parse(run(process.execPath, [bin, "events:list", "--json"], consumerRoot).stdout);
+  const packedListeners = JSON.parse(run(process.execPath, [bin, "listeners:list", "--json"], consumerRoot).stdout);
+  if (!packedEvents.items.some((entry) => entry.name === "PackedEvent")
+    || !packedListeners.items.some((entry) => entry.name === "PackedListener")) {
+    throw new Error("Packed CLI did not generate discoverable Core Event and Listener sources.");
+  }
   watchChild = spawn(process.execPath, [bin, "watch"], { cwd: consumerRoot, stdio: ["ignore", "pipe", "pipe"] });
   let output = "";
   let errors = "";
@@ -96,7 +105,7 @@ try {
     catch { return false; }
   }, `Packed watcher did not regenerate after source edit. ${errors}`);
   if (errors.trim()) throw new Error(`Packed watcher reported an error: ${errors}`);
-  console.log("Packed CLI generated and watched Electrobun artifacts without Vite or Bun installed.");
+  console.log("Packed CLI generated, inspected, scaffolded, and watched Electrobun artifacts without Vite or Bun installed.");
 } finally {
   if (watchChild && watchChild.exitCode === null && watchChild.signalCode === null) {
     const exited = new Promise((resolve) => watchChild.once("exit", resolve));

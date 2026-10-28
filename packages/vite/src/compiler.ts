@@ -41,3 +41,4 @@ export {
   type BunwireInspectionLocation,
   type BunwireProjectInspection,
 } from "./project-inspection.js";
+export { resolveBunwireEventExport, type BunwireEventExport } from "./source-event-reference.js";

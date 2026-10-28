@@ -6,6 +6,7 @@ import {
   inspectBunwireApplication,
   type BunwireInspectionItem,
 } from "@bunwire/vite/compiler";
+import { MAKE_COMMANDS, makeSource, type MakeCommand } from "./make.js";
 import { watchBunwireProject } from "./watch.js";
 
 export interface BunwireCliIO {
@@ -24,6 +25,7 @@ const commands = Object.freeze([
   ["list", "List available commands."],
   ["generate", "Generate physical Bunwire artifacts for one project."],
   ["watch", "Regenerate physical artifacts when project inputs change."],
+  ...MAKE_COMMANDS.map((command) => [command, `Create a Core ${command.slice(5)} class.`] as const),
   ...BUNWIRE_INSPECTION_COMMANDS.map((command) => [command, `Inspect compiled ${command.replace(":list", "")} definitions.`] as const),
 ] as const);
 
@@ -42,6 +44,9 @@ function help(command?: string): string {
   }
   if (command === "generate") return "Usage: bunwire generate [--root path]\nGenerate physical Bunwire artifacts for one configured project.";
   if (command === "watch") return "Usage: bunwire watch [--root path]\nRegenerate physical Bunwire artifacts when project inputs change.";
+  if (command && MAKE_COMMANDS.some((entry) => entry === command)) {
+    return `Usage: bunwire ${command} ClassName [--root path] [--source path]${command === "make:listener" ? " --event project-relative-file#ExportName" : ""}${command === "make:middleware" ? " [--alias value]" : ""}\nCreate one Core managed class in the configured source root.`;
+  }
   if (command === "list") return "Usage: bunwire list\nList available commands.";
   if (command === "help") return "Usage: bunwire help [command]\nShow general or per-command help.";
   return `Usage: bunwire <command> [options]\n\n${commandList()}\n\nOptions:\n  --root path  Select one project root (default: current working directory).\n  --json       Emit a JSON envelope for inspection commands.`;
@@ -73,6 +78,9 @@ export async function runBunwireCli(argv: readonly string[], options: BunwireCli
   const cwd = options.cwd ?? process.cwd();
   let root: string | undefined;
   let json = false;
+  let source: string | undefined;
+  let event: string | undefined;
+  let alias: string | undefined;
   const positionals: string[] = [];
   try {
     for (let index = 0; index < argv.length; index++) {
@@ -89,6 +97,20 @@ export async function runBunwireCli(argv: readonly string[], options: BunwireCli
       } else if (arg === "--json") {
         if (json) throw new Error("--json may be supplied only once.");
         json = true;
+      } else if (["--source", "--event", "--alias"].some((option) => arg === option || arg.startsWith(`${option}=`))) {
+        const key = arg.split("=", 1)[0]!;
+        const value = arg === key ? argv[++index] : arg.slice(key.length + 1);
+        if (!value || value.startsWith("--")) throw new Error(`${key} requires a value.`);
+        if (key === "--source") {
+          if (source !== undefined) throw new Error("--source may be supplied only once.");
+          source = value;
+        } else if (key === "--event") {
+          if (event !== undefined) throw new Error("--event may be supplied only once.");
+          event = value;
+        } else {
+          if (alias !== undefined) throw new Error("--alias may be supplied only once.");
+          alias = value;
+        }
       } else if (arg.startsWith("-")) {
         throw new Error(`Unknown option "${arg}".`);
       } else {
@@ -96,6 +118,9 @@ export async function runBunwireCli(argv: readonly string[], options: BunwireCli
       }
     }
     const [command, ...args] = positionals;
+    if ((source !== undefined || event !== undefined || alias !== undefined) && !MAKE_COMMANDS.some((entry) => entry === command)) {
+      throw new Error("--source, --event, and --alias are available only for make:* commands.");
+    }
     if (json && !BUNWIRE_INSPECTION_COMMANDS.some((entry) => entry === command)) {
       throw new Error("--json is available only for inspection commands.");
     }
@@ -119,6 +144,20 @@ export async function runBunwireCli(argv: readonly string[], options: BunwireCli
     if (command === "watch") {
       if (args.length) throw new Error("watch does not accept positional arguments.");
       return await watchBunwireProject(path.resolve(cwd, root ?? "."), io, options.signal, diagnostic);
+    }
+    if (MAKE_COMMANDS.some((entry) => entry === command)) {
+      if (args.length !== 1) throw new Error(`${command} requires exactly one ClassName.`);
+      const filePath = await makeSource(command as MakeCommand, args[0]!, {
+        root: path.resolve(cwd, root ?? "."),
+        ...(source === undefined ? {} : { source }),
+        ...(event === undefined ? {} : { event }),
+        ...(alias === undefined ? {} : { alias }),
+      });
+      io.stdout(`Created ${filePath}`);
+      if (command === "make:middleware") io.stdout("Attach this Middleware explicitly with @Use(ClassName) or its alias on a Controller or managed method; creating it does not activate it.");
+      if (command === "make:controller") io.stdout("Add adapter-defined managed method decorators to expose endpoints; the Controller alone creates none.");
+      if (command === "make:listener") io.stdout("The Listener is discovered automatically; implement its handle(event) reaction before relying on it.");
+      return 0;
     }
     if (BUNWIRE_INSPECTION_COMMANDS.some((entry) => entry === command)) {
       if (args.length) throw new Error(`${command} does not accept positional arguments.`);
